@@ -2,18 +2,18 @@ import { Link } from "@tanstack/react-router";
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t-2 border-[#1a1a1a] px-6 py-16 bg-[#1a1a1a] text-[#f0f0e8]">
+    <footer className="border-t-2 border-[var(--border)] px-6 py-16 bg-[var(--foreground)] text-[var(--foreground-inverse)]">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16">
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#888] mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
               Product
             </h3>
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <Link
                   to="/pricing"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   Pricing
                 </Link>
@@ -21,7 +21,7 @@ export function MarketingFooter() {
               <li>
                 <Link
                   to="/sign-up"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   Start 7-day trial
                 </Link>
@@ -29,7 +29,7 @@ export function MarketingFooter() {
               <li>
                 <Link
                   to="/sign-in"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   Sign in
                 </Link>
@@ -37,14 +37,14 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#888] mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
               Compare
             </h3>
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <Link
                   to="/compare/loom"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   loam vs Loom
                 </Link>
@@ -52,7 +52,7 @@ export function MarketingFooter() {
               <li>
                 <Link
                   to="/compare/tella"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   loam vs Tella.tv
                 </Link>
@@ -60,14 +60,14 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#888] mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
               Use cases
             </h3>
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <Link
                   to="/for/video-editors"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   For small teams
                 </Link>
@@ -75,7 +75,7 @@ export function MarketingFooter() {
               <li>
                 <Link
                   to="/for/agencies"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   For agencies
                 </Link>
@@ -83,7 +83,7 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#888] mb-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
               Open source
             </h3>
             <ul className="space-y-3 text-sm font-bold">
@@ -92,7 +92,7 @@ export function MarketingFooter() {
                   href="https://github.com/nibzard/loam"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-[#7cb87c] transition-colors"
+                  className="hover:text-[var(--accent-light)] transition-colors"
                 >
                   GitHub
                 </a>
@@ -100,9 +100,9 @@ export function MarketingFooter() {
             </ul>
           </div>
         </div>
-        <div className="border-t border-[#333] pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="border-t border-[var(--border-subtle)] pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <span className="font-black text-3xl tracking-tighter">loam.</span>
-          <span className="text-sm text-[#888]">
+          <span className="text-sm text-[var(--foreground-muted)]">
             Async video sharing for teams.
           </span>
         </div>

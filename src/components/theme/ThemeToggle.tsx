@@ -12,8 +12,10 @@ import {
 
 const THEME_STORAGE_KEY = "loam-theme";
 const LEGACY_THEME_STORAGE_KEY = "lawn-theme";
+const THEME_LOOK_STORAGE_KEY = "loam-theme-look";
 
 type Theme = "light" | "dark";
+type ThemeLook = "brutalist" | "clean";
 
 function getSystemTheme(): Theme {
   if (typeof window === "undefined") return "light";
@@ -44,9 +46,27 @@ function getInitialTheme(): Theme {
   return getSystemTheme();
 }
 
+function getInitialThemeLook(): ThemeLook {
+  if (typeof document === "undefined") return "brutalist";
+
+  const attributeLook = document.documentElement.getAttribute("data-look");
+  if (attributeLook === "clean" || attributeLook === "brutalist") {
+    return attributeLook;
+  }
+
+  const storedLook = localStorage.getItem(THEME_LOOK_STORAGE_KEY);
+  if (storedLook === "clean" || storedLook === "brutalist") {
+    return storedLook;
+  }
+
+  return "brutalist";
+}
+
 interface ThemeContextValue {
   theme: Theme;
+  themeLook: ThemeLook;
   toggleTheme: () => void;
+  toggleThemeLook: () => void;
   mounted: boolean;
 }
 
@@ -67,6 +87,7 @@ export function useTheme() {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => getInitialTheme());
+  const [themeLook, setThemeLook] = useState<ThemeLook>(() => getInitialThemeLook());
   const mounted = useMounted();
 
   useEffect(() => {
@@ -75,8 +96,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [mounted, theme]);
 
+  useEffect(() => {
+    if (!mounted) return;
+    document.documentElement.setAttribute("data-look", themeLook);
+    localStorage.setItem(THEME_LOOK_STORAGE_KEY, themeLook);
+  }, [mounted, themeLook]);
+
   const toggleTheme = useCallback(() => {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }, []);
+
+  const toggleThemeLook = useCallback(() => {
+    setThemeLook((current) => (current === "brutalist" ? "clean" : "brutalist"));
   }, []);
 
   // Keyboard shortcut: Ctrl/Cmd + Shift + L
@@ -95,11 +126,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [mounted, toggleTheme]);
 
   const value = useMemo(
-    () => ({ theme, toggleTheme, mounted }),
-    [theme, toggleTheme, mounted]
+    () => ({ theme, themeLook, toggleTheme, toggleThemeLook, mounted }),
+    [theme, themeLook, toggleTheme, toggleThemeLook, mounted],
   );
 
-  return (
-    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

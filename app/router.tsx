@@ -4,8 +4,8 @@ import { NotFound } from "@/components/ui/NotFound";
 
 function DefaultPending() {
   return (
-    <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
-      <div className="text-[#888]">Loading...</div>
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+      <div className="text-[var(--foreground-muted)]">Loading...</div>
     </div>
   );
 }

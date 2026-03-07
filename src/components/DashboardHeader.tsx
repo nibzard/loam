@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { UserButton } from "@clerk/tanstack-react-start";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Palette, Sun } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeToggle";
 import React from "react";
 import { useConvex } from "convex/react";
@@ -8,14 +8,14 @@ import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmDashboardIndex } from "../../app/routes/dashboard/-index.data";
 
 function ThemeToggleButton() {
-  const { theme, toggleTheme, mounted } = useTheme();
+  const { theme, toggleTheme, themeLook, toggleThemeLook, mounted } = useTheme();
 
   if (!mounted) return <div className="w-8 h-8" />;
 
   return (
     <button
       onClick={toggleTheme}
-      className="w-8 h-8 flex items-center justify-center text-[#888] hover:text-[#1a1a1a] hover:bg-[#e8e8e0] transition-colors"
+      className="w-8 h-8 flex items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-alt)] transition-colors"
       title={`Switch to ${theme === "dark" ? "light" : "dark"} mode (⌘⇧L)`}
       aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
     >
@@ -24,6 +24,23 @@ function ThemeToggleButton() {
       ) : (
         <Moon className="h-4 w-4" />
       )}
+    </button>
+  );
+}
+
+function ThemeLookButton() {
+  const { themeLook, toggleThemeLook, mounted } = useTheme();
+
+  if (!mounted) return <div className="w-8 h-8" />;
+
+  return (
+    <button
+      onClick={toggleThemeLook}
+      className="w-8 h-8 flex items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-alt)] transition-colors"
+      title={`Switch to ${themeLook === "brutalist" ? "clean" : "brutalist"} visual style`}
+      aria-label={`Switch to ${themeLook === "brutalist" ? "clean" : "brutalist"} visual style`}
+    >
+      <Palette className="h-4 w-4" />
     </button>
   );
 }
@@ -47,13 +64,13 @@ export function DashboardHeader({
   );
 
   return (
-    <header className="flex-shrink-0 border-b-2 border-[#1a1a1a] bg-[#f0f0e8] grid grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center px-4 sm:px-6">
+    <header className="flex-shrink-0 border-b-2 border-[var(--border)] bg-[var(--background)] grid grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center px-4 sm:px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center text-xl font-black tracking-tighter text-[#1a1a1a] min-w-0 h-11 sm:h-14">
+      <div className="flex items-center text-xl font-black tracking-tighter text-[var(--foreground)] min-w-0 h-11 sm:h-14">
         <Link
           to="/dashboard"
           preload="intent"
-          className="hover:text-[#2d5a2d] transition-colors mr-2 flex-shrink-0"
+          className="hover:text-[var(--accent)] transition-colors mr-2 flex-shrink-0"
           {...prewarmHomeIntentHandlers}
         >
           loam.
@@ -62,16 +79,16 @@ export function DashboardHeader({
           const isIntermediate = paths.length >= 2 && index < paths.length - 1;
           return (
           <div key={index} className={`${isIntermediate ? 'hidden sm:flex' : 'flex'} items-center min-w-0 flex-shrink`}>
-            <span className="text-[#888] mr-2 flex-shrink-0">/</span>
+            <span className="text-[var(--foreground-muted)] mr-2 flex-shrink-0">/</span>
             {path.href ? (
-              <Link
-                to={path.href}
-                preload="intent"
-                className="hover:text-[#2d5a2d] transition-colors truncate mr-2"
-                {...path.prewarmIntentHandlers}
-              >
-                {path.label}
-              </Link>
+            <Link
+              to={path.href}
+              preload="intent"
+              className="hover:text-[var(--accent)] transition-colors truncate mr-2"
+              {...path.prewarmIntentHandlers}
+            >
+              {path.label}
+            </Link>
             ) : (
               <div className="truncate flex items-center gap-3">
                 {path.label}
@@ -83,21 +100,22 @@ export function DashboardHeader({
       </div>
 
       {/* User controls — pinned top-right */}
-      <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-4 pl-4 border-l-2 border-[#1a1a1a]/10 h-8">
+        <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-4 pl-4 border-l-2 border-[var(--border)]/10 h-8">
         <ThemeToggleButton />
+        <ThemeLookButton />
         <UserButton
           appearance={{
             variables: {
-              colorText: "#1a1a1a",
-              colorTextSecondary: "#888",
-              colorBackground: "#f0f0e8",
+              colorText: "var(--foreground)",
+              colorTextSecondary: "var(--foreground-muted)",
+              colorBackground: "var(--surface)",
             },
             elements: {
-              avatarBox: "w-8 h-8 rounded-none border-2 border-[#1a1a1a]",
-              userButtonPopoverCard: "bg-[#f0f0e8] border-2 border-[#1a1a1a] rounded-none shadow-[8px_8px_0px_0px_var(--shadow-color)]",
-              userButtonPopoverActionButton: "!text-[#1a1a1a] hover:!bg-[#e8e8e0] rounded-none",
-              userButtonPopoverActionButtonText: "!text-[#1a1a1a] hover:!text-[#1a1a1a] font-mono font-bold",
-              userButtonPopoverActionButtonIcon: "!text-[#1a1a1a] hover:!text-[#1a1a1a]",
+              avatarBox: "w-8 h-8 rounded-none border-2 border-[var(--border)]",
+              userButtonPopoverCard: "bg-[var(--surface)] border-2 border-[var(--border)] rounded-none shadow-[8px_8px_0px_0px_var(--shadow-color)]",
+              userButtonPopoverActionButton: "!text-[var(--foreground)] hover:!bg-[var(--surface-alt)] rounded-none",
+              userButtonPopoverActionButtonText: "!text-[var(--foreground)] hover:!text-[var(--foreground)] font-mono font-bold",
+              userButtonPopoverActionButtonIcon: "!text-[var(--foreground)] hover:!text-[var(--foreground)]",
               userButtonPopoverFooter: "hidden",
             },
           }}

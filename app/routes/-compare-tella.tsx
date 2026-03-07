@@ -314,7 +314,7 @@ export default function CompareTella() {
                     </span>
                   </li>
                 </ul>
-                <p className="text-sm text-[var(--foreground-muted)] mt-6 pt-4 border-t border-[#333]">
+                <p className="text-sm text-[var(--foreground-muted)] mt-6 pt-4 border-t border-[var(--border-subtle)]">
                   loam is intentionally less like a mini production studio and
                   more like async team communication that happens to be video.
                 </p>

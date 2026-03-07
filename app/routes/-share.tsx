@@ -230,19 +230,19 @@ export default function SharePage() {
 
   if (isBootstrappingShare) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
-        <div className="text-[#888]">Opening shared video...</div>
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-[var(--foreground-muted)]">Opening shared video...</div>
       </div>
     );
   }
 
   if (shareInfo.status === "missing" || shareInfo.status === "expired") {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
-              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--destructive)]/10 flex items-center justify-center mb-4 border-2 border-[var(--destructive)]">
+              <AlertCircle className="h-6 w-6 text-[var(--destructive)]" />
             </div>
             <CardTitle>Link expired or invalid</CardTitle>
             <CardDescription>
@@ -263,11 +263,11 @@ export default function SharePage() {
 
   if (shareInfo.status === "processing") {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
-              <Video className="h-6 w-6 text-[#888]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+              <Video className="h-6 w-6 text-[var(--foreground-muted)]" />
             </div>
             <CardTitle>Video is still processing</CardTitle>
             <CardDescription>
@@ -282,11 +282,11 @@ export default function SharePage() {
 
   if (shareInfo.status === "failed") {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
-              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--destructive)]/10 flex items-center justify-center mb-4 border-2 border-[var(--destructive)]">
+              <AlertCircle className="h-6 w-6 text-[var(--destructive)]" />
             </div>
             <CardTitle>Video processing failed</CardTitle>
             <CardDescription>
@@ -300,11 +300,11 @@ export default function SharePage() {
 
   if (shareInfo.status === "requiresPassword" && !grantToken) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
-              <Lock className="h-6 w-6 text-[#888]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+              <Lock className="h-6 w-6 text-[var(--foreground-muted)]" />
             </div>
             <CardTitle>Password required</CardTitle>
             <CardDescription>
@@ -327,7 +327,7 @@ export default function SharePage() {
                 autoFocus
               />
               {passwordError && (
-                <p className="text-sm text-[#dc2626]">Incorrect password</p>
+                <p className="text-sm text-[var(--destructive)]">Incorrect password</p>
               )}
               <Button type="submit" className="w-full" disabled={!passwordInput || isRequestingGrant}>
                 {isRequestingGrant ? "Verifying..." : "View video"}
@@ -341,11 +341,11 @@ export default function SharePage() {
 
   if (!videoData?.video) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
-              <Video className="h-6 w-6 text-[#888]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+              <Video className="h-6 w-6 text-[var(--foreground-muted)]" />
             </div>
             <CardTitle>Video not available</CardTitle>
             <CardDescription>
@@ -361,7 +361,7 @@ export default function SharePage() {
   const fallbackPosterUrl =
     playbackSession?.posterUrl ?? (video.thumbnailUrl?.startsWith("http") ? video.thumbnailUrl : undefined);
   const playerFallback = (
-    <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800/80 bg-black shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
+    <div className="relative aspect-video overflow-hidden rounded-xl border border-[var(--media-border)] bg-[var(--media-background)] shadow-[0_10px_40px_var(--media-shadow)]">
       {fallbackPosterUrl ? (
         <img
           src={fallbackPosterUrl}
@@ -369,10 +369,10 @@ export default function SharePage() {
           className="h-full w-full object-cover blur-[4px]"
         />
       ) : null}
-      <div className="absolute inset-0 bg-black/45" />
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-        <p className="text-sm font-medium text-white/85">
+      <div className="absolute inset-0 bg-[var(--media-overlay)]" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-[var(--media-text)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--media-outline)] border-t-[var(--media-text-subtle)]" />
+        <p className="text-sm font-medium text-[var(--media-text-dim)]">
           {playbackSession?.url ? "Loading player..." : playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
         </p>
       </div>
@@ -380,13 +380,13 @@ export default function SharePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[#f0f0e8]">
-      <header className="bg-[#f0f0e8] border-b-2 border-[#1a1a1a] px-6 py-4">
+    <div className="min-h-screen bg-[var(--background)]">
+      <header className="bg-[var(--background)] border-b-2 border-[var(--border)] px-6 py-4">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <Link
             preload="intent"
             to="/"
-            className="text-[#888] hover:text-[#1a1a1a] text-sm flex items-center gap-2 font-bold"
+            className="text-[var(--foreground-muted)] hover:text-[var(--foreground)] text-sm flex items-center gap-2 font-bold"
           >
             loam
           </Link>
@@ -395,18 +395,18 @@ export default function SharePage() {
 
       <main className="max-w-6xl mx-auto p-6 space-y-6">
         <div>
-          <h1 className="text-2xl font-black text-[#1a1a1a]">{video.title}</h1>
+          <h1 className="text-2xl font-black text-[var(--foreground)]">{video.title}</h1>
           {video.description && (
-            <p className="text-[#888] mt-1">{video.description}</p>
+            <p className="text-[var(--foreground-muted)] mt-1">{video.description}</p>
           )}
-          <div className="flex items-center gap-4 mt-2 text-sm text-[#888]">
+          <div className="flex items-center gap-4 mt-2 text-sm text-[var(--foreground-muted)]">
             {video.duration && <span className="font-mono">{formatDuration(video.duration)}</span>}
             {comments && <span>{comments.length} threads</span>}
             <VideoWatchers watchers={watchers} className="ml-auto" />
           </div>
         </div>
 
-        <div className="border-2 border-[#1a1a1a] overflow-hidden">
+        <div className="border-2 border-[var(--border)] overflow-hidden">
           {playbackSession?.url ? (
             <Suspense fallback={playerFallback}>
               <LazyVideoPlayer
@@ -423,10 +423,10 @@ export default function SharePage() {
           )}
         </div>
 
-        <section className="border-2 border-[#1a1a1a] bg-[#e8e8e0] p-4 space-y-4">
+        <section className="border-2 border-[var(--border)] bg-[var(--surface-alt)] p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-black text-[#1a1a1a]">Comments</h2>
-            <span className="text-xs text-[#888] font-mono">{formatTimestamp(currentTime)}</span>
+            <h2 className="font-black text-[var(--foreground)]">Comments</h2>
+            <span className="text-xs text-[var(--foreground-muted)] font-mono">{formatTimestamp(currentTime)}</span>
           </div>
 
           <ReactionBar
@@ -437,7 +437,7 @@ export default function SharePage() {
 
           {isUserLoaded && user ? (
             <form onSubmit={handleSubmitComment} className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-[#666]">
+              <div className="flex items-center gap-2 text-xs text-[var(--foreground-subtle)]">
                 <Clock className="h-3.5 w-3.5" />
                 Comment at {formatTimestamp(currentTime)}
               </div>
@@ -447,7 +447,7 @@ export default function SharePage() {
                 placeholder="Leave a comment..."
                 className="min-h-[90px]"
               />
-              {commentError ? <p className="text-xs text-[#dc2626]">{commentError}</p> : null}
+              {commentError ? <p className="text-xs text-[var(--destructive)]">{commentError}</p> : null}
               <Button type="submit" disabled={!commentText.trim() || isSubmittingComment}>
                 <MessageSquare className="mr-1.5 h-4 w-4" />
                 {isSubmittingComment ? "Posting..." : "Post comment"}
@@ -466,41 +466,41 @@ export default function SharePage() {
           )}
 
           {comments === undefined ? (
-            <p className="text-sm text-[#888]">Loading comments...</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Loading comments...</p>
           ) : comments.length === 0 ? (
-            <p className="text-sm text-[#888]">No comments yet.</p>
+            <p className="text-sm text-[var(--foreground-muted)]">No comments yet.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((comment) => (
-                <article key={comment._id} className="border-2 border-[#1a1a1a] bg-[#f0f0e8] p-3">
+                <article key={comment._id} className="border-2 border-[var(--border)] bg-[var(--background)] p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-bold text-[#1a1a1a]">{comment.userName}</div>
+                    <div className="text-sm font-bold text-[var(--foreground)]">{comment.userName}</div>
                     <button
                       type="button"
-                      className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+                      className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
                       onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
                     >
                       {formatTimestamp(comment.timestampSeconds)}
                     </button>
                   </div>
-                  <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap">{comment.text}</p>
-                  <p className="text-[11px] text-[#888] mt-1">{formatRelativeTime(comment._creationTime)}</p>
+                  <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap">{comment.text}</p>
+                  <p className="text-[11px] text-[var(--foreground-muted)] mt-1">{formatRelativeTime(comment._creationTime)}</p>
 
                   {comment.replies.length > 0 ? (
-                    <div className="mt-3 ml-4 border-l-2 border-[#1a1a1a] pl-3 space-y-2">
+                    <div className="mt-3 ml-4 border-l-2 border-[var(--border)] pl-3 space-y-2">
                       {comment.replies.map((reply) => (
                         <div key={reply._id} className="text-sm">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-[#1a1a1a]">{reply.userName}</span>
+                            <span className="font-bold text-[var(--foreground)]">{reply.userName}</span>
                             <button
                               type="button"
-                              className="font-mono text-xs text-[#2d5a2d] hover:text-[#1a1a1a]"
+                              className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
                               onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
                             >
                               {formatTimestamp(reply.timestampSeconds)}
                             </button>
                           </div>
-                          <p className="text-[#1a1a1a] whitespace-pre-wrap">{reply.text}</p>
+                          <p className="text-[var(--foreground)] whitespace-pre-wrap">{reply.text}</p>
                         </div>
                       ))}
                     </div>
@@ -512,10 +512,10 @@ export default function SharePage() {
         </section>
       </main>
 
-      <footer className="border-t-2 border-[#1a1a1a] px-6 py-4 mt-8">
-        <div className="max-w-6xl mx-auto text-center text-sm text-[#888]">
+      <footer className="border-t-2 border-[var(--border)] px-6 py-4 mt-8">
+        <div className="max-w-6xl mx-auto text-center text-sm text-[var(--foreground-muted)]">
           Shared via{" "}
-          <Link to="/" preload="intent" className="text-[#1a1a1a] hover:text-[#2d5a2d] font-bold">
+          <Link to="/" preload="intent" className="text-[var(--foreground)] hover:text-[var(--accent)] font-bold">
             loam
           </Link>
         </div>

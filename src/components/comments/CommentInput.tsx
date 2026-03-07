@@ -94,7 +94,7 @@ export function CommentInput({
       onSubmit={handleSubmit} 
       className={
         variant === "seamless" 
-          ? "relative w-full bg-[#f0f0e8]"
+          ? "relative w-full bg-[var(--background)]"
           : "relative w-full pb-1 pr-1"
       }
     >
@@ -107,8 +107,8 @@ export function CommentInput({
         autoFocus={autoFocus}
         className={
           variant === "seamless"
-            ? "block w-full max-h-64 min-h-[100px] bg-transparent border-0 focus:ring-0 resize-none px-4 pt-4 pb-12 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none transition-all"
-            : "block w-full max-h-64 min-h-[100px] bg-[#f0f0e8] border-2 border-[#1a1a1a] focus:ring-0 resize-none px-3 pt-3 pb-12 text-sm leading-relaxed text-[#1a1a1a] placeholder:text-[#888] font-sans outline-none shadow-[4px_4px_0px_0px_var(--shadow-color)] focus:translate-y-[2px] focus:translate-x-[2px] focus:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all"
+            ? "block w-full max-h-64 min-h-[100px] bg-transparent border-0 focus:ring-0 resize-none px-4 pt-4 pb-12 text-sm leading-relaxed text-[var(--foreground)] placeholder:text-[var(--foreground-muted)] font-sans outline-none transition-all"
+            : "block w-full max-h-64 min-h-[100px] bg-[var(--background)] border-2 border-[var(--border)] focus:ring-0 resize-none px-3 pt-3 pb-12 text-sm leading-relaxed text-[var(--foreground)] placeholder:text-[var(--foreground-muted)] font-sans outline-none shadow-[4px_4px_0px_0px_var(--shadow-color)] focus:translate-y-[2px] focus:translate-x-[2px] focus:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all"
         }
         rows={3}
       />

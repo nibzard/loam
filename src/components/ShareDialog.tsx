@@ -122,11 +122,11 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 border-2 border-[#1a1a1a] p-4 bg-[#e8e8e0]">
+        <div className="space-y-3 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-sm text-[#1a1a1a]">Visibility</h3>
-              <p className="text-xs text-[#666]">
+              <h3 className="font-bold text-sm text-[var(--foreground)]">Visibility</h3>
+              <p className="text-xs text-[var(--foreground-subtle)]">
                 Private disables the public URL. Restricted share links still work while the video remains private.
               </p>
             </div>
@@ -155,9 +155,9 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
           </div>
 
           {publicWatchPath ? (
-            <div className="p-3 border-2 border-[#1a1a1a] bg-[#f0f0e8] space-y-2">
-              <div className="text-xs text-[#666]">Public URL</div>
-              <code className="block text-sm bg-[#e8e8e0] px-2 py-1 font-mono truncate">
+            <div className="p-3 border-2 border-[var(--border)] bg-[var(--background)] space-y-2">
+              <div className="text-xs text-[var(--foreground-subtle)]">Public URL</div>
+              <code className="block text-sm bg-[var(--surface-alt)] px-2 py-1 font-mono truncate">
                 {publicWatchPath}
               </code>
               <div className="flex gap-2">
@@ -184,14 +184,14 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
           ) : null}
         </div>
 
-        <div className="space-y-4 border-2 border-[#1a1a1a] p-4 bg-[#e8e8e0]">
-          <h3 className="font-bold text-sm text-[#1a1a1a]">Create restricted share link</h3>
-          <p className="text-xs text-[#666]">
+        <div className="space-y-4 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
+          <h3 className="font-bold text-sm text-[var(--foreground)]">Create restricted share link</h3>
+          <p className="text-xs text-[var(--foreground-subtle)]">
             Best for external sharing. The video stays private in your workspace and only this link grants access.
           </p>
 
           <div>
-            <label className="text-sm text-[#888]">Expiration</label>
+            <label className="text-sm text-[var(--foreground-muted)]">Expiration</label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" className="w-full justify-between mt-1">
@@ -234,7 +234,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
           </div>
 
           <div>
-            <label className="text-sm text-[#888]">Password (optional)</label>
+            <label className="text-sm text-[var(--foreground-muted)]">Password (optional)</label>
             <Input
               type="password"
               placeholder="Leave empty for no password"
@@ -258,28 +258,28 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         <Separator />
 
         <div className="space-y-2">
-          <h3 className="font-bold text-sm text-[#1a1a1a]">Restricted links</h3>
+          <h3 className="font-bold text-sm text-[var(--foreground)]">Restricted links</h3>
           {shareLinks === undefined ? (
-            <p className="text-sm text-[#888]">Loading...</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Loading...</p>
           ) : shareLinks.length === 0 ? (
-            <p className="text-sm text-[#888]">No share links yet</p>
+            <p className="text-sm text-[var(--foreground-muted)]">No share links yet</p>
           ) : (
             <div className="space-y-2">
               {shareLinks.map((link) => (
                 <div
                   key={link._id}
-                  className="flex items-center justify-between p-3 border-2 border-[#1a1a1a]"
+                  className="flex items-center justify-between p-3 border-2 border-[var(--border)]"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <code className="text-sm bg-[#e8e8e0] px-2 py-0.5 font-mono truncate max-w-[200px]">
+                      <code className="text-sm bg-[var(--surface-alt)] px-2 py-0.5 font-mono truncate max-w-[200px]">
                         /share/{link.token}
                       </code>
                       {link.isExpired ? (
                         <Badge variant="destructive">Expired</Badge>
                       ) : null}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-[#888]">
+                    <div className="flex items-center gap-3 mt-1 text-xs text-[var(--foreground-muted)]">
                       <span className="flex items-center gap-1">
                         <Eye className="h-3 w-3" />
                         {link.viewCount} views
@@ -304,7 +304,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                       onClick={() => handleCopyLink(link.token)}
                     >
                       {copiedId === link.token ? (
-                        <Check className="h-4 w-4 text-[#2d5a2d]" />
+                        <Check className="h-4 w-4 text-[var(--accent)]" />
                       ) : (
                         <Copy className="h-4 w-4" />
                       )}
@@ -319,7 +319,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-[#dc2626] hover:text-[#dc2626]"
+                      className="text-[var(--destructive)] hover:text-[var(--destructive)]"
                       onClick={() => handleDeleteLink(link._id)}
                     >
                       <Trash2 className="h-4 w-4" />

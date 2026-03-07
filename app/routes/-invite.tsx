@@ -40,19 +40,19 @@ export default function InvitePage() {
 
   if (invite === undefined || !isLoaded) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center">
-        <div className="text-[#888]">Loading...</div>
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-[var(--foreground-muted)]">Loading...</div>
       </div>
     );
   }
 
   if (invite === null) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
-              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--destructive)]/10 flex items-center justify-center mb-4 border-2 border-[var(--destructive)]">
+              <AlertCircle className="h-6 w-6 text-[var(--destructive)]" />
             </div>
             <CardTitle>Invalid or expired invite</CardTitle>
             <CardDescription>
@@ -74,11 +74,11 @@ export default function InvitePage() {
   // User not signed in
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
-              <Users className="h-6 w-6 text-[#888]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+              <Users className="h-6 w-6 text-[var(--foreground-muted)]" />
             </div>
             <CardTitle>You&apos;re invited to {invite.team?.name}</CardTitle>
             <CardDescription>
@@ -86,14 +86,14 @@ export default function InvitePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-3 bg-[#e8e8e0] border-2 border-[#1a1a1a] flex items-center gap-3">
-              <Mail className="h-5 w-5 text-[#888]" />
+            <div className="p-3 bg-[var(--surface-alt)] border-2 border-[var(--border)] flex items-center gap-3">
+              <Mail className="h-5 w-5 text-[var(--foreground-muted)]" />
               <div>
-                <p className="text-sm text-[#888]">Invited email</p>
-                <p className="font-bold text-[#1a1a1a]">{invite.email}</p>
+                <p className="text-sm text-[var(--foreground-muted)]">Invited email</p>
+                <p className="font-bold text-[var(--foreground)]">{invite.email}</p>
               </div>
             </div>
-            <p className="text-sm text-[#888] text-center">
+            <p className="text-sm text-[var(--foreground-muted)] text-center">
               Sign in with the email address above to accept this invite.
             </p>
             <a href={`/sign-in?redirect_url=${encodeURIComponent(`/invite/${token}`)}`} className="block">
@@ -108,11 +108,11 @@ export default function InvitePage() {
   // User signed in but with different email
   if (user.primaryEmailAddress?.emailAddress !== invite.email) {
     return (
-      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
           <CardHeader className="text-center">
-            <div className="mx-auto w-12 h-12 bg-[#ca8a04]/10 flex items-center justify-center mb-4 border-2 border-[#ca8a04]">
-              <AlertCircle className="h-6 w-6 text-[#ca8a04]" />
+            <div className="mx-auto w-12 h-12 bg-[var(--warning)]/10 flex items-center justify-center mb-4 border-2 border-[var(--warning)]">
+              <AlertCircle className="h-6 w-6 text-[var(--warning)]" />
             </div>
             <CardTitle>Different email address</CardTitle>
             <CardDescription>
@@ -121,7 +121,7 @@ export default function InvitePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-[#888] text-center">
+            <p className="text-sm text-[var(--foreground-muted)] text-center">
               Please sign in with the correct email address to accept this invite.
             </p>
             <a href={`/sign-in?redirect_url=${encodeURIComponent(`/invite/${token}`)}`} className="block">
@@ -137,11 +137,11 @@ export default function InvitePage() {
 
   // User signed in with correct email
   return (
-    <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
-            <Users className="h-6 w-6 text-[#888]" />
+          <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+            <Users className="h-6 w-6 text-[var(--foreground-muted)]" />
           </div>
           <CardTitle>Join {invite.team?.name}</CardTitle>
           <CardDescription>
@@ -151,7 +151,7 @@ export default function InvitePage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {error && (
-            <div className="p-3 bg-[#dc2626]/10 text-[#dc2626] border-2 border-[#dc2626] text-sm">
+            <div className="p-3 bg-[var(--destructive)]/10 text-[var(--destructive)] border-2 border-[var(--destructive)] text-sm">
               {error}
             </div>
           )}

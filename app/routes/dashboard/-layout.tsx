@@ -204,16 +204,16 @@ export default function DashboardLayout() {
 
   if (!isLoaded) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#f0f0e8]">
-        <div className="text-[#888]">Loading...</div>
+      <div className="h-full flex items-center justify-center bg-[var(--background)]">
+        <div className="text-[var(--foreground-muted)]">Loading...</div>
       </div>
     );
   }
 
   if (!userId) {
     return (
-      <div className="h-full flex items-center justify-center bg-[#f0f0e8]">
-        <div className="text-[#888]">
+      <div className="h-full flex items-center justify-center bg-[var(--background)]">
+        <div className="text-[var(--foreground-muted)]">
           {isResolvingPublicPlaybackExemption
             ? "Checking public playback access..."
             : "Redirecting to sign in..."}
@@ -223,7 +223,7 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className={cn("relative h-full flex flex-col bg-[#f0f0e8]")}>
+    <div className={cn("relative h-full flex flex-col bg-[var(--background)]")}>
       {/* Main content */}
       <main className="flex-1 overflow-auto flex flex-col">
         <DashboardUploadProvider value={uploadContext}>
@@ -233,9 +233,9 @@ export default function DashboardLayout() {
 
       {isGlobalDragActive && (
         <div className="pointer-events-none fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-[#1a1a1a]/20" />
-          <div className="absolute inset-4 border-4 border-dashed border-[#2d5a2d] bg-[#2d5a2d]/10 flex items-center justify-center">
-            <p className="border-2 border-[#1a1a1a] bg-[#f0f0e8] px-4 py-2 text-sm font-bold text-[#1a1a1a]">
+          <div className="absolute inset-0 bg-[var(--border)]/20" />
+          <div className="absolute inset-4 border-4 border-dashed border-[var(--accent)] bg-[var(--accent)]/10 flex items-center justify-center">
+            <p className="border-2 border-[var(--border)] bg-[var(--background)] px-4 py-2 text-sm font-bold text-[var(--foreground)]">
               Drop videos to upload
             </p>
           </div>
@@ -271,22 +271,22 @@ export default function DashboardLayout() {
             </DialogDescription>
           </DialogHeader>
           {uploadTargets === undefined ? (
-            <p className="text-sm text-[#888]">Loading projects...</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Loading projects...</p>
           ) : uploadTargets.length === 0 ? (
-            <p className="text-sm text-[#888]">
+            <p className="text-sm text-[var(--foreground-muted)]">
               No uploadable projects found for your account.
             </p>
           ) : (
-            <div className="max-h-80 overflow-y-auto border-2 border-[#1a1a1a] divide-y-2 divide-[#1a1a1a]">
+            <div className="max-h-80 overflow-y-auto border-2 border-[var(--border)] divide-y-2 divide-[var(--border)]">
               {uploadTargets.map((target) => (
                 <button
                   key={target.projectId}
                   type="button"
-                  className="w-full px-4 py-3 text-left hover:bg-[#e8e8e0] transition-colors"
+                  className="w-full px-4 py-3 text-left hover:bg-[var(--surface-alt)] transition-colors"
                   onClick={() => handleProjectSelected(target.projectId)}
                 >
-                  <p className="font-bold text-[#1a1a1a]">{target.projectName}</p>
-                  <p className="text-xs text-[#888]">{target.teamName}</p>
+                  <p className="font-bold text-[var(--foreground)]">{target.projectName}</p>
+                  <p className="text-xs text-[var(--foreground-muted)]">{target.teamName}</p>
                 </button>
               ))}
             </div>

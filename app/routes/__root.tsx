@@ -61,11 +61,17 @@ function RootDocument({ children }: { children: ReactNode }) {
     (() => {
       try {
         const stored = localStorage.getItem("loam-theme") ?? localStorage.getItem("lawn-theme");
+        const storedLook = localStorage.getItem("loam-theme-look");
         if (stored === "light" || stored === "dark") {
           localStorage.setItem("loam-theme", stored);
           document.documentElement.setAttribute("data-theme", stored);
-          return;
         }
+        if (storedLook === "brutalist" || storedLook === "clean") {
+          document.documentElement.setAttribute("data-look", storedLook);
+        } else {
+          document.documentElement.setAttribute("data-look", "brutalist");
+        }
+        if (stored === "light" || stored === "dark") return;
         const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         if (prefersDark) {
           document.documentElement.setAttribute("data-theme", "dark");

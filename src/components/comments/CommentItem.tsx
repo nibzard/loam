@@ -71,8 +71,8 @@ export function CommentItem({
         "transition-all relative group",
         isReply ? "py-2" : "p-4",
         isHighlighted
-          ? "bg-[#2d5a2d]/10"
-          : "hover:bg-[#1a1a1a]/5",
+          ? "bg-[var(--accent)]/10"
+          : "hover:bg-[var(--surface-strong)]/5",
         comment.resolved && "opacity-50"
       )}
     >
@@ -86,12 +86,12 @@ export function CommentItem({
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="font-bold text-sm text-[#1a1a1a] truncate">
+              <span className="font-bold text-sm text-[var(--foreground)] truncate">
                 {comment.userName}
               </span>
               <button
                 onClick={() => onTimestampClick(comment.timestampSeconds)}
-                className="text-xs text-[#2d5a2d] hover:text-[#1a1a1a] font-mono font-bold shrink-0"
+                className="text-xs text-[var(--accent)] hover:text-[var(--foreground)] font-mono font-bold shrink-0"
               >
                 {formatTimestamp(comment.timestampSeconds)}
               </button>
@@ -121,7 +121,7 @@ export function CommentItem({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  className="text-[#dc2626] focus:text-[#dc2626]"
+                  className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                   onClick={handleDelete}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
@@ -130,10 +130,10 @@ export function CommentItem({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <p className="text-sm text-[#1a1a1a] mt-1 whitespace-pre-wrap break-words">
+          <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap break-words">
             {comment.text}
           </p>
-          <p className="text-[11px] text-[#888] mt-1">
+          <p className="text-[11px] text-[var(--foreground-muted)] mt-1">
             {formatRelativeTime(comment._creationTime)}
           </p>
         </div>

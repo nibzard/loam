@@ -35,13 +35,13 @@ export function ReactionBar({
           <button
             key={emoji}
             type="button"
-            className="inline-flex items-center gap-1 border-2 border-[#1a1a1a] bg-[#f0f0e8] px-2 py-1 text-sm font-semibold hover:bg-[#e8e8e0] disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1 border-2 border-[var(--border)] bg-[var(--background)] px-2 py-1 text-sm font-semibold hover:bg-[var(--surface-alt)] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={disabled}
             onClick={() => onReact(emoji)}
           >
             <span>{emoji}</span>
             {count > 0 ? (
-              <span className="text-xs font-mono text-[#666]">{count}</span>
+              <span className="text-xs font-mono text-[var(--foreground-subtle)]">{count}</span>
             ) : null}
           </button>
         );

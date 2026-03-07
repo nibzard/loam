@@ -79,6 +79,29 @@
   --border-subtle: #cccccc;
   --shadow-color: #1a1a1a;
   --shadow-accent: rgba(45,90,45,1);
+  --media-background: #000000;
+  --media-border: rgba(0,0,0,0.8);
+  --media-shadow: rgba(0,0,0,0.45);
+  --media-scrim: rgba(0,0,0,0.4);
+  --media-overlay: rgba(0,0,0,0.6);
+  --media-overlay-subtle: rgba(0,0,0,0.1);
+  --media-overlay-strong: rgba(0,0,0,0.7);
+  --media-overlay-solid: rgba(0,0,0,0.75);
+  --media-overlay-heavy: rgba(0,0,0,0.9);
+  --media-outline: rgba(255,255,255,0.10);
+  --media-outline-strong: rgba(255,255,255,0.15);
+  --media-outline-focus: rgba(255,255,255,0.30);
+  --media-fill: rgba(255,255,255,0.05);
+  --media-fill-strong: rgba(255,255,255,0.10);
+  --media-fill-stronger: rgba(255,255,255,0.15);
+  --media-track-fill: rgba(255,255,255,0.10);
+  --media-track-buffered: rgba(255,255,255,0.20);
+  --media-text: rgba(255,255,255,1);
+  --media-text-soft: rgba(255,255,255,0.95);
+  --media-text-dim: rgba(255,255,255,0.85);
+  --media-text-faint: rgba(255,255,255,0.60);
+  --media-text-subtle: rgba(255,255,255,0.6);
+  --media-control-ink: rgba(0,0,0,0.40);
 
   /* Accent - forest green */
   --accent: #2d5a2d;
@@ -111,7 +134,7 @@
   --foreground: #e7ede4;
   --foreground-muted: #9aa79b;
   --foreground-subtle: #7e897f;
-  --foreground-inverse: #101410;
+  --foreground-inverse: #e7ede4;
 
   /* Borders */
   --border: #e7ede4;
@@ -135,6 +158,60 @@
   color-scheme: dark;
 }
 
+:root[data-look="clean"] {
+  /* Cleaner visual preset with softened contrast */
+  --background: #f5f7fb;
+  --background-alt: #1f2937;
+  --surface: #ffffff;
+  --surface-alt: #eef2ff;
+  --surface-strong: #111827;
+  --surface-muted: #dbe4f2;
+
+  --foreground: #0f172a;
+  --foreground-muted: #64748b;
+  --foreground-subtle: #94a3b8;
+  --foreground-inverse: #f8fafc;
+
+  --border: #111827;
+  --border-subtle: #cbd5e1;
+  --shadow-color: #111827;
+  --shadow-accent: #0f766e;
+
+  --media-background: #0f172a;
+  --media-border: rgba(15,23,42,0.85);
+  --media-shadow: rgba(15,23,42,0.35);
+  --media-scrim: rgba(15,23,42,0.45);
+  --media-overlay: rgba(15,23,42,0.6);
+  --media-overlay-subtle: rgba(15,23,42,0.12);
+  --media-overlay-strong: rgba(15,23,42,0.75);
+  --media-overlay-solid: rgba(15,23,42,0.8);
+  --media-overlay-heavy: rgba(15,23,42,0.9);
+  --media-outline: rgba(248,250,252,0.12);
+  --media-outline-strong: rgba(248,250,252,0.2);
+  --media-outline-focus: rgba(248,250,252,0.35);
+  --media-fill: rgba(248,250,252,0.05);
+  --media-fill-strong: rgba(248,250,252,0.10);
+  --media-fill-stronger: rgba(248,250,252,0.15);
+  --media-track-fill: rgba(248,250,252,0.12);
+  --media-track-buffered: rgba(248,250,252,0.2);
+  --media-text: rgba(248,250,252,1);
+  --media-text-soft: rgba(248,250,252,0.94);
+  --media-text-dim: rgba(248,250,252,0.86);
+  --media-text-faint: rgba(248,250,252,0.62);
+  --media-text-subtle: rgba(248,250,252,0.6);
+
+  --accent: #0f766e;
+  --accent-hover: #0f5d56;
+  --accent-light: #2dd4bf;
+
+  --destructive: #dc2626;
+  --destructive-subtle: #fef2f2;
+  --success: #16a34a;
+  --success-subtle: #dcfce7;
+  --warning: #ca8a04;
+  --warning-subtle: #fef9c3;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     /* Core palette - deep olive/charcoal */
@@ -146,10 +223,10 @@
     --surface-muted: #2b332b;
 
     /* Text */
-    --foreground: #e7ede4;
-    --foreground-muted: #9aa79b;
-    --foreground-subtle: #7e897f;
-    --foreground-inverse: #101410;
+  --foreground: #e7ede4;
+  --foreground-muted: #9aa79b;
+  --foreground-subtle: #7e897f;
+  --foreground-inverse: #e7ede4;
 
     /* Borders */
     --border: #e7ede4;
@@ -172,6 +249,59 @@
 
     color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"][data-look="clean"] {
+  --background: #0f172a;
+  --background-alt: #94a3b8;
+  --surface: #111827;
+  --surface-alt: #1e293b;
+  --surface-strong: #1d293f;
+  --surface-muted: #27364a;
+
+  --foreground: #e2e8f0;
+  --foreground-muted: #94a3b8;
+  --foreground-subtle: #cbd5e1;
+  --foreground-inverse: #f8fafc;
+
+  --border: #94a3b8;
+  --border-subtle: #334155;
+  --shadow-color: #0ea5e9;
+  --shadow-accent: #2dd4bf;
+
+  --media-background: #020617;
+  --media-border: rgba(15,23,42,0.9);
+  --media-shadow: rgba(14,165,233,0.38);
+  --media-scrim: rgba(15,23,42,0.55);
+  --media-overlay: rgba(2,6,23,0.65);
+  --media-overlay-subtle: rgba(2,6,23,0.15);
+  --media-overlay-strong: rgba(2,6,23,0.74);
+  --media-overlay-solid: rgba(2,6,23,0.8);
+  --media-overlay-heavy: rgba(2,6,23,0.92);
+  --media-outline: rgba(248,250,252,0.12);
+  --media-outline-strong: rgba(248,250,252,0.22);
+  --media-outline-focus: rgba(248,250,252,0.38);
+  --media-fill: rgba(248,250,252,0.05);
+  --media-fill-strong: rgba(248,250,252,0.11);
+  --media-fill-stronger: rgba(248,250,252,0.16);
+  --media-track-fill: rgba(248,250,252,0.12);
+  --media-track-buffered: rgba(248,250,252,0.25);
+  --media-text: rgba(248,250,252,1);
+  --media-text-soft: rgba(248,250,252,0.95);
+  --media-text-dim: rgba(248,250,252,0.85);
+  --media-text-faint: rgba(248,250,252,0.62);
+  --media-text-subtle: rgba(248,250,252,0.6);
+
+  --accent: #2dd4bf;
+  --accent-hover: #14b8a6;
+  --accent-light: #a7f3d0;
+
+  --destructive: #f87171;
+  --destructive-subtle: #2d1618;
+  --success: #4ade80;
+  --success-subtle: #14291a;
+  --warning: #fbbf24;
+  --warning-subtle: #2f250f;
 }
 
 @theme inline {

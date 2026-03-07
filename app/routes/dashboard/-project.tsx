@@ -265,7 +265,7 @@ export default function ProjectPage({
   if (context === null || project === null) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-[#888]">Project not found</div>
+        <div className="text-[var(--foreground-muted)]">Project not found</div>
       </div>
     );
   }
@@ -288,14 +288,14 @@ export default function ProjectPage({
           isLoadingData ? "opacity-0" : "opacity-100"
         )}>
           {/* View toggle */}
-          <div className="flex items-center border-2 border-[#1a1a1a] p-0.5">
+          <div className="flex items-center border-2 border-[var(--border)] p-0.5">
             <button
               onClick={() => setViewMode("grid")}
               className={cn(
                 "p-1.5 transition-colors",
                 viewMode === "grid"
-                  ? "bg-[#1a1a1a] text-[#f0f0e8]"
-                  : "text-[#888] hover:text-[#1a1a1a]",
+                  ? "bg-[var(--surface-strong)] text-[var(--foreground-inverse)]"
+                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]",
               )}
             >
               <Grid3X3 className="h-4 w-4" />
@@ -305,8 +305,8 @@ export default function ProjectPage({
               className={cn(
                 "p-1.5 transition-colors",
                 viewMode === "list"
-                  ? "bg-[#1a1a1a] text-[#f0f0e8]"
-                  : "text-[#888] hover:text-[#1a1a1a]",
+                  ? "bg-[var(--surface-strong)] text-[var(--foreground-inverse)]"
+                  : "text-[var(--foreground-muted)] hover:text-[var(--foreground)]",
               )}
             >
               <LayoutList className="h-4 w-4" />
@@ -357,7 +357,7 @@ export default function ProjectPage({
                       })
                     }
                   >
-                    <div className="relative aspect-video bg-[#e8e8e0] overflow-hidden border-2 border-[#1a1a1a] shadow-[4px_4px_0px_0px_var(--shadow-color)] group-hover:translate-y-[2px] group-hover:translate-x-[2px] group-hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all">
+                    <div className="relative aspect-video bg-[var(--surface-alt)] overflow-hidden border-2 border-[var(--border)] shadow-[4px_4px_0px_0px_var(--shadow-color)] group-hover:translate-y-[2px] group-hover:translate-x-[2px] group-hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all">
                       {thumbnailSrc ? (
                         <img
                           src={thumbnailSrc}
@@ -366,17 +366,17 @@ export default function ProjectPage({
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <Play className="h-10 w-10 text-[#888]" />
+                          <Play className="h-10 w-10 text-[var(--foreground-muted)]" />
                         </div>
                       )}
                     {video.status === "ready" && video.duration && (
-                      <div className="absolute bottom-2 right-2 bg-black/70 text-white text-[11px] font-mono px-1.5 py-0.5">
+                      <div className="absolute bottom-2 right-2 bg-[var(--media-overlay-strong)] text-[var(--media-text)] text-[11px] font-mono px-1.5 py-0.5">
                         {formatDuration(video.duration)}
                       </div>
                     )}
                     {video.status !== "ready" && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <span className="text-white text-xs font-bold uppercase tracking-wider">
+                      <div className="absolute inset-0 bg-[var(--media-overlay)] flex items-center justify-center">
+                        <span className="text-[var(--media-text)] text-xs font-bold uppercase tracking-wider">
                           {video.status === "uploading" && "Uploading..."}
                           {video.status === "processing" && "Processing..."}
                           {video.status === "failed" && "Failed"}
@@ -392,7 +392,7 @@ export default function ProjectPage({
                         >
                           <button
                             type="button"
-                            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center bg-black/60 hover:bg-black/80 text-white"
+                            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center bg-[var(--media-overlay-strong)] hover:bg-[var(--media-overlay-solid)] text-[var(--media-text)]"
                           >
                             <MoreVertical className="h-4 w-4" />
                           </button>
@@ -423,7 +423,7 @@ export default function ProjectPage({
                           </DropdownMenuItem>
                           {canUpload && (
                             <DropdownMenuItem
-                              className="text-[#dc2626] focus:text-[#dc2626]"
+                              className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteVideo(video._id);
@@ -438,7 +438,7 @@ export default function ProjectPage({
                     </div>
                   </div>
                   <div className="mt-2.5">
-                    <p className="text-[15px] text-[#1a1a1a] font-black truncate leading-tight">
+                    <p className="text-[15px] text-[var(--foreground)] font-black truncate leading-tight">
                       {video.title}
                     </p>
                     <div className="mt-1.5 flex items-center gap-3">
@@ -451,18 +451,18 @@ export default function ProjectPage({
                         }
                       />
                       {video.commentCount > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-[#888]">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-[var(--foreground-muted)]">
                           <MessageSquare className="h-3 w-3" />
                           {video.commentCount}
                         </span>
                       )}
                       {watchingCount > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-[#1a1a1a]">
+                        <span className="inline-flex items-center gap-1 text-[11px] text-[var(--foreground)]">
                           <Eye className="h-3 w-3" />
                           {watchingCount}
                         </span>
                       )}
-                      <span className="text-[11px] text-[#888] ml-auto font-mono">
+                      <span className="text-[11px] text-[var(--foreground-muted)] ml-auto font-mono">
                         {formatRelativeTime(video._creationTime)}
                       </span>
                     </div>
@@ -475,7 +475,7 @@ export default function ProjectPage({
         ) : (
           /* List View - Horizontal rows */
           <div className={cn(
-            "divide-y-2 divide-[#1a1a1a] transition-opacity duration-300",
+            "divide-y-2 divide-[var(--border)] transition-opacity duration-300",
             isLoadingData ? "opacity-0" : "opacity-100"
           )}>
             {videos?.map((video) => {
@@ -489,7 +489,7 @@ export default function ProjectPage({
               return (
                 <VideoIntentTarget
                   key={video._id}
-                  className="group flex items-center gap-5 px-6 py-3 hover:bg-[#e8e8e0] cursor-pointer transition-colors"
+                  className="group flex items-center gap-5 px-6 py-3 hover:bg-[var(--surface-alt)] cursor-pointer transition-colors"
                   teamSlug={resolvedTeamSlug}
                   projectId={project._id}
                   videoId={video._id}
@@ -501,7 +501,7 @@ export default function ProjectPage({
                   }
                 >
                   {/* Thumbnail */}
-                  <div className="relative w-44 aspect-video bg-[#e8e8e0] overflow-hidden border-2 border-[#1a1a1a] shrink-0 shadow-[4px_4px_0px_0px_var(--shadow-color)] group-hover:translate-y-[2px] group-hover:translate-x-[2px] group-hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all">
+                  <div className="relative w-44 aspect-video bg-[var(--surface-alt)] overflow-hidden border-2 border-[var(--border)] shrink-0 shadow-[4px_4px_0px_0px_var(--shadow-color)] group-hover:translate-y-[2px] group-hover:translate-x-[2px] group-hover:shadow-[2px_2px_0px_0px_var(--shadow-color)] transition-all">
                     {thumbnailSrc ? (
                       <img
                         src={thumbnailSrc}
@@ -510,12 +510,12 @@ export default function ProjectPage({
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <Play className="h-6 w-6 text-[#888]" />
+                        <Play className="h-6 w-6 text-[var(--foreground-muted)]" />
                       </div>
                     )}
                     {video.status !== "ready" && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <span className="text-white text-[10px] font-bold uppercase tracking-wider">
+                      <div className="absolute inset-0 bg-[var(--media-overlay)] flex items-center justify-center">
+                        <span className="text-[var(--media-text)] text-[10px] font-bold uppercase tracking-wider">
                           {video.status === "uploading" && "Uploading..."}
                           {video.status === "processing" && "Processing..."}
                           {video.status === "failed" && "Failed"}
@@ -523,7 +523,7 @@ export default function ProjectPage({
                       </div>
                     )}
                     {video.status === "ready" && video.duration && (
-                      <div className="absolute bottom-1 right-1 bg-black/70 text-white text-[10px] font-mono px-1 py-0.5">
+                      <div className="absolute bottom-1 right-1 bg-[var(--media-overlay-strong)] text-[var(--media-text)] text-[10px] font-mono px-1 py-0.5">
                         {formatDuration(video.duration)}
                       </div>
                     )}
@@ -531,7 +531,7 @@ export default function ProjectPage({
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="font-black text-[#1a1a1a] truncate">
+                  <p className="font-black text-[var(--foreground)] truncate">
                     {video.title}
                   </p>
                   <div className="flex items-center gap-3 mt-1">
@@ -544,22 +544,22 @@ export default function ProjectPage({
                       }
                     />
                     {video.commentCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs text-[#888]">
+                      <span className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
                         <MessageSquare className="h-3.5 w-3.5" />
                         {video.commentCount}
                       </span>
                     )}
                     {watchingCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-xs text-[#1a1a1a]">
+                      <span className="inline-flex items-center gap-1 text-xs text-[var(--foreground)]">
                         <Eye className="h-3.5 w-3.5" />
                         {watchingCount}
                       </span>
                     )}
-                    <span className="text-xs text-[#888] font-mono">
+                    <span className="text-xs text-[var(--foreground-muted)] font-mono">
                       {formatRelativeTime(video._creationTime)}
                     </span>
                     {video.uploaderName && (
-                      <span className="text-xs text-[#888]">
+                      <span className="text-xs text-[var(--foreground-muted)]">
                         {video.uploaderName}
                       </span>
                     )}
@@ -575,7 +575,7 @@ export default function ProjectPage({
                     >
                       <button
                         type="button"
-                        className="inline-flex h-8 w-8 cursor-pointer items-center justify-center text-[#888] hover:text-[#1a1a1a]"
+                        className="inline-flex h-8 w-8 cursor-pointer items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
                       >
                         <MoreVertical className="h-4 w-4" />
                       </button>
@@ -603,7 +603,7 @@ export default function ProjectPage({
                       </DropdownMenuItem>
                       {canUpload && (
                         <DropdownMenuItem
-                          className="text-[#dc2626] focus:text-[#dc2626]"
+                          className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteVideo(video._id);
@@ -629,8 +629,8 @@ export default function ProjectPage({
             className={cn(
               "border-2 px-3 py-2 text-sm font-bold shadow-[4px_4px_0px_0px_var(--shadow-color)]",
               shareToast.tone === "success"
-                ? "border-[#1a1a1a] bg-[#f0f0e8] text-[#1a1a1a]"
-                : "border-[#dc2626] bg-[#fef2f2] text-[#dc2626]",
+                ? "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]"
+                : "border-[var(--destructive)] bg-[var(--destructive-subtle)] text-[var(--destructive)]",
             )}
           >
             {shareToast.message}

@@ -72,7 +72,7 @@ function DashboardProjectCard({
 
   return (
     <Card
-      className="group cursor-pointer hover:bg-[#e8e8e0] transition-colors"
+      className="group cursor-pointer hover:bg-[var(--surface-alt)] transition-colors"
       onClick={onOpen}
       {...prewarmIntentHandlers}
     >
@@ -85,7 +85,7 @@ function DashboardProjectCard({
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between text-sm text-[#888] group-hover:text-[#1a1a1a] transition-colors">
+        <div className="flex items-center justify-between text-sm text-[var(--foreground-muted)] group-hover:text-[var(--foreground)] transition-colors">
           <span>Open project</span>
           <ArrowRight className="h-4 w-4" />
         </div>
@@ -109,8 +109,8 @@ export default function DashboardPage() {
         <div className="flex-1 flex items-center justify-center p-8 animate-in fade-in duration-300">
           <Card className="max-w-sm w-full text-center">
             <CardHeader>
-              <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-2">
-                <Users className="h-6 w-6 text-[#888]" />
+              <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-2">
+                <Users className="h-6 w-6 text-[var(--foreground-muted)]" />
               </div>
               <CardTitle className="text-lg">Create your first team</CardTitle>
               <CardDescription>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
               <div key={team._id} className="mb-12 last:mb-0">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-6">
                   <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-black text-[#1a1a1a]">{team.name}</h2>
+                    <h2 className="text-xl font-black text-[var(--foreground)]">{team.name}</h2>
                     <Badge variant="secondary">
                       {formatTeamPlanLabel(
                         team.plan,
@@ -172,13 +172,13 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-4">
                     <Link
                       to={teamSettingsPath(team.slug)}
-                      className="text-[#888] hover:text-[#1a1a1a] text-sm font-bold transition-colors"
+                      className="text-[var(--foreground-muted)] hover:text-[var(--foreground)] text-sm font-bold transition-colors"
                     >
                       Billing
                     </Link>
                     <Link
                       to={teamHomePath(team.slug)}
-                      className="text-[#888] hover:text-[#1a1a1a] text-sm font-bold flex items-center gap-1 transition-colors"
+                      className="text-[var(--foreground-muted)] hover:text-[var(--foreground)] text-sm font-bold flex items-center gap-1 transition-colors"
                     >
                       Manage team <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
@@ -188,8 +188,8 @@ export default function DashboardPage() {
                 {team.projects.length === 0 ? (
                   <Card className="max-w-sm text-center">
                     <CardHeader>
-                      <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-2">
-                        <Folder className="h-6 w-6 text-[#888]" />
+                      <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-2">
+                        <Folder className="h-6 w-6 text-[var(--foreground-muted)]" />
                       </div>
                       <CardTitle className="text-lg">No projects yet</CardTitle>
                       <CardDescription>

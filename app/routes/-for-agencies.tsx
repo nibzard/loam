@@ -56,10 +56,10 @@ export default function ForAgencies() {
   return (
     <MarketingLayout>
       {/* Hero */}
-      <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[#f0f0e8]">
+      <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--background)]">
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
-            <span className="text-sm font-bold uppercase tracking-widest text-[#888]">
+            <span className="text-sm font-bold uppercase tracking-widest text-[var(--foreground-muted)]">
               /FOR AGENCIES
             </span>
           </div>
@@ -68,17 +68,17 @@ export default function ForAgencies() {
             <br />
             PER SEAT.
             <br />
-            <span className="text-[#2d5a2d]">START SHIPPING</span>
+            <span className="text-[var(--accent)]">START SHIPPING</span>
             <br />
             WORK.
           </h1>
           <div className="mt-12 max-w-2xl">
-            <p className="text-xl md:text-2xl font-medium text-[#1a1a1a]">
+            <p className="text-xl md:text-2xl font-medium text-[var(--foreground)]">
               You're a 15-person agency with 30 freelancers rotating through.
               Per-seat pricing wasn't built for you. It was built to charge you
               more.
             </p>
-            <p className="text-lg text-[#888] font-medium mt-4">
+            <p className="text-lg text-[var(--foreground-muted)] font-medium mt-4">
               loam is async video for teams. Starter is $15/month for the
               whole workspace, not per seat.
             </p>
@@ -86,15 +86,15 @@ export default function ForAgencies() {
           <div className="mt-12 flex flex-col sm:flex-row gap-4">
             <Link
               to="/sign-up"
-              className="bg-[#1a1a1a] text-[#f0f0e8] px-8 py-5 border-2 border-[#1a1a1a] font-black text-lg uppercase tracking-wider hover:bg-[#2d5a2d] transition-colors shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] text-center"
+              className="bg-[var(--surface-strong)] text-[var(--foreground-inverse)] px-8 py-5 border-2 border-[var(--border)] font-black text-lg uppercase tracking-wider hover:bg-[var(--accent)] transition-colors shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] text-center"
             >
               START YOUR TEAM
             </Link>
-            <div className="bg-[#f0f0e8] border-2 border-[#1a1a1a] px-8 py-5 shadow-[8px_8px_0px_0px_var(--shadow-color)]">
+            <div className="bg-[var(--background)] border-2 border-[var(--border)] px-8 py-5 shadow-[8px_8px_0px_0px_var(--shadow-color)]">
               <span className="text-3xl font-black block leading-none">
                 From $15/mo
               </span>
-              <span className="text-xs font-bold uppercase tracking-wider text-[#888] mt-1 block">
+              <span className="text-xs font-bold uppercase tracking-wider text-[var(--foreground-muted)] mt-1 block">
                 Unlimited seats. No seat tax.
               </span>
             </div>
@@ -103,14 +103,14 @@ export default function ForAgencies() {
       </section>
 
       {/* Pain Points */}
-      <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[#e8e8e0]">
+      <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--surface-alt)]">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-6">
             AGENCY LIFE
             <br />
             IS HARD ENOUGH.
           </h2>
-          <p className="text-xl text-[#888] font-medium mb-16 max-w-2xl">
+          <p className="text-xl text-[var(--foreground-muted)] font-medium mb-16 max-w-2xl">
             Your async video tool shouldn't make it harder. Here are the
             problems we actually solve.
           </p>
@@ -119,10 +119,10 @@ export default function ForAgencies() {
             {painPoints.map((point) => (
               <div
                 key={point.id}
-                className="bg-[#f0f0e8] border-2 border-[#1a1a1a] shadow-[8px_8px_0px_0px_var(--shadow-color)] flex flex-col hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] transition-all"
+                className="bg-[var(--background)] border-2 border-[var(--border)] shadow-[8px_8px_0px_0px_var(--shadow-color)] flex flex-col hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] transition-all"
               >
-                <div className="border-b-2 border-[#1a1a1a] px-6 py-4 flex items-center gap-4 bg-[#1a1a1a] text-[#f0f0e8]">
-                  <span className="text-sm font-black text-[#7cb87c]">
+                <div className="border-b-2 border-[var(--border)] px-6 py-4 flex items-center gap-4 bg-[var(--surface-strong)] text-[var(--foreground-inverse)]">
+                  <span className="text-sm font-black text-[var(--accent-light)]">
                     /{point.id}
                   </span>
                 </div>
@@ -130,7 +130,7 @@ export default function ForAgencies() {
                   <h3 className="text-xl md:text-2xl font-black uppercase tracking-tight leading-tight mb-4">
                     {point.title}
                   </h3>
-                  <p className="text-base font-medium text-[#1a1a1a] leading-relaxed">
+                  <p className="text-base font-medium text-[var(--foreground)] leading-relaxed">
                     {point.description}
                   </p>
                 </div>
@@ -141,7 +141,7 @@ export default function ForAgencies() {
       </section>
 
       {/* Cost Comparison */}
-      <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[#f0f0e8]">
+      <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--background)]">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row gap-16">
             <div className="lg:w-1/3">
@@ -150,7 +150,7 @@ export default function ForAgencies() {
                 <br />
                 MATH.
               </h2>
-              <p className="text-xl text-[#888] font-medium max-w-sm">
+              <p className="text-xl text-[var(--foreground-muted)] font-medium max-w-sm">
                 Loom Business starts at $18/user/month. loam Starter is
                 $15/month per workspace. Here is what that looks like at agency
                 scale.
@@ -161,12 +161,12 @@ export default function ForAgencies() {
               {comparisons.map((row) => (
                 <div
                   key={row.size}
-                  className="border-2 border-[#1a1a1a] shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] transition-all"
+                  className="border-2 border-[var(--border)] shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:-translate-y-1 hover:translate-x-1 hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] transition-all"
                 >
                   <div className="flex flex-col md:flex-row">
                     {/* Team size label */}
-                    <div className="bg-[#1a1a1a] text-[#f0f0e8] p-6 md:p-8 md:w-1/3 flex flex-col justify-center border-b-2 md:border-b-0 md:border-r-2 border-[#1a1a1a]">
-                      <span className="text-xs font-bold tracking-widest text-[#7cb87c] mb-1">
+                    <div className="bg-[var(--surface-strong)] text-[var(--foreground-inverse)] p-6 md:p-8 md:w-1/3 flex flex-col justify-center border-b-2 md:border-b-0 md:border-r-2 border-[var(--border)]">
+                      <span className="text-xs font-bold tracking-widest text-[var(--accent-light)] mb-1">
                         TEAM SIZE
                       </span>
                       <span className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-none">
@@ -176,36 +176,36 @@ export default function ForAgencies() {
 
                     {/* Comparison numbers */}
                     <div className="flex flex-col sm:flex-row flex-grow">
-                      <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[#1a1a1a] bg-[#ffffff]">
-                        <span className="text-xs font-bold tracking-widest text-[#888] block mb-1">
+                      <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[var(--border)] bg-[var(--surface)]">
+                        <span className="text-xs font-bold tracking-widest text-[var(--foreground-muted)] block mb-1">
                           LOOM
                         </span>
-                        <span className="text-3xl font-black text-[#dc2626]">
+                        <span className="text-3xl font-black text-[var(--destructive)]">
                           {row.competitor}
                         </span>
-                        <span className="text-sm text-[#888] font-bold">
+                        <span className="text-sm text-[var(--foreground-muted)] font-bold">
                           /mo
                         </span>
                       </div>
-                      <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[#1a1a1a] bg-[#f0f0e8]">
-                        <span className="text-xs font-bold tracking-widest text-[#888] block mb-1">
+                      <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[var(--border)] bg-[var(--background)]">
+                        <span className="text-xs font-bold tracking-widest text-[var(--foreground-muted)] block mb-1">
                           LOAM
                         </span>
-                        <span className="text-3xl font-black text-[#2d5a2d]">
+                        <span className="text-3xl font-black text-[var(--accent)]">
                           {row.loam}
                         </span>
-                        <span className="text-sm text-[#888] font-bold">
+                        <span className="text-sm text-[var(--foreground-muted)] font-bold">
                           /mo
                         </span>
                       </div>
-                      <div className="p-6 md:p-8 flex-1 bg-[#f0f0e8]">
-                        <span className="text-xs font-bold tracking-widest text-[#888] block mb-1">
+                      <div className="p-6 md:p-8 flex-1 bg-[var(--background)]">
+                        <span className="text-xs font-bold tracking-widest text-[var(--foreground-muted)] block mb-1">
                           YOU SAVE / YEAR
                         </span>
-                        <span className="text-3xl font-black text-[#2d5a2d]">
+                        <span className="text-3xl font-black text-[var(--accent)]">
                           {row.saved}
                         </span>
-                        <p className="text-sm font-bold text-[#888] mt-2">
+                        <p className="text-sm font-bold text-[var(--foreground-muted)] mt-2">
                           {row.commentary}
                         </p>
                       </div>
@@ -214,9 +214,9 @@ export default function ForAgencies() {
                 </div>
               ))}
 
-              <div className="border-2 border-[#1a1a1a] bg-[#1a1a1a] text-[#f0f0e8] p-6 md:p-8">
+              <div className="border-2 border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground-inverse)] p-6 md:p-8">
                 <p className="text-lg font-bold">
-                  <span className="text-[#7cb87c]">The pattern:</span> They
+                  <span className="text-[var(--accent-light)]">The pattern:</span> They
                   charge more as you grow. We don't. Your 50th seat costs the
                   same as your first - $0 extra.
                 </p>
@@ -227,7 +227,7 @@ export default function ForAgencies() {
       </section>
 
       {/* CTA */}
-      <section className="px-6 py-32 bg-[#2d5a2d] text-[#f0f0e8] border-b-2 border-[#1a1a1a]">
+      <section className="px-6 py-32 bg-[var(--accent)] text-[var(--foreground-inverse)] border-b-2 border-[var(--border)]">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           <h2 className="text-6xl md:text-8xl lg:text-9xl font-black uppercase tracking-tighter leading-[0.85] mb-8">
             START YOUR
@@ -238,12 +238,12 @@ export default function ForAgencies() {
             Starter is $15/month. Pro is $49. Unlimited seats either way, with
             storage and sharing limits that stay predictable.
           </p>
-          <p className="text-lg text-[#f0f0e8]/60 font-medium mb-12">
+          <p className="text-lg text-[var(--foreground-inverse)]/60 font-medium mb-12">
             Set up takes about 2 minutes. Your first freelancer will thank you.
           </p>
           <Link
             to="/sign-up"
-            className="bg-[#f0f0e8] text-[#1a1a1a] px-12 py-6 border-2 border-[#f0f0e8] text-2xl font-black uppercase tracking-wider hover:bg-[#1a1a1a] hover:text-[#f0f0e8] hover:border-[#f0f0e8] transition-colors shadow-[8px_8px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]"
+            className="bg-[var(--background)] text-[var(--foreground)] px-12 py-6 border-2 border-[var(--border)] text-2xl font-black uppercase tracking-wider hover:bg-[var(--surface-strong)] hover:text-[var(--foreground-inverse)] hover:border-[var(--border)] transition-colors shadow-[8px_8px_0px_0px_rgba(0,0,0,0.3)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]"
           >
             START YOUR TEAM
           </Link>

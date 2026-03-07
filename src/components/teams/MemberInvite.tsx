@@ -145,8 +145,8 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
         </form>
 
         {inviteLink && (
-          <div className="border-2 border-[#1a1a1a] bg-[#e8e8e0] p-3">
-            <p className="text-sm text-[#888] mb-2">
+          <div className="border-2 border-[var(--border)] bg-[var(--surface-alt)] p-3">
+            <p className="text-sm text-[var(--foreground-muted)] mb-2">
               Share this link with the invitee:
             </p>
             <div className="flex gap-2">
@@ -167,12 +167,12 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
         )}
 
         <div className="space-y-2">
-          <h4 className="text-sm font-bold text-[#1a1a1a]">Current members</h4>
+          <h4 className="text-sm font-bold text-[var(--foreground)]">Current members</h4>
           <div className="space-y-2">
             {members?.map((member) => (
               <div
                 key={member._id}
-                className="flex items-center justify-between p-2 border-2 border-[#1a1a1a]"
+                className="flex items-center justify-between p-2 border-2 border-[var(--border)]"
               >
                 <div className="flex items-center gap-3">
                   <Avatar className="h-8 w-8">
@@ -182,8 +182,8 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-sm font-bold text-[#1a1a1a]">{member.userName}</p>
-                    <p className="text-xs text-[#888]">{member.userEmail}</p>
+                    <p className="text-sm font-bold text-[var(--foreground)]">{member.userName}</p>
+                    <p className="text-xs text-[var(--foreground-muted)]">{member.userEmail}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -219,7 +219,7 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-[#dc2626] hover:text-[#dc2626] hover:bg-[#dc2626]/10"
+                        className="h-8 w-8 text-[var(--destructive)] hover:text-[var(--destructive)] hover:bg-[var(--destructive)]/10"
                         onClick={() => handleRemoveMember(member._id)}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -234,16 +234,16 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
 
         {invites && invites.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-bold text-[#1a1a1a]">Pending invites</h4>
+            <h4 className="text-sm font-bold text-[var(--foreground)]">Pending invites</h4>
             <div className="space-y-2">
               {invites.map((invite) => (
                 <div
                   key={invite._id}
-                  className="flex items-center justify-between p-2 border-2 border-[#1a1a1a] bg-[#e8e8e0]"
+                  className="flex items-center justify-between p-2 border-2 border-[var(--border)] bg-[var(--surface-alt)]"
                 >
                   <div>
-                    <p className="text-sm text-[#1a1a1a]">{invite.email}</p>
-                    <p className="text-xs text-[#888]">
+                    <p className="text-sm text-[var(--foreground)]">{invite.email}</p>
+                    <p className="text-xs text-[var(--foreground-muted)]">
                       Invited as {roleLabels[invite.role]}
                     </p>
                   </div>

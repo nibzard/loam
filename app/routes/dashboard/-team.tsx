@@ -65,7 +65,7 @@ function TeamProjectCard({
 
   return (
     <Card
-      className="group cursor-pointer hover:bg-[#e8e8e0] transition-colors"
+      className="group cursor-pointer hover:bg-[var(--surface-alt)] transition-colors"
       onClick={onOpen}
       {...prewarmIntentHandlers}
     >
@@ -92,7 +92,7 @@ function TeamProjectCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                className="text-[#dc2626] focus:text-[#dc2626]"
+                className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(project._id);
@@ -106,7 +106,7 @@ function TeamProjectCard({
         )}
       </CardHeader>
       <CardContent>
-        <div className="flex items-center justify-between text-sm text-[#888] group-hover:text-[#1a1a1a] transition-colors">
+        <div className="flex items-center justify-between text-sm text-[var(--foreground-muted)] group-hover:text-[var(--foreground)] transition-colors">
           <span>Open project</span>
           <ArrowRight className="h-4 w-4" />
         </div>
@@ -149,7 +149,7 @@ export default function TeamPage() {
   if (context === null) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-[#888]">Team not found</div>
+        <div className="text-[var(--foreground-muted)]">Team not found</div>
       </div>
     );
   }
@@ -222,7 +222,7 @@ export default function TeamPage() {
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {!isLoadingData && !hasActiveSubscription && canAccessBilling && (
-          <Card className="mb-6 border-[#1a1a1a]">
+          <Card className="mb-6 border-[var(--border)]">
             <CardHeader>
               <CardTitle>Set up billing to create projects</CardTitle>
               <CardDescription>
@@ -247,8 +247,8 @@ export default function TeamPage() {
           <div className="h-full flex items-center justify-center animate-in fade-in duration-300">
             <Card className="max-w-sm text-center">
               <CardHeader>
-                <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-2">
-                  <Folder className="h-6 w-6 text-[#888]" />
+                <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-2">
+                  <Folder className="h-6 w-6 text-[var(--foreground-muted)]" />
                 </div>
                 <CardTitle className="text-lg">No projects yet</CardTitle>
                 <CardDescription>

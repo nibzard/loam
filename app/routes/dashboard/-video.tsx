@@ -283,7 +283,7 @@ export default function VideoPage() {
   if (context === undefined || video === undefined || shouldCanonicalize) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-[#888]">Loading...</div>
+        <div className="text-[var(--foreground-muted)]">Loading...</div>
       </div>
     );
   }
@@ -291,7 +291,7 @@ export default function VideoPage() {
   if (context === null || video === null || !resolvedProjectId || !resolvedVideoId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-[#888]">Video not found</div>
+        <div className="text-[var(--foreground-muted)]">Video not found</div>
       </div>
     );
   }
@@ -301,31 +301,31 @@ export default function VideoPage() {
   const playerFallback = (
     <div className="flex-1 flex items-center justify-center">
       {video.status === "ready" && !playbackUrl ? (
-        <div className="flex flex-col items-center gap-3 text-white">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-          <p className="text-sm font-medium text-white/85">
+        <div className="flex flex-col items-center gap-3 text-[var(--media-text)]">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--media-outline)] border-t-[var(--media-text-subtle)]" />
+          <p className="text-sm font-medium text-[var(--media-text-dim)]">
             {isLoadingPlayback ? "Loading stream..." : "Preparing stream..."}
           </p>
         </div>
       ) : activePlaybackUrl ? (
-        <div className="flex flex-col items-center gap-3 text-white">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-          <p className="text-sm font-medium text-white/85">Loading player...</p>
+        <div className="flex flex-col items-center gap-3 text-[var(--media-text)]">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--media-outline)] border-t-[var(--media-text-subtle)]" />
+          <p className="text-sm font-medium text-[var(--media-text-dim)]">Loading player...</p>
         </div>
       ) : (
         <div className="text-center">
           {video.status === "uploading" && (
-            <p className="text-white/60">Uploading...</p>
+            <p className="text-[var(--media-text-faint)]">Uploading...</p>
           )}
           {video.status === "processing" && (
-            <p className="text-white/60">
+            <p className="text-[var(--media-text-faint)]">
               {isLoadingOriginalPlayback
                 ? "Preparing original playback..."
                 : "Processing video..."}
             </p>
           )}
           {video.status === "failed" && (
-            <p className="text-[#dc2626]">Processing failed</p>
+            <p className="text-[var(--destructive)]">Processing failed</p>
           )}
         </div>
       )}
@@ -398,17 +398,17 @@ export default function VideoPage() {
         }
       ]}>
         {/* Desktop: inline actions */}
-        <div className="hidden sm:flex items-center gap-3 text-xs text-[#888]">
+        <div className="hidden sm:flex items-center gap-3 text-xs text-[var(--foreground-muted)]">
           <span className="truncate max-w-[100px]">{video.uploaderName}</span>
           {video.duration && (
             <>
-              <span className="text-[#ccc]">·</span>
+              <span className="text-[var(--foreground-muted)]">·</span>
               <span className="font-mono">{formatDuration(video.duration)}</span>
             </>
           )}
           <VideoWatchers watchers={watchers} />
         </div>
-        <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[#1a1a1a]/20 pl-3 ml-1">
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[var(--border)]/20 pl-3 ml-1">
           <VideoWorkflowStatusControl
             status={video.workflowStatus}
             size="lg"
@@ -466,12 +466,12 @@ export default function VideoPage() {
       {/* Main content - horizontal split */}
       <div className="flex-1 flex overflow-hidden">
         {/* Video player area - full black, review-focused layout */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--media-background)]">
           {video.status === "processing" && isUsingOriginalFallback && activePlaybackUrl ? (
-            <div className="flex-shrink-0 flex items-center gap-2 bg-[#1a1a1a] px-4 py-2 text-sm text-white">
-              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-[#2d5a2d]" />
+            <div className="flex-shrink-0 flex items-center gap-2 bg-[var(--surface-strong)] px-4 py-2 text-sm text-[var(--media-text)]">
+              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-[var(--accent)]" />
               <span className="font-semibold">Original playback active.</span>
-              <span className="text-white/60">720p stream is still encoding.</span>
+              <span className="text-[var(--media-text-faint)]">720p stream is still encoding.</span>
             </div>
           ) : null}
 
@@ -514,18 +514,18 @@ export default function VideoPage() {
         </div>
 
         {/* Comments sidebar — desktop */}
-        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[#1a1a1a] flex-col bg-[#f0f0e8]">
-          <div className="flex-shrink-0 px-5 py-4 border-b border-[#1a1a1a]/10 dark:border-white/10 flex items-center justify-between">
-            <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a] dark:text-[#f0f0e8]">
+        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[var(--border)] flex-col bg-[var(--background)]">
+          <div className="flex-shrink-0 px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
+            <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[var(--foreground)] dark:text-[var(--foreground-inverse)]">
               Discussion
             </h2>
             {comments && comments.length > 0 && (
-              <span className="text-[11px] font-medium text-[#888] bg-[#1a1a1a]/5 dark:bg-white/5 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] font-medium text-[var(--foreground-muted)] bg-[var(--surface-strong)]/5 dark:bg-[var(--media-fill)] px-2 py-0.5 rounded-full">
                 {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
               </span>
             )}
           </div>
-          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[var(--border)]/10">
             <ReactionBar
               counts={reactionSummary}
               onReact={handleAddReaction}
@@ -541,7 +541,7 @@ export default function VideoPage() {
             />
           </div>
           {canComment && (
-            <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
+            <div className="flex-shrink-0 border-t-2 border-[var(--border)] bg-[var(--background)]">
               <CommentInput
                 videoId={resolvedVideoId}
                 timestampSeconds={currentTime}
@@ -555,12 +555,12 @@ export default function VideoPage() {
 
       {/* Comments overlay — mobile */}
       {mobileCommentsOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[#f0f0e8]">
-          <div className="flex-shrink-0 px-5 py-4 border-b-2 border-[#1a1a1a] flex items-center justify-between">
-            <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[#1a1a1a]">
+        <div className="fixed inset-0 z-50 lg:hidden flex flex-col bg-[var(--background)]">
+          <div className="flex-shrink-0 px-5 py-4 border-b-2 border-[var(--border)] flex items-center justify-between">
+            <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[var(--foreground)]">
               Discussion
               {comments && comments.length > 0 && (
-                <span className="text-[11px] font-medium text-[#888] bg-[#1a1a1a]/5 px-2 py-0.5 rounded-full">
+                <span className="text-[11px] font-medium text-[var(--foreground-muted)] bg-[var(--surface-strong)]/5 px-2 py-0.5 rounded-full">
                   {comments.length}
                 </span>
               )}
@@ -574,7 +574,7 @@ export default function VideoPage() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[var(--border)]/10">
             <ReactionBar
               counts={reactionSummary}
               onReact={handleAddReaction}
@@ -593,7 +593,7 @@ export default function VideoPage() {
             />
           </div>
           {canComment && (
-            <div className="flex-shrink-0 border-t-2 border-[#1a1a1a] bg-[#f0f0e8]">
+            <div className="flex-shrink-0 border-t-2 border-[var(--border)] bg-[var(--background)]">
               <CommentInput
                 videoId={resolvedVideoId}
                 timestampSeconds={currentTime}

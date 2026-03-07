@@ -34,18 +34,18 @@ export function VideoWatchers({
         {visible.map((watcher) => (
           <Avatar
             key={watcher.userId}
-            className="h-5 w-5 border-2 border-[#f0f0e8] ring-0"
+            className="h-5 w-5 border-2 border-[var(--border)] ring-0"
           >
             {watcher.avatarUrl ? (
               <AvatarImage src={watcher.avatarUrl} alt={watcher.displayName} />
             ) : null}
-            <AvatarFallback className="text-[8px] font-bold leading-none bg-[#e8e8e0] text-[#1a1a1a]">
+            <AvatarFallback className="text-[8px] font-bold leading-none bg-[var(--surface-alt)] text-[var(--foreground)]">
               {initials(watcher.displayName)}
             </AvatarFallback>
           </Avatar>
         ))}
         {overflow > 0 && (
-          <span className="inline-flex h-5 min-w-5 items-center justify-center border-2 border-[#f0f0e8] bg-[#e8e8e0] text-[8px] font-bold text-[#888] rounded-full px-1">
+          <span className="inline-flex h-5 min-w-5 items-center justify-center border-2 border-[var(--border)] bg-[var(--surface-alt)] text-[8px] font-bold text-[var(--foreground-muted)] rounded-full px-1">
             +{overflow}
           </span>
         )}

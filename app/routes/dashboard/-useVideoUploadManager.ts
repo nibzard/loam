@@ -14,6 +14,8 @@ export interface ManagedUploadItem {
   error?: string;
   bytesPerSecond?: number;
   estimatedSecondsRemaining?: number | null;
+  shareLinkUrl?: string;
+  shareLinkCopied?: boolean;
   abortController?: AbortController;
 }
 
@@ -22,6 +24,35 @@ function createUploadId() {
     return crypto.randomUUID();
   }
   return Math.random().toString(36).slice(2);
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } finally {
+    document.body.removeChild(textarea);
+  }
+
+  return copied;
 }
 
 export function useVideoUploadManager() {
@@ -33,6 +64,8 @@ export function useVideoUploadManager() {
 
   const uploadFilesToProject = useCallback(
     async (projectId: Id<"projects">, files: File[]) => {
+      const shouldAutoCopyShareLink = files.length === 1;
+
       for (const file of files) {
         const uploadId = createUploadId();
         const title = file.name.replace(/\.[^/.]+$/, "");
@@ -51,14 +84,20 @@ export function useVideoUploadManager() {
         ]);
 
         let createdVideoId: Id<"videos"> | undefined;
+        let shareLinkUrl: string | undefined;
 
         try {
-          createdVideoId = await createVideo({
+          const createdVideo = await createVideo({
             projectId,
             title,
             fileSize: file.size,
             contentType: file.type || "video/mp4",
           });
+          createdVideoId = createdVideo.videoId;
+
+          if (shouldAutoCopyShareLink && typeof window !== "undefined") {
+            shareLinkUrl = `${window.location.origin}/watch/${createdVideo.publicId}`;
+          }
 
           setUploads((prev) =>
             prev.map((upload) =>
@@ -146,10 +185,21 @@ export function useVideoUploadManager() {
 
           await markUploadComplete({ videoId: createdVideoId });
 
+          let shareLinkCopied = false;
+          if (shareLinkUrl && shouldAutoCopyShareLink) {
+            shareLinkCopied = await copyTextToClipboard(shareLinkUrl);
+          }
+
           setUploads((prev) =>
             prev.map((upload) =>
               upload.id === uploadId
-                ? { ...upload, status: "complete", progress: 100 }
+                ? {
+                    ...upload,
+                    status: "complete",
+                    progress: 100,
+                    shareLinkUrl,
+                    shareLinkCopied,
+                  }
                 : upload,
             ),
           );

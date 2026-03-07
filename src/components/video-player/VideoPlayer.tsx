@@ -43,6 +43,7 @@ interface VideoPlayerProps {
   downloadUrl?: string;
   downloadFilename?: string;
   onRequestDownload?: () => Promise<DownloadResult | null | undefined> | DownloadResult | null | undefined;
+  onPlaybackStarted?: () => void;
   qualityOptionsConfig?: Array<{
     id: string;
     label: string;
@@ -87,6 +88,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     downloadUrl,
     downloadFilename,
     onRequestDownload,
+    onPlaybackStarted,
     qualityOptionsConfig,
     selectedQualityId,
     onSelectQuality,
@@ -127,6 +129,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const isPlayingRef = useRef(false);
   const isScrubbingRef = useRef(false);
   const resumeTimeOnSourceChangeRef = useRef<number | null>(null);
+  const playbackStartedRef = useRef(false);
 
   const groupedMarkers = useMemo(() => {
     if (!duration || comments.length === 0) return [] as { position: number; comment: Comment }[];
@@ -455,6 +458,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (cancelled) return;
       setIsPlaying(true);
       setIsBuffering(false);
+      if (!playbackStartedRef.current) {
+        playbackStartedRef.current = true;
+        onPlaybackStarted?.();
+      }
       showControls();
     };
 
@@ -528,6 +535,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       setQualityMenuOpen(false);
       setQualityOptions([]);
       setSelectedQualityLevel(AUTO_QUALITY_LEVEL);
+      playbackStartedRef.current = false;
 
       // Reset the element source before attaching a new one.
       video.removeAttribute("src");
@@ -629,7 +637,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, initialTime, onTimeUpdate, showControls, updateBuffered]);
+  }, [src, initialTime, onPlaybackStarted, onTimeUpdate, showControls, updateBuffered]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

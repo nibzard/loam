@@ -12,6 +12,8 @@ import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
+import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
+import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -21,7 +23,9 @@ export default function SharePage() {
 
   const issueAccessGrant = useMutation(api.shareLinks.issueAccessGrant);
   const createComment = useMutation(api.comments.createForShareGrant);
+  const createReaction = useMutation(api.reactions.createForShareGrant);
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
+  const recordWatch = useAction(api.watchEventActions.recordWatch);
 
   const [grantToken, setGrantToken] = useState<string | null>(null);
   const [hasAttemptedAutoGrant, setHasAttemptedAutoGrant] = useState(false);
@@ -38,9 +42,10 @@ export default function SharePage() {
   const [commentText, setCommentText] = useState("");
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [viewerClientId, setViewerClientId] = useState<string | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
-  const { shareInfo, videoData, comments } = useShareData({ token, grantToken });
+  const { shareInfo, videoData, comments, reactions } = useShareData({ token, grantToken });
   const canTrackPresence = Boolean(playbackSession?.url && videoData?.video?._id);
   const { watchers } = useVideoPresence({
     videoId: videoData?.video?._id,
@@ -52,6 +57,10 @@ export default function SharePage() {
     setGrantToken(null);
     setHasAttemptedAutoGrant(false);
   }, [token]);
+
+  useEffect(() => {
+    setViewerClientId(getOrCreateViewerClientId());
+  }, []);
 
   const acquireGrant = useCallback(
     async (password?: string) => {
@@ -156,6 +165,40 @@ export default function SharePage() {
       setIsSubmittingComment(false);
     }
   };
+
+  const handlePlaybackStarted = useCallback(() => {
+    if (!grantToken) return;
+    const clientId = viewerClientId ?? getOrCreateViewerClientId() ?? undefined;
+    void recordWatch({
+      grantToken,
+      clientId,
+    }).catch(() => {
+      // Watch tracking is best effort and should not interrupt playback.
+    });
+  }, [grantToken, recordWatch, viewerClientId]);
+
+  const reactionSummary = useMemo(
+    () => summarizeReactions(reactions),
+    [reactions],
+  );
+
+  const canReact = Boolean(isUserLoaded && user && grantToken);
+
+  const handleAddReaction = useCallback(
+    async (emoji: "👍" | "❤️" | "😂" | "🎉" | "😮" | "🔥") => {
+      if (!canReact || !grantToken) return;
+      try {
+        await createReaction({
+          grantToken,
+          emoji,
+          timestampSeconds: currentTime,
+        });
+      } catch (error) {
+        console.error("Failed to post reaction:", error);
+      }
+    },
+    [canReact, createReaction, currentTime, grantToken],
+  );
 
   const isBootstrappingShare =
     shareInfo === undefined ||
@@ -292,6 +335,7 @@ export default function SharePage() {
               poster={playbackSession.posterUrl}
               comments={flattenedComments}
               onTimeUpdate={setCurrentTime}
+              onPlaybackStarted={handlePlaybackStarted}
               allowDownload={false}
             />
           ) : (
@@ -319,6 +363,12 @@ export default function SharePage() {
             <h2 className="font-black text-[#1a1a1a]">Comments</h2>
             <span className="text-xs text-[#888] font-mono">{formatTimestamp(currentTime)}</span>
           </div>
+
+          <ReactionBar
+            counts={reactionSummary}
+            onReact={handleAddReaction}
+            disabled={!canReact}
+          />
 
           {isUserLoaded && user ? (
             <form onSubmit={handleSubmitComment} className="space-y-2">

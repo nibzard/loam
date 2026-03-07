@@ -27,6 +27,8 @@ interface UploadProgressProps {
   error?: string;
   bytesPerSecond?: number;
   estimatedSecondsRemaining?: number | null;
+  shareLinkUrl?: string;
+  shareLinkCopied?: boolean;
   onCancel?: () => void;
 }
 
@@ -38,6 +40,8 @@ export function UploadProgress({
   error,
   bytesPerSecond = 0,
   estimatedSecondsRemaining = null,
+  shareLinkUrl,
+  shareLinkCopied = false,
   onCancel,
 }: UploadProgressProps) {
   return (
@@ -87,6 +91,16 @@ export function UploadProgress({
 
       {status === "processing" && (
         <p className="text-xs text-[#888] mt-2">Processing video...</p>
+      )}
+
+      {status === "complete" && (
+        <p className="text-xs text-[#2d5a2d] mt-2">
+          {shareLinkCopied
+            ? "Share link copied to clipboard."
+            : shareLinkUrl
+              ? "Share link ready."
+              : "Upload complete."}
+        </p>
       )}
 
       {status === "error" && error && (

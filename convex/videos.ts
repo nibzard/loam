@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
-import { identityName, requireProjectAccess, requireVideoAccess } from "./auth";
+import { identityEmail, identityName, requireProjectAccess, requireVideoAccess } from "./auth";
 import { Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
@@ -57,6 +57,10 @@ export const create = mutation({
     fileSize: v.optional(v.number()),
     contentType: v.optional(v.string()),
   },
+  returns: v.object({
+    videoId: v.id("videos"),
+    publicId: v.string(),
+  }),
   handler: async (ctx, args) => {
     const { user, project } = await requireProjectAccess(ctx, args.projectId, "member");
     await assertTeamCanStoreBytes(ctx, project.teamId, args.fileSize ?? 0);
@@ -66,6 +70,7 @@ export const create = mutation({
       projectId: args.projectId,
       uploadedByClerkId: user.subject,
       uploaderName: identityName(user),
+      uploaderEmail: identityEmail(user),
       title: args.title,
       description: args.description,
       fileSize: args.fileSize,
@@ -77,7 +82,7 @@ export const create = mutation({
       publicId,
     });
 
-    return videoId;
+    return { videoId, publicId };
   },
 });
 
@@ -255,6 +260,22 @@ export const remove = mutation({
       .collect();
     for (const comment of comments) {
       await ctx.db.delete(comment._id);
+    }
+
+    const reactions = await ctx.db
+      .query("reactions")
+      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+      .collect();
+    for (const reaction of reactions) {
+      await ctx.db.delete(reaction._id);
+    }
+
+    const watchEvents = await ctx.db
+      .query("videoWatchEvents")
+      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+      .collect();
+    for (const watchEvent of watchEvents) {
+      await ctx.db.delete(watchEvent._id);
     }
 
     const shareLinks = await ctx.db

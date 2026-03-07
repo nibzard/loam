@@ -436,6 +436,24 @@ export const deleteTeam = mutation({
           await ctx.db.delete(comment._id);
         }
 
+        // Delete reactions
+        const reactions = await ctx.db
+          .query("reactions")
+          .withIndex("by_video", (q) => q.eq("videoId", video._id))
+          .collect();
+        for (const reaction of reactions) {
+          await ctx.db.delete(reaction._id);
+        }
+
+        // Delete watch events
+        const watchEvents = await ctx.db
+          .query("videoWatchEvents")
+          .withIndex("by_video", (q) => q.eq("videoId", video._id))
+          .collect();
+        for (const watchEvent of watchEvents) {
+          await ctx.db.delete(watchEvent._id);
+        }
+
         // Delete share links
         const shareLinks = await ctx.db
           .query("shareLinks")

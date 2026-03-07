@@ -13,6 +13,8 @@ export type DashboardUploadContextValue = {
     error?: string;
     bytesPerSecond?: number;
     estimatedSecondsRemaining?: number | null;
+    shareLinkUrl?: string;
+    shareLinkCopied?: boolean;
   }[];
   cancelUpload: (uploadId: string) => void;
 };

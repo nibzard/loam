@@ -2,13 +2,15 @@ import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { useUser } from "@clerk/tanstack-react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
 import { AlertCircle, MessageSquare, Clock, X } from "lucide-react";
+import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
+import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -17,9 +19,11 @@ export default function WatchPage() {
   const { user, isLoaded: isUserLoaded } = useUser();
 
   const createComment = useMutation(api.comments.createForPublic);
+  const createReaction = useMutation(api.reactions.createForPublic);
   const getPlaybackSession = useAction(api.videoActions.getPublicPlaybackSession);
+  const recordWatch = useAction(api.watchEventActions.recordWatch);
 
-  const { videoData, comments } = useWatchData({ publicId });
+  const { videoData, comments, reactions } = useWatchData({ publicId });
   const [playbackSession, setPlaybackSession] = useState<{
     url: string;
     posterUrl: string;
@@ -31,7 +35,12 @@ export default function WatchPage() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const [viewerClientId, setViewerClientId] = useState<string | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+
+  useEffect(() => {
+    setViewerClientId(getOrCreateViewerClientId());
+  }, []);
 
   useEffect(() => {
     if (!videoData?.video?.muxPlaybackId) {
@@ -102,6 +111,39 @@ export default function WatchPage() {
       setIsSubmittingComment(false);
     }
   };
+
+  const handlePlaybackStarted = useCallback(() => {
+    const clientId = viewerClientId ?? getOrCreateViewerClientId() ?? undefined;
+    void recordWatch({
+      publicId,
+      clientId,
+    }).catch(() => {
+      // Watch tracking is best effort and should not interrupt playback.
+    });
+  }, [publicId, recordWatch, viewerClientId]);
+
+  const reactionSummary = useMemo(
+    () => summarizeReactions(reactions),
+    [reactions],
+  );
+
+  const canReact = Boolean(isUserLoaded && user);
+
+  const handleAddReaction = useCallback(
+    async (emoji: "👍" | "❤️" | "😂" | "🎉" | "😮" | "🔥") => {
+      if (!canReact) return;
+      try {
+        await createReaction({
+          publicId,
+          emoji,
+          timestampSeconds: currentTime,
+        });
+      } catch (error) {
+        console.error("Failed to post reaction:", error);
+      }
+    },
+    [canReact, createReaction, currentTime, publicId],
+  );
 
   if (videoData === undefined) {
     return (
@@ -183,6 +225,7 @@ export default function WatchPage() {
               poster={playbackSession.posterUrl}
               comments={flattenedComments}
               onTimeUpdate={setCurrentTime}
+              onPlaybackStarted={handlePlaybackStarted}
               allowDownload={false}
               controlsBelow
             />
@@ -209,6 +252,13 @@ export default function WatchPage() {
                 {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
               </span>
             )}
+          </div>
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+            <ReactionBar
+              counts={reactionSummary}
+              onReact={handleAddReaction}
+              disabled={!canReact}
+            />
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -312,6 +362,13 @@ export default function WatchPage() {
             >
               <X className="h-4 w-4" />
             </Button>
+          </div>
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+            <ReactionBar
+              counts={reactionSummary}
+              onReact={handleAddReaction}
+              disabled={!canReact}
+            />
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">

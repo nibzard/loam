@@ -2,7 +2,7 @@
 import { useConvex, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ import {
   MessageSquare,
   MoreVertical,
 } from "lucide-react";
+import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,7 @@ export default function VideoPage() {
     video,
     comments,
     commentsThreaded,
+    reactions,
   } = useVideoData({
     teamSlug,
     projectId,
@@ -66,6 +68,8 @@ export default function VideoPage() {
   const getPlaybackSession = useAction(api.videoActions.getPlaybackSession);
   const getOriginalPlaybackUrl = useAction(api.videoActions.getOriginalPlaybackUrl);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
+  const recordWatch = useAction(api.watchEventActions.recordWatch);
+  const createReaction = useMutation(api.reactions.create);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -193,6 +197,34 @@ export default function VideoPage() {
       return null;
     }
   }, [getDownloadUrl, video, resolvedVideoId]);
+
+  const handlePlaybackStarted = useCallback(() => {
+    if (!resolvedVideoId) return;
+    void recordWatch({ videoId: resolvedVideoId }).catch(() => {
+      // Watch tracking is best effort and should not interrupt playback.
+    });
+  }, [recordWatch, resolvedVideoId]);
+
+  const reactionSummary = useMemo(
+    () => summarizeReactions(reactions),
+    [reactions],
+  );
+
+  const handleAddReaction = useCallback(
+    async (emoji: "👍" | "❤️" | "😂" | "🎉" | "😮" | "🔥") => {
+      if (!resolvedVideoId) return;
+      try {
+        await createReaction({
+          videoId: resolvedVideoId,
+          emoji,
+          timestampSeconds: currentTime,
+        });
+      } catch (error) {
+        console.error("Failed to add reaction:", error);
+      }
+    },
+    [createReaction, currentTime, resolvedVideoId],
+  );
 
   const handleTimestampClick = useCallback(
     (time: number) => {
@@ -404,6 +436,7 @@ export default function VideoPage() {
               allowDownload={video.status === "ready"}
               downloadFilename={`${video.title}.mp4`}
               onRequestDownload={requestDownload}
+              onPlaybackStarted={handlePlaybackStarted}
               controlsBelow
               qualityOptionsConfig={[
                 {
@@ -466,6 +499,12 @@ export default function VideoPage() {
               </span>
             )}
           </div>
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+            <ReactionBar
+              counts={reactionSummary}
+              onReact={handleAddReaction}
+            />
+          </div>
           <div className="flex-1 overflow-hidden">
             <CommentList
               videoId={resolvedVideoId}
@@ -508,6 +547,12 @@ export default function VideoPage() {
             >
               <X className="h-4 w-4" />
             </Button>
+          </div>
+          <div className="flex-shrink-0 px-5 py-3 border-b border-[#1a1a1a]/10">
+            <ReactionBar
+              counts={reactionSummary}
+              onReact={handleAddReaction}
+            />
           </div>
           <div className="flex-1 overflow-hidden">
             <CommentList

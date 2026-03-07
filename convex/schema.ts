@@ -67,6 +67,7 @@ export default defineSchema({
     projectId: v.id("projects"),
     uploadedByClerkId: v.string(),
     uploaderName: v.string(),
+    uploaderEmail: v.optional(v.string()),
     title: v.string(),
     description: v.optional(v.string()),
     visibility: v.union(v.literal("public"), v.literal("private")),
@@ -120,6 +121,34 @@ export default defineSchema({
     .index("by_video", ["videoId"])
     .index("by_video_and_timestamp", ["videoId", "timestampSeconds"])
     .index("by_parent", ["parentId"]),
+
+  reactions: defineTable({
+    videoId: v.id("videos"),
+    userClerkId: v.string(),
+    userName: v.string(),
+    userAvatarUrl: v.optional(v.string()),
+    emoji: v.string(),
+    timestampSeconds: v.number(),
+  })
+    .index("by_video", ["videoId"])
+    .index("by_video_and_timestamp", ["videoId", "timestampSeconds"]),
+
+  videoWatchEvents: defineTable({
+    videoId: v.id("videos"),
+    fingerprint: v.string(),
+    viewerKind: v.union(v.literal("member"), v.literal("guest")),
+    viewerLabel: v.string(),
+    source: v.union(
+      v.literal("dashboard"),
+      v.literal("public"),
+      v.literal("share"),
+    ),
+    firstWatchedAt: v.number(),
+    lastWatchedAt: v.number(),
+    watchCount: v.number(),
+  })
+    .index("by_video", ["videoId"])
+    .index("by_video_and_fingerprint", ["videoId", "fingerprint"]),
 
   shareLinks: defineTable({
     videoId: v.id("videos"),

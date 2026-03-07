@@ -26,6 +26,9 @@ export function getVideoEssentialSpecs(params: {
     makeRouteQuerySpec(api.comments.getThreaded, {
       videoId: params.videoId,
     }),
+    makeRouteQuerySpec(api.reactions.list, {
+      videoId: params.videoId,
+    }),
   ];
 }
 
@@ -55,6 +58,10 @@ export function useVideoData(params: {
     api.comments.getThreaded,
     resolvedVideoId ? { videoId: resolvedVideoId } : "skip",
   );
+  const reactions = useQuery(
+    api.reactions.list,
+    resolvedVideoId ? { videoId: resolvedVideoId } : "skip",
+  );
 
   return {
     context,
@@ -64,6 +71,7 @@ export function useVideoData(params: {
     video,
     comments,
     commentsThreaded,
+    reactions,
   };
 }
 

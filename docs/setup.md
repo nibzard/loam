@@ -47,6 +47,10 @@ bun run lint
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_BASIC_MONTHLY`
 - `STRIPE_PRICE_PRO_MONTHLY`
+- Optional watch notification email vars:
+  - `RESEND_API_KEY`
+  - `NOTIFICATION_FROM_EMAIL`
+  - `APP_SITE_URL` (or `VITE_CONVEX_SITE_URL`) for absolute watch links in emails
 - Convex deployment vars as needed (`CONVEX_DEPLOYMENT`, etc.)
 
 Stripe webhook endpoint (for the Convex Stripe component):

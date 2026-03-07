@@ -16,6 +16,7 @@ import type * as http from "../http.js";
 import type * as mux from "../mux.js";
 import type * as muxActions from "../muxActions.js";
 import type * as projects from "../projects.js";
+import type * as reactions from "../reactions.js";
 import type * as s3 from "../s3.js";
 import type * as security from "../security.js";
 import type * as shareAccess from "../shareAccess.js";
@@ -24,6 +25,8 @@ import type * as teams from "../teams.js";
 import type * as videoActions from "../videoActions.js";
 import type * as videoPresence from "../videoPresence.js";
 import type * as videos from "../videos.js";
+import type * as watchEventActions from "../watchEventActions.js";
+import type * as watchEvents from "../watchEvents.js";
 import type * as workspace from "../workspace.js";
 
 import type {
@@ -41,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   mux: typeof mux;
   muxActions: typeof muxActions;
   projects: typeof projects;
+  reactions: typeof reactions;
   s3: typeof s3;
   security: typeof security;
   shareAccess: typeof shareAccess;
@@ -49,6 +53,8 @@ declare const fullApi: ApiFromModules<{
   videoActions: typeof videoActions;
   videoPresence: typeof videoPresence;
   videos: typeof videos;
+  watchEventActions: typeof watchEventActions;
+  watchEvents: typeof watchEvents;
   workspace: typeof workspace;
 }>;
 

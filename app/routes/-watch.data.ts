@@ -13,6 +13,9 @@ export function getWatchEssentialSpecs(params: { publicId: string }) {
     makeRouteQuerySpec(api.comments.getThreadedForPublic, {
       publicId: params.publicId,
     }),
+    makeRouteQuerySpec(api.reactions.listForPublic, {
+      publicId: params.publicId,
+    }),
   ];
 }
 
@@ -25,7 +28,11 @@ export function useWatchData(params: { publicId: string }) {
     publicId: params.publicId,
   });
 
-  return { videoData, comments };
+  const reactions = useQuery(api.reactions.listForPublic, {
+    publicId: params.publicId,
+  });
+
+  return { videoData, comments, reactions };
 }
 
 export async function prewarmWatch(

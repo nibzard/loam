@@ -28,7 +28,12 @@ export function useShareData(params: { token: string; grantToken?: string | null
     params.grantToken ? { grantToken: params.grantToken } : "skip",
   );
 
-  return { shareInfo, videoData, comments };
+  const reactions = useQuery(
+    api.reactions.listForShareGrant,
+    params.grantToken ? { grantToken: params.grantToken } : "skip",
+  );
+
+  return { shareInfo, videoData, comments, reactions };
 }
 
 export async function prewarmShare(

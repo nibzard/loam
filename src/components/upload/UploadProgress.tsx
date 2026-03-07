@@ -96,7 +96,7 @@ export function UploadProgress({
       {status === "complete" && (
         <p className="text-xs text-[#2d5a2d] mt-2">
           {shareLinkCopied
-            ? "Share link copied to clipboard."
+            ? "Share link copied. It will start working as soon as processing finishes."
             : shareLinkUrl
               ? "Share link ready."
               : "Upload complete."}

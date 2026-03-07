@@ -57,6 +57,7 @@ async function copyTextToClipboard(text: string) {
 
 export function useVideoUploadManager() {
   const createVideo = useMutation(api.videos.create);
+  const createShareLink = useMutation(api.shareLinks.create);
   const getUploadUrl = useAction(api.videoActions.getUploadUrl);
   const markUploadComplete = useAction(api.videoActions.markUploadComplete);
   const markUploadFailed = useAction(api.videoActions.markUploadFailed);
@@ -84,6 +85,7 @@ export function useVideoUploadManager() {
         ]);
 
         let createdVideoId: Id<"videos"> | undefined;
+        let createdPublicId: string | undefined;
         let shareLinkUrl: string | undefined;
 
         try {
@@ -94,10 +96,7 @@ export function useVideoUploadManager() {
             contentType: file.type || "video/mp4",
           });
           createdVideoId = createdVideo.videoId;
-
-          if (shouldAutoCopyShareLink && typeof window !== "undefined") {
-            shareLinkUrl = `${window.location.origin}/watch/${createdVideo.publicId}`;
-          }
+          createdPublicId = createdVideo.publicId;
 
           setUploads((prev) =>
             prev.map((upload) =>
@@ -185,6 +184,20 @@ export function useVideoUploadManager() {
 
           await markUploadComplete({ videoId: createdVideoId });
 
+          if (shouldAutoCopyShareLink && typeof window !== "undefined") {
+            try {
+              const shareLink = await createShareLink({
+                videoId: createdVideoId,
+              });
+              shareLinkUrl = `${window.location.origin}/share/${shareLink.token}`;
+            } catch (error) {
+              console.error("Failed to create default share link:", error);
+              if (createdPublicId) {
+                shareLinkUrl = `${window.location.origin}/watch/${createdPublicId}`;
+              }
+            }
+          }
+
           let shareLinkCopied = false;
           if (shareLinkUrl && shouldAutoCopyShareLink) {
             shareLinkCopied = await copyTextToClipboard(shareLinkUrl);
@@ -225,7 +238,7 @@ export function useVideoUploadManager() {
         }
       }
     },
-    [createVideo, getUploadUrl, markUploadComplete, markUploadFailed],
+    [createShareLink, createVideo, getUploadUrl, markUploadComplete, markUploadFailed],
   );
 
   const cancelUpload = useCallback(

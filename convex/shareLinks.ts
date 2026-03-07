@@ -10,6 +10,8 @@ import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
 const shareLinkStatusValidator = v.union(
   v.literal("missing"),
   v.literal("expired"),
+  v.literal("processing"),
+  v.literal("failed"),
   v.literal("requiresPassword"),
   v.literal("ok"),
 );
@@ -219,7 +221,19 @@ export const getByToken = query({
     }
 
     const video = await ctx.db.get(link.videoId);
-    if (!video || video.status !== "ready") {
+    if (!video) {
+      return { status: "missing" as const };
+    }
+
+    if (video.status === "uploading" || video.status === "processing") {
+      return { status: "processing" as const };
+    }
+
+    if (video.status === "failed") {
+      return { status: "failed" as const };
+    }
+
+    if (video.status !== "ready") {
       return { status: "missing" as const };
     }
 

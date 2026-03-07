@@ -4,8 +4,8 @@ import { useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getOrCreateViewerClientId } from "./viewerClientId";
 
-const STORAGE_KEY_CLIENT_ID = "lawn.presence.client_id";
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
 const DISCONNECT_PATH = "videoPresence:disconnect";
 
@@ -17,25 +17,10 @@ export type VideoWatcher = {
   avatarUrl?: string;
 };
 
-function createClientId() {
-  return crypto.randomUUID().replace(/-/g, "");
-}
-
-function getOrCreateClientId() {
-  const existing = window.localStorage.getItem(STORAGE_KEY_CLIENT_ID);
-  if (existing && existing.trim().length > 0) {
-    return existing;
-  }
-
-  const clientId = createClientId();
-  window.localStorage.setItem(STORAGE_KEY_CLIENT_ID, clientId);
-  return clientId;
-}
-
 export function useVideoPresence(input: {
   videoId?: Id<"videos">;
   enabled?: boolean;
-  shareToken?: string;
+  shareGrantToken?: string;
   intervalMs?: number;
 }) {
   const convex = useConvex();
@@ -49,13 +34,13 @@ export function useVideoPresence(input: {
   const {
     videoId,
     enabled = true,
-    shareToken,
+    shareGrantToken,
     intervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
   } = input;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setClientId(getOrCreateClientId());
+    setClientId(getOrCreateViewerClientId());
   }, []);
 
   useEffect(() => {
@@ -73,7 +58,7 @@ export function useVideoPresence(input: {
         sessionId,
         clientId,
         interval: intervalMs,
-        shareToken,
+        shareGrantToken,
       });
 
       if (!active) return;
@@ -117,7 +102,7 @@ export function useVideoPresence(input: {
         });
       }
     };
-  }, [clientId, convex.url, disconnect, enabled, heartbeat, intervalMs, shareToken, videoId]);
+  }, [clientId, convex.url, disconnect, enabled, heartbeat, intervalMs, shareGrantToken, videoId]);
 
   const state = useQuery(
     api.videoPresence.list,

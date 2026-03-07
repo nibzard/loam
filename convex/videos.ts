@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { identityEmail, identityName, requireProjectAccess, requireVideoAccess } from "./auth";
 import { Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
@@ -252,7 +253,15 @@ export const updateWorkflowStatus = mutation({
 export const remove = mutation({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "admin");
+    const { video } = await requireVideoAccess(ctx, args.videoId, "admin");
+
+    if (video.s3Key || video.muxAssetId) {
+      await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+        videoId: video._id,
+        s3Key: video.s3Key,
+        muxAssetId: video.muxAssetId,
+      });
+    }
 
     const comments = await ctx.db
       .query("comments")
@@ -473,22 +482,6 @@ export const getVideoForPlayback = query({
   handler: async (ctx, args) => {
     const { video } = await requireVideoAccess(ctx, args.videoId, "viewer");
     return video;
-  },
-});
-
-export const incrementViewCount = mutation({
-  args: { token: v.string() },
-  handler: async (ctx, args) => {
-    const shareLink = await ctx.db
-      .query("shareLinks")
-      .withIndex("by_token", (q) => q.eq("token", args.token))
-      .unique();
-
-    if (shareLink) {
-      await ctx.db.patch(shareLink._id, {
-        viewCount: shareLink.viewCount + 1,
-      });
-    }
   },
 });
 

@@ -1,11 +1,41 @@
 "use node";
 
+import { HOUR, MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
-import { action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { action, ActionCtx } from "./_generated/server";
+import { api, components, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 type WatchSource = "dashboard" | "public" | "share";
+
+const watchEventRateLimiter = new RateLimiter(components.rateLimiter, {
+  recordWatchByViewer: {
+    kind: "token bucket",
+    rate: 12,
+    period: MINUTE,
+    capacity: 4,
+    shards: 8,
+  },
+  guestWatchByVideoSource: {
+    kind: "token bucket",
+    rate: 120,
+    period: MINUTE,
+    capacity: 30,
+    shards: 8,
+  },
+  guestPublicNotificationsByVideo: {
+    kind: "fixed window",
+    rate: 1,
+    period: 30 * MINUTE,
+    shards: 8,
+  },
+  guestShareNotificationsByVideo: {
+    kind: "fixed window",
+    rate: 6,
+    period: HOUR,
+    shards: 8,
+  },
+});
 
 function identityDisplayName(identity: Record<string, unknown>) {
   const name = identity.name;
@@ -130,6 +160,31 @@ async function sendWatchNotificationEmail(input: {
   return { sent: true as const };
 }
 
+async function shouldSendGuestNotification(ctx: ActionCtx, input: {
+  source: WatchSource;
+  videoId: Id<"videos">;
+}) {
+  if (input.source === "public") {
+    const status = await watchEventRateLimiter.limit(
+      ctx,
+      "guestPublicNotificationsByVideo",
+      { key: `${input.videoId}` },
+    );
+    return status.ok;
+  }
+
+  if (input.source === "share") {
+    const status = await watchEventRateLimiter.limit(
+      ctx,
+      "guestShareNotificationsByVideo",
+      { key: `${input.videoId}` },
+    );
+    return status.ok;
+  }
+
+  return true;
+}
+
 export const recordWatch = action({
   args: {
     videoId: v.optional(v.id("videos")),
@@ -196,6 +251,26 @@ export const recordWatch = action({
       viewerLabel = deriveGuestLabel(clientId);
     }
 
+    const watchLimit = await watchEventRateLimiter.limit(
+      ctx,
+      "recordWatchByViewer",
+      { key: `${resolvedVideoId}:${fingerprint}` },
+    );
+    if (!watchLimit.ok) {
+      return { recorded: false, firstWatch: false, notificationSent: false };
+    }
+
+    if (viewerKind === "guest") {
+      const guestVolumeLimit = await watchEventRateLimiter.limit(
+        ctx,
+        "guestWatchByVideoSource",
+        { key: `${resolvedVideoId}:${source}` },
+      );
+      if (!guestVolumeLimit.ok) {
+        return { recorded: false, firstWatch: false, notificationSent: false };
+      }
+    }
+
     const watchEvent = await ctx.runMutation(internal.watchEvents.recordWatchEvent, {
       videoId: resolvedVideoId,
       fingerprint,
@@ -213,6 +288,16 @@ export const recordWatch = action({
     }
 
     if (!watchEvent.uploaderEmail) {
+      return { recorded: true, firstWatch: true, notificationSent: false };
+    }
+
+    if (
+      viewerKind === "guest" &&
+      !(await shouldSendGuestNotification(ctx, {
+        source,
+        videoId: resolvedVideoId,
+      }))
+    ) {
       return { recorded: true, firstWatch: true, notificationSent: false };
     }
 

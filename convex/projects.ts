@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getUser, requireTeamAccess, requireProjectAccess } from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
 
@@ -134,6 +135,14 @@ export const remove = mutation({
       .collect();
 
     for (const video of videos) {
+      if (video.s3Key || video.muxAssetId) {
+        await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+          videoId: video._id,
+          s3Key: video.s3Key,
+          muxAssetId: video.muxAssetId,
+        });
+      }
+
       // Delete comments
       const comments = await ctx.db
         .query("comments")

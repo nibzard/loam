@@ -50,7 +50,7 @@ export default function SharePage() {
   const { watchers } = useVideoPresence({
     videoId: videoData?.video?._id,
     enabled: canTrackPresence,
-    shareToken: token,
+    shareGrantToken: grantToken ?? undefined,
   });
 
   useEffect(() => {
@@ -234,6 +234,43 @@ export default function SharePage() {
               </Button>
             </Link>
           </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (shareInfo.status === "processing") {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[#e8e8e0] flex items-center justify-center mb-4 border-2 border-[#1a1a1a]">
+              <Video className="h-6 w-6 text-[#888]" />
+            </div>
+            <CardTitle>Video is still processing</CardTitle>
+            <CardDescription>
+              This share link is valid, but the upload is still being prepared for playback.
+              Leave this page open or refresh in a moment.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (shareInfo.status === "failed") {
+    return (
+      <div className="min-h-screen bg-[#f0f0e8] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[#dc2626]/10 flex items-center justify-center mb-4 border-2 border-[#dc2626]">
+              <AlertCircle className="h-6 w-6 text-[#dc2626]" />
+            </div>
+            <CardTitle>Video processing failed</CardTitle>
+            <CardDescription>
+              This upload could not be prepared for playback. Ask the owner to re-upload the file.
+            </CardDescription>
+          </CardHeader>
         </Card>
       </div>
     );

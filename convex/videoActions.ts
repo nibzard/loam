@@ -8,7 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { v } from "convex/values";
-import { action, ActionCtx } from "./_generated/server";
+import { action, internalAction, ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
@@ -16,6 +16,7 @@ import {
   buildMuxThumbnailUrl,
   createMuxAssetFromInputUrl,
   createPublicPlaybackId,
+  deleteMuxAsset,
   getMuxAsset,
 } from "./mux";
 import { BUCKET_NAME, getS3Client } from "./s3";
@@ -200,6 +201,48 @@ async function ensurePublicPlaybackId(
 
   return resolvedPlaybackId;
 }
+
+export const cleanupDeletedVideoAssets = internalAction({
+  args: {
+    videoId: v.optional(v.id("videos")),
+    s3Key: v.optional(v.string()),
+    muxAssetId: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (_ctx, args) => {
+    if (args.s3Key) {
+      try {
+        const s3 = getS3Client();
+        await s3.send(
+          new DeleteObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: args.s3Key,
+          }),
+        );
+      } catch (error) {
+        console.error("Failed to delete S3 object for removed video", {
+          videoId: args.videoId,
+          s3Key: args.s3Key,
+          error,
+        });
+      }
+    }
+
+    if (args.muxAssetId) {
+      try {
+        await deleteMuxAsset(args.muxAssetId);
+      } catch (error) {
+        console.error("Failed to delete Mux asset for removed video", {
+          videoId: args.videoId,
+          muxAssetId: args.muxAssetId,
+          error,
+        });
+      }
+    }
+
+    return null;
+  },
+});
 
 export const getUploadUrl = action({
   args: {

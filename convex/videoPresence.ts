@@ -8,7 +8,7 @@ import {
   requireProjectAccess,
   requireVideoAccess,
 } from "./auth";
-import { findShareLinkByToken } from "./shareAccess";
+import { resolveActiveShareGrant } from "./shareAccess";
 
 const presence = new Presence(components.presence);
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
@@ -28,18 +28,17 @@ function guestDisplayName(clientId: string) {
   return `Guest ${suffix || "USER"}`;
 }
 
-async function hasShareTokenAccess(
+async function hasShareGrantAccess(
   ctx: MutationCtx,
-  shareToken: string | undefined,
+  shareGrantToken: string | undefined,
   videoId: string,
 ) {
-  if (!shareToken) return false;
+  if (!shareGrantToken) return false;
 
-  const shareLink = await findShareLinkByToken(ctx, shareToken);
-  if (!shareLink) return false;
-  if (shareLink.expiresAt && shareLink.expiresAt <= Date.now()) return false;
+  const resolved = await resolveActiveShareGrant(ctx, shareGrantToken);
+  if (!resolved) return false;
 
-  return shareLink.videoId === videoId;
+  return resolved.shareLink.videoId === videoId;
 }
 
 export const heartbeat = mutation({
@@ -48,7 +47,7 @@ export const heartbeat = mutation({
     sessionId: v.string(),
     clientId: v.string(),
     interval: v.optional(v.number()),
-    shareToken: v.optional(v.string()),
+    shareGrantToken: v.optional(v.string()),
   },
   returns: v.object({
     roomToken: v.string(),
@@ -67,9 +66,9 @@ export const heartbeat = mutation({
       }
     }
 
-    const hasTokenAccess = await hasShareTokenAccess(
+    const hasTokenAccess = await hasShareGrantAccess(
       ctx,
-      args.shareToken,
+      args.shareGrantToken,
       args.videoId,
     );
 

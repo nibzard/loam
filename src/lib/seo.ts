@@ -3,6 +3,13 @@ const SITE_NAME = "lawn";
 const DEFAULT_OG_IMAGE = "/og/default.png";
 const TWITTER_HANDLE = "@theo";
 
+export const muxPreconnectLinks = [
+  { rel: "preconnect", href: "https://stream.mux.com", crossOrigin: "anonymous" },
+  { rel: "preconnect", href: "https://image.mux.com", crossOrigin: "anonymous" },
+  { rel: "dns-prefetch", href: "//stream.mux.com" },
+  { rel: "dns-prefetch", href: "//image.mux.com" },
+] as const;
+
 type SeoOptions = {
   title: string;
   description: string;

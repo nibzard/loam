@@ -4,10 +4,8 @@ import {
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router";
-import { ClerkProvider } from "@clerk/tanstack-react-start";
 import type { ReactNode } from "react";
 
-import { ConvexClientProvider } from "@/lib/convex";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme/ThemeToggle";
 import { NotFound } from "@/components/ui/NotFound";
@@ -32,10 +30,6 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/svg+xml", href: "/grass-logo.svg?v=4" },
       { rel: "icon", type: "image/x-icon", href: "/favicon.ico?v=4" },
       { rel: "shortcut icon", href: "/favicon.ico?v=4" },
-      { rel: "preconnect", href: "https://stream.mux.com", crossOrigin: "anonymous" },
-      { rel: "preconnect", href: "https://image.mux.com", crossOrigin: "anonymous" },
-      { rel: "dns-prefetch", href: "//stream.mux.com" },
-      { rel: "dns-prefetch", href: "//image.mux.com" },
     ],
   }),
   component: RootComponent,
@@ -57,23 +51,9 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <AppShell>
+    <RootDocument>
       <Outlet />
-    </AppShell>
-  );
-}
-
-function AppShell({ children }: { children: ReactNode }) {
-  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
-
-  if (!publishableKey) {
-    throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
-  }
-
-  return (
-    <ClerkProvider publishableKey={publishableKey}>
-      <RootDocument>{children}</RootDocument>
-    </ClerkProvider>
+    </RootDocument>
   );
 }
 
@@ -101,11 +81,9 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="h-full antialiased" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        <ConvexClientProvider>
-          <ThemeProvider>
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeProvider>
-        </ConvexClientProvider>
+        <ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

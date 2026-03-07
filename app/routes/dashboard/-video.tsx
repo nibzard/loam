@@ -2,11 +2,11 @@
 import { useConvex, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
+import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -36,6 +36,7 @@ import {
 import { Id } from "@convex/_generated/dataModel";
 import { projectPath, teamHomePath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
+import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
 import { useVideoData } from "./-video.data";
@@ -121,6 +122,11 @@ export default function VideoPage() {
   }, [shouldCanonicalize, context, navigate]);
 
   useEffect(() => {
+    if (!video || video.status === "uploading" || video.status === "failed") return;
+    preloadVideoPlayer();
+  }, [video]);
+
+  useEffect(() => {
     if (!resolvedVideoId || !isPlayable) {
       setPlaybackSession(null);
       setIsLoadingPlayback(false);
@@ -177,6 +183,12 @@ export default function VideoPage() {
       cancelled = true;
     };
   }, [getOriginalPlaybackUrl, resolvedVideoId, video?.status, video?.s3Key]);
+
+  useEffect(() => {
+    if (!video?.muxPlaybackId || !playbackUrl || activePlaybackUrl !== playbackUrl) return;
+    prefetchHlsRuntime();
+    prefetchMuxPlaybackManifest(video.muxPlaybackId);
+  }, [activePlaybackUrl, playbackUrl, video?.muxPlaybackId]);
 
   const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
@@ -281,6 +293,39 @@ export default function VideoPage() {
 
   const canEdit = video.role !== "viewer";
   const canComment = true;
+  const playerFallback = (
+    <div className="flex-1 flex items-center justify-center">
+      {video.status === "ready" && !playbackUrl ? (
+        <div className="flex flex-col items-center gap-3 text-white">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          <p className="text-sm font-medium text-white/85">
+            {isLoadingPlayback ? "Loading stream..." : "Preparing stream..."}
+          </p>
+        </div>
+      ) : activePlaybackUrl ? (
+        <div className="flex flex-col items-center gap-3 text-white">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+          <p className="text-sm font-medium text-white/85">Loading player...</p>
+        </div>
+      ) : (
+        <div className="text-center">
+          {video.status === "uploading" && (
+            <p className="text-white/60">Uploading...</p>
+          )}
+          {video.status === "processing" && (
+            <p className="text-white/60">
+              {isLoadingOriginalPlayback
+                ? "Preparing original playback..."
+                : "Processing video..."}
+            </p>
+          )}
+          {video.status === "failed" && (
+            <p className="text-[#dc2626]">Processing failed</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col">
@@ -426,64 +471,41 @@ export default function VideoPage() {
           ) : null}
 
           {activePlaybackUrl ? (
-            <VideoPlayer
-              ref={playerRef}
-              src={activePlaybackUrl}
-              poster={playbackSession?.posterUrl}
-              comments={comments || []}
-              onTimeUpdate={handleTimeUpdate}
-              onMarkerClick={handleMarkerClick}
-              allowDownload={video.status === "ready"}
-              downloadFilename={`${video.title}.mp4`}
-              onRequestDownload={requestDownload}
-              onPlaybackStarted={handlePlaybackStarted}
-              controlsBelow
-              qualityOptionsConfig={[
-                {
-                  id: "mux720",
-                  label: playbackUrl ? "720p" : "720p (encoding...)",
-                  disabled: !playbackUrl,
-                },
-                {
-                  id: "original",
-                  label: "Original",
-                  disabled: !originalPlaybackUrl,
-                },
-              ]}
-              selectedQualityId={activeQualityId}
-              onSelectQuality={(id) => {
-                if (id === "mux720" || id === "original") {
-                  setPreferredSource(id);
-                }
-              }}
-            />
+            <Suspense fallback={playerFallback}>
+              <LazyVideoPlayer
+                ref={playerRef}
+                src={activePlaybackUrl}
+                poster={playbackSession?.posterUrl}
+                comments={comments || []}
+                onTimeUpdate={handleTimeUpdate}
+                onMarkerClick={handleMarkerClick}
+                allowDownload={video.status === "ready"}
+                downloadFilename={`${video.title}.mp4`}
+                onRequestDownload={requestDownload}
+                onPlaybackStarted={handlePlaybackStarted}
+                controlsBelow
+                qualityOptionsConfig={[
+                  {
+                    id: "mux720",
+                    label: playbackUrl ? "720p" : "720p (encoding...)",
+                    disabled: !playbackUrl,
+                  },
+                  {
+                    id: "original",
+                    label: "Original",
+                    disabled: !originalPlaybackUrl,
+                  },
+                ]}
+                selectedQualityId={activeQualityId}
+                onSelectQuality={(id) => {
+                  if (id === "mux720" || id === "original") {
+                    setPreferredSource(id);
+                  }
+                }}
+              />
+            </Suspense>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              {video.status === "ready" && !playbackUrl ? (
-                <div className="flex flex-col items-center gap-3 text-white">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                  <p className="text-sm font-medium text-white/85">
-                    {isLoadingPlayback ? "Loading stream..." : "Preparing stream..."}
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center">
-                  {video.status === "uploading" && (
-                    <p className="text-white/60">Uploading...</p>
-                  )}
-                  {video.status === "processing" && (
-                    <p className="text-white/60">
-                      {isLoadingOriginalPlayback
-                        ? "Preparing original playback..."
-                        : "Processing video..."}
-                    </p>
-                  )}
-                  {video.status === "failed" && (
-                    <p className="text-[#dc2626]">Processing failed</p>
-                  )}
-                </div>
-              )}
-            </div>
+            playerFallback
           )}
         </div>
 

@@ -28,6 +28,7 @@ import { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { teamHomePath, videoPath } from "@/lib/routes";
 import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { preloadVideoPlayer } from "@/components/video-player/lazy";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import {
   VideoWorkflowStatusControl,
@@ -100,6 +101,7 @@ function VideoIntentTarget({
       projectId,
       videoId,
     });
+    preloadVideoPlayer();
     prefetchHlsRuntime();
     if (muxPlaybackId) {
       prefetchMuxPlaybackManifest(muxPlaybackId);

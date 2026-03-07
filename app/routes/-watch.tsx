@@ -2,12 +2,13 @@ import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { useUser } from "@clerk/tanstack-react-start";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
+import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { AlertCircle, MessageSquare, Clock, X } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
@@ -41,6 +42,15 @@ export default function WatchPage() {
   useEffect(() => {
     setViewerClientId(getOrCreateViewerClientId());
   }, []);
+
+  useEffect(() => {
+    const muxPlaybackId = videoData?.video?.muxPlaybackId;
+    if (!muxPlaybackId) return;
+
+    preloadVideoPlayer();
+    prefetchHlsRuntime();
+    prefetchMuxPlaybackManifest(muxPlaybackId);
+  }, [videoData?.video?.muxPlaybackId]);
 
   useEffect(() => {
     if (!videoData?.video?.muxPlaybackId) {
@@ -177,6 +187,16 @@ export default function WatchPage() {
   }
 
   const video = videoData.video;
+  const playerFallback = (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-white">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+        <p className="text-sm font-medium text-white/85">
+          {playbackSession?.url ? "Loading player..." : playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="h-[100dvh] flex flex-col bg-[#f0f0e8]">
@@ -219,25 +239,20 @@ export default function WatchPage() {
         {/* Video player area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-black">
           {playbackSession?.url ? (
-            <VideoPlayer
-              ref={playerRef}
-              src={playbackSession.url}
-              poster={playbackSession.posterUrl}
-              comments={flattenedComments}
-              onTimeUpdate={setCurrentTime}
-              onPlaybackStarted={handlePlaybackStarted}
-              allowDownload={false}
-              controlsBelow
-            />
+            <Suspense fallback={playerFallback}>
+              <LazyVideoPlayer
+                ref={playerRef}
+                src={playbackSession.url}
+                poster={playbackSession.posterUrl}
+                comments={flattenedComments}
+                onTimeUpdate={setCurrentTime}
+                onPlaybackStarted={handlePlaybackStarted}
+                allowDownload={false}
+                controlsBelow
+              />
+            </Suspense>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3 text-white">
-                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                 <p className="text-sm font-medium text-white/85">
-                   {playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
-                 </p>
-              </div>
-            </div>
+            playerFallback
           )}
         </div>
 

@@ -2,13 +2,14 @@ import { useAction, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { Link, useParams } from "@tanstack/react-router";
 import { useUser } from "@clerk/tanstack-react-start";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { VideoPlayer, type VideoPlayerHandle } from "@/components/video-player/VideoPlayer";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
+import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
@@ -124,6 +125,15 @@ export default function SharePage() {
       cancelled = true;
     };
   }, [getPlaybackSession, grantToken]);
+
+  useEffect(() => {
+    const muxPlaybackId = videoData?.video?.muxPlaybackId;
+    if (!muxPlaybackId) return;
+
+    preloadVideoPlayer();
+    prefetchHlsRuntime();
+    prefetchMuxPlaybackManifest(muxPlaybackId);
+  }, [videoData?.video?.muxPlaybackId]);
 
   const flattenedComments = useMemo(() => {
     if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; resolved: boolean }>;
@@ -336,6 +346,26 @@ export default function SharePage() {
   }
 
   const video = videoData.video;
+  const fallbackPosterUrl =
+    playbackSession?.posterUrl ?? (video.thumbnailUrl?.startsWith("http") ? video.thumbnailUrl : undefined);
+  const playerFallback = (
+    <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800/80 bg-black shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
+      {fallbackPosterUrl ? (
+        <img
+          src={fallbackPosterUrl}
+          alt={`${video.title} thumbnail`}
+          className="h-full w-full object-cover blur-[4px]"
+        />
+      ) : null}
+      <div className="absolute inset-0 bg-black/45" />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+        <p className="text-sm font-medium text-white/85">
+          {playbackSession?.url ? "Loading player..." : playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
+        </p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#f0f0e8]">
@@ -366,32 +396,19 @@ export default function SharePage() {
 
         <div className="border-2 border-[#1a1a1a] overflow-hidden">
           {playbackSession?.url ? (
-            <VideoPlayer
-              ref={playerRef}
-              src={playbackSession.url}
-              poster={playbackSession.posterUrl}
-              comments={flattenedComments}
-              onTimeUpdate={setCurrentTime}
-              onPlaybackStarted={handlePlaybackStarted}
-              allowDownload={false}
-            />
+            <Suspense fallback={playerFallback}>
+              <LazyVideoPlayer
+                ref={playerRef}
+                src={playbackSession.url}
+                poster={playbackSession.posterUrl}
+                comments={flattenedComments}
+                onTimeUpdate={setCurrentTime}
+                onPlaybackStarted={handlePlaybackStarted}
+                allowDownload={false}
+              />
+            </Suspense>
           ) : (
-            <div className="relative aspect-video overflow-hidden rounded-xl border border-zinc-800/80 bg-black shadow-[0_10px_40px_rgba(0,0,0,0.45)]">
-              {(playbackSession?.posterUrl || video.thumbnailUrl?.startsWith("http")) ? (
-                <img
-                  src={playbackSession?.posterUrl ?? video.thumbnailUrl}
-                  alt={`${video.title} thumbnail`}
-                  className="h-full w-full object-cover blur-[4px]"
-                />
-              ) : null}
-              <div className="absolute inset-0 bg-black/45" />
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-white">
-                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                <p className="text-sm font-medium text-white/85">
-                  {playbackError ?? (isLoadingPlayback ? "Loading stream..." : "Preparing stream...")}
-                </p>
-              </div>
-            </div>
+            playerFallback
           )}
         </div>
 

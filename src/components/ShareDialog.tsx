@@ -118,7 +118,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         <DialogHeader>
           <DialogTitle>Share video</DialogTitle>
           <DialogDescription>
-            Public videos can be viewed by anyone with the URL. Only signed-in users can comment.
+            Videos stay private by default. Create a restricted share link for external access, or enable a public URL if you want anyone with the link to view it.
           </DialogDescription>
         </DialogHeader>
 
@@ -127,7 +127,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
             <div>
               <h3 className="font-bold text-sm text-[#1a1a1a]">Visibility</h3>
               <p className="text-xs text-[#666]">
-                Private disables the public URL. Restricted share links can still be used.
+                Private disables the public URL. Restricted share links still work while the video remains private.
               </p>
             </div>
             <Badge variant={video?.visibility === "public" ? "success" : "secondary"}>
@@ -186,6 +186,9 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
 
         <div className="space-y-4 border-2 border-[#1a1a1a] p-4 bg-[#e8e8e0]">
           <h3 className="font-bold text-sm text-[#1a1a1a]">Create restricted share link</h3>
+          <p className="text-xs text-[#666]">
+            Best for external sharing. The video stays private in your workspace and only this link grants access.
+          </p>
 
           <div>
             <label className="text-sm text-[#888]">Expiration</label>

@@ -24,8 +24,8 @@ import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as ForVideoEditorsRouteImport } from './routes/for.video-editors'
 import { Route as ForAgenciesRouteImport } from './routes/for.agencies'
 import { Route as DashboardTeamSlugRouteImport } from './routes/dashboard/$teamSlug'
-import { Route as CompareWipsterRouteImport } from './routes/compare.wipster'
-import { Route as CompareFrameioRouteImport } from './routes/compare.frameio'
+import { Route as CompareTellaRouteImport } from './routes/compare.tella'
+import { Route as CompareLoomRouteImport } from './routes/compare.loom'
 import { Route as DashboardTeamSlugIndexRouteImport } from './routes/dashboard/$teamSlug.index'
 import { Route as DashboardTeamSlugSettingsRouteImport } from './routes/dashboard/$teamSlug.settings'
 import { Route as DashboardTeamSlugProjectIdRouteImport } from './routes/dashboard/$teamSlug.$projectId'
@@ -107,14 +107,14 @@ const DashboardTeamSlugRoute = DashboardTeamSlugRouteImport.update({
   path: '/$teamSlug',
   getParentRoute: () => DashboardRouteRoute,
 } as any)
-const CompareWipsterRoute = CompareWipsterRouteImport.update({
-  id: '/compare/wipster',
-  path: '/compare/wipster',
+const CompareTellaRoute = CompareTellaRouteImport.update({
+  id: '/compare/tella',
+  path: '/compare/tella',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CompareFrameioRoute = CompareFrameioRouteImport.update({
-  id: '/compare/frameio',
-  path: '/compare/frameio',
+const CompareLoomRoute = CompareLoomRouteImport.update({
+  id: '/compare/loom',
+  path: '/compare/loom',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardTeamSlugIndexRoute = DashboardTeamSlugIndexRouteImport.update({
@@ -154,8 +154,8 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/sign-in': typeof SignInRouteWithChildren
   '/sign-up': typeof SignUpRouteWithChildren
-  '/compare/frameio': typeof CompareFrameioRoute
-  '/compare/wipster': typeof CompareWipsterRoute
+  '/compare/loom': typeof CompareLoomRoute
+  '/compare/tella': typeof CompareTellaRoute
   '/dashboard/$teamSlug': typeof DashboardTeamSlugRouteWithChildren
   '/for/agencies': typeof ForAgenciesRoute
   '/for/video-editors': typeof ForVideoEditorsRoute
@@ -177,8 +177,8 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/sign-in': typeof SignInRouteWithChildren
   '/sign-up': typeof SignUpRouteWithChildren
-  '/compare/frameio': typeof CompareFrameioRoute
-  '/compare/wipster': typeof CompareWipsterRoute
+  '/compare/loom': typeof CompareLoomRoute
+  '/compare/tella': typeof CompareTellaRoute
   '/for/agencies': typeof ForAgenciesRoute
   '/for/video-editors': typeof ForVideoEditorsRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -200,8 +200,8 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/sign-in': typeof SignInRouteWithChildren
   '/sign-up': typeof SignUpRouteWithChildren
-  '/compare/frameio': typeof CompareFrameioRoute
-  '/compare/wipster': typeof CompareWipsterRoute
+  '/compare/loom': typeof CompareLoomRoute
+  '/compare/tella': typeof CompareTellaRoute
   '/dashboard/$teamSlug': typeof DashboardTeamSlugRouteWithChildren
   '/for/agencies': typeof ForAgenciesRoute
   '/for/video-editors': typeof ForVideoEditorsRoute
@@ -226,8 +226,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/sign-in'
     | '/sign-up'
-    | '/compare/frameio'
-    | '/compare/wipster'
+    | '/compare/loom'
+    | '/compare/tella'
     | '/dashboard/$teamSlug'
     | '/for/agencies'
     | '/for/video-editors'
@@ -249,8 +249,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/sign-in'
     | '/sign-up'
-    | '/compare/frameio'
-    | '/compare/wipster'
+    | '/compare/loom'
+    | '/compare/tella'
     | '/for/agencies'
     | '/for/video-editors'
     | '/invite/$token'
@@ -271,8 +271,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/sign-in'
     | '/sign-up'
-    | '/compare/frameio'
-    | '/compare/wipster'
+    | '/compare/loom'
+    | '/compare/tella'
     | '/dashboard/$teamSlug'
     | '/for/agencies'
     | '/for/video-editors'
@@ -296,8 +296,8 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   SignInRoute: typeof SignInRouteWithChildren
   SignUpRoute: typeof SignUpRouteWithChildren
-  CompareFrameioRoute: typeof CompareFrameioRoute
-  CompareWipsterRoute: typeof CompareWipsterRoute
+  CompareLoomRoute: typeof CompareLoomRoute
+  CompareTellaRoute: typeof CompareTellaRoute
   ForAgenciesRoute: typeof ForAgenciesRoute
   ForVideoEditorsRoute: typeof ForVideoEditorsRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -412,18 +412,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardTeamSlugRouteImport
       parentRoute: typeof DashboardRouteRoute
     }
-    '/compare/wipster': {
-      id: '/compare/wipster'
-      path: '/compare/wipster'
-      fullPath: '/compare/wipster'
-      preLoaderRoute: typeof CompareWipsterRouteImport
+    '/compare/tella': {
+      id: '/compare/tella'
+      path: '/compare/tella'
+      fullPath: '/compare/tella'
+      preLoaderRoute: typeof CompareTellaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/compare/frameio': {
-      id: '/compare/frameio'
-      path: '/compare/frameio'
-      fullPath: '/compare/frameio'
-      preLoaderRoute: typeof CompareFrameioRouteImport
+    '/compare/loom': {
+      id: '/compare/loom'
+      path: '/compare/loom'
+      fullPath: '/compare/loom'
+      preLoaderRoute: typeof CompareLoomRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/$teamSlug/': {
@@ -539,8 +539,8 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   SignInRoute: SignInRouteWithChildren,
   SignUpRoute: SignUpRouteWithChildren,
-  CompareFrameioRoute: CompareFrameioRoute,
-  CompareWipsterRoute: CompareWipsterRoute,
+  CompareLoomRoute: CompareLoomRoute,
+  CompareTellaRoute: CompareTellaRoute,
   ForAgenciesRoute: ForAgenciesRoute,
   ForVideoEditorsRoute: ForVideoEditorsRoute,
   InviteTokenRoute: InviteTokenRoute,

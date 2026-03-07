@@ -23,7 +23,7 @@ export function MarketingFooter() {
                   to="/sign-up"
                   className="hover:text-[#7cb87c] transition-colors"
                 >
-                  Start free trial
+                  Start 7-day trial
                 </Link>
               </li>
               <li>
@@ -43,18 +43,18 @@ export function MarketingFooter() {
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <Link
-                  to="/compare/frameio"
+                  to="/compare/loom"
                   className="hover:text-[#7cb87c] transition-colors"
                 >
-                  lawn vs Frame.io
+                  loam vs Loom
                 </Link>
               </li>
               <li>
                 <Link
-                  to="/compare/wipster"
+                  to="/compare/tella"
                   className="hover:text-[#7cb87c] transition-colors"
                 >
-                  lawn vs Wipster
+                  loam vs Tella.tv
                 </Link>
               </li>
             </ul>
@@ -69,7 +69,7 @@ export function MarketingFooter() {
                   to="/for/video-editors"
                   className="hover:text-[#7cb87c] transition-colors"
                 >
-                  For video editors
+                  For small teams
                 </Link>
               </li>
               <li>
@@ -89,7 +89,7 @@ export function MarketingFooter() {
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <a
-                  href="https://github.com/pingdotgg/lawn"
+                  href="https://github.com/nibzard/loam"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-[#7cb87c] transition-colors"
@@ -101,9 +101,9 @@ export function MarketingFooter() {
           </div>
         </div>
         <div className="border-t border-[#333] pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <span className="font-black text-3xl tracking-tighter">lawn.</span>
+          <span className="font-black text-3xl tracking-tighter">loam.</span>
           <span className="text-sm text-[#888]">
-            Video review for creative teams.
+            Async video sharing for teams.
           </span>
         </div>
       </div>

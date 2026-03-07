@@ -4,9 +4,9 @@ import { MarketingLayout } from "@/components/MarketingLayout";
 const painPoints = [
   {
     id: "01",
-    title: "ADDING A FREELANCER SHOULDN'T COST $19/MO",
+    title: "ADDING A FREELANCER SHOULD NOT COST $18/MO",
     description:
-      'You hired them for a two-week project. Why are you paying a monthly seat fee? lawn is $5/month total. Unlimited seats. Add your whole roster — full-timers, freelancers, that one intern who\'s "really good at Premiere."',
+      'You hired them for a two-week project. Why are you paying a monthly seat fee? loam Starter is $15/month for the workspace. Add your whole roster - full-timers, freelancers, contractors, and project collaborators.',
   },
   {
     id: "02",
@@ -31,23 +31,23 @@ const painPoints = [
 const comparisons = [
   {
     size: "5-PERSON TEAM",
-    competitor: "$95",
-    lawn: "$5",
-    saved: "$1,080",
+    competitor: "$90",
+    loam: "$15",
+    saved: "$900",
     commentary: "That's a lot of coffee.",
   },
   {
     size: "10-PERSON TEAM",
-    competitor: "$190",
-    lawn: "$5",
-    saved: "$2,220",
+    competitor: "$180",
+    loam: "$15",
+    saved: "$1,980",
     commentary: "A nice camera lens, actually.",
   },
   {
     size: "15 + FREELANCERS",
-    competitor: "$285+",
-    lawn: "$5",
-    saved: "$3,360+",
+    competitor: "$270+",
+    loam: "$15",
+    saved: "$3,060+",
     commentary: "Almost enough for one more freelancer.",
   },
 ];
@@ -79,8 +79,8 @@ export default function ForAgencies() {
               more.
             </p>
             <p className="text-lg text-[#888] font-medium mt-4">
-              lawn is video review for creative teams. Unlimited seats. $5/month.
-              The whole agency, not per editor.
+              loam is async video for teams. Starter is $15/month for the
+              whole workspace, not per seat.
             </p>
           </div>
           <div className="mt-12 flex flex-col sm:flex-row gap-4">
@@ -92,10 +92,10 @@ export default function ForAgencies() {
             </Link>
             <div className="bg-[#f0f0e8] border-2 border-[#1a1a1a] px-8 py-5 shadow-[8px_8px_0px_0px_var(--shadow-color)]">
               <span className="text-3xl font-black block leading-none">
-                $5/mo
+                From $15/mo
               </span>
               <span className="text-xs font-bold uppercase tracking-wider text-[#888] mt-1 block">
-                Unlimited seats. Seriously.
+                Unlimited seats. No seat tax.
               </span>
             </div>
           </div>
@@ -111,7 +111,7 @@ export default function ForAgencies() {
             IS HARD ENOUGH.
           </h2>
           <p className="text-xl text-[#888] font-medium mb-16 max-w-2xl">
-            Your video review tool shouldn't make it harder. Here are the
+            Your async video tool shouldn't make it harder. Here are the
             problems we actually solve.
           </p>
 
@@ -151,8 +151,9 @@ export default function ForAgencies() {
                 MATH.
               </h2>
               <p className="text-xl text-[#888] font-medium max-w-sm">
-                Frame.io charges $19/user/month. lawn charges $5/month total.
-                Here's what that looks like at agency scale.
+                Loom Business starts at $18/user/month. loam Starter is
+                $15/month per workspace. Here is what that looks like at agency
+                scale.
               </p>
             </div>
 
@@ -177,7 +178,7 @@ export default function ForAgencies() {
                     <div className="flex flex-col sm:flex-row flex-grow">
                       <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[#1a1a1a] bg-[#ffffff]">
                         <span className="text-xs font-bold tracking-widest text-[#888] block mb-1">
-                          FRAME.IO
+                          LOOM
                         </span>
                         <span className="text-3xl font-black text-[#dc2626]">
                           {row.competitor}
@@ -188,10 +189,10 @@ export default function ForAgencies() {
                       </div>
                       <div className="p-6 md:p-8 flex-1 border-b-2 sm:border-b-0 sm:border-r-2 border-[#1a1a1a] bg-[#f0f0e8]">
                         <span className="text-xs font-bold tracking-widest text-[#888] block mb-1">
-                          LAWN
+                          LOAM
                         </span>
                         <span className="text-3xl font-black text-[#2d5a2d]">
-                          {row.lawn}
+                          {row.loam}
                         </span>
                         <span className="text-sm text-[#888] font-bold">
                           /mo
@@ -217,7 +218,7 @@ export default function ForAgencies() {
                 <p className="text-lg font-bold">
                   <span className="text-[#7cb87c]">The pattern:</span> They
                   charge more as you grow. We don't. Your 50th seat costs the
-                  same as your first — $0 extra.
+                  same as your first - $0 extra.
                 </p>
               </div>
             </div>
@@ -234,8 +235,8 @@ export default function ForAgencies() {
             TEAM.
           </h2>
           <p className="text-xl md:text-2xl font-medium mb-4 max-w-lg">
-            $5/month. Unlimited seats. Unlimited projects. No per-user pricing.
-            Ever.
+            Starter is $15/month. Pro is $49. Unlimited seats either way, with
+            storage and sharing limits that stay predictable.
           </p>
           <p className="text-lg text-[#f0f0e8]/60 font-medium mb-12">
             Set up takes about 2 minutes. Your first freelancer will thank you.

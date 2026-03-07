@@ -8,4 +8,4 @@ Disallow: /invite/
 Disallow: /mono
 Disallow: /_shell
 
-Sitemap: https://lawn.video/sitemap.xml
+Sitemap: https://loam.you/sitemap.xml

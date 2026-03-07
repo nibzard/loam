@@ -16,14 +16,13 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "lawn — video review for creative teams" },
+      { title: "loam — async video sharing for teams" },
       {
         name: "description",
         content:
-          "Video review and collaboration for creative teams. Frame-accurate comments, unlimited seats, $5/month flat. The open source Frame.io alternative.",
+          "Async video sharing for teams. Share screen recordings, walkthroughs, and video feedback with fast playback and simple links.",
       },
-      { property: "og:site_name", content: "lawn" },
-      { name: "twitter:site", content: "@theo" },
+      { property: "og:site_name", content: "loam" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -61,8 +60,9 @@ function RootDocument({ children }: { children: ReactNode }) {
   const themeInitScript = `
     (() => {
       try {
-        const stored = localStorage.getItem("lawn-theme");
+        const stored = localStorage.getItem("loam-theme") ?? localStorage.getItem("lawn-theme");
         if (stored === "light" || stored === "dark") {
+          localStorage.setItem("loam-theme", stored);
           document.documentElement.setAttribute("data-theme", stored);
           return;
         }

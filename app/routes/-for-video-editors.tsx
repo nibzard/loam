@@ -4,48 +4,48 @@ import { MarketingLayout } from "@/components/MarketingLayout";
 const painPoints = [
   {
     id: "01",
-    title: "CLIENTS DON'T KNOW TIMECODES",
+    title: "ASYNC COMMUNICATION BREAKS CONTEXT",
     description:
-      'Your client says "around the middle somewhere, you know, after the thing." With lawn, they click on the video and their comment lands on that exact frame. No timecode math. No guessing.',
+      "Hand-off messages bounce between chat, slides, and tickets. loam gives everyone one shared reference: a single link they can open in the right context.",
   },
   {
     id: "02",
-    title: "UPLOAD, WAIT, TRANSCODE, WAIT",
+    title: "WAITING KILLS MOMENTUM",
     description:
-      "You just exported a 12GB ProRes and now you need to wait 20 minutes for it to process. lawn uses Mux-powered playback — upload your file, get a link, share it. Seconds, not minutes.",
+      "Teams lose time when uploads stall. loam keeps playback fast and lightweight, so small teams can move from recording to share in minutes.",
   },
   {
     id: "03",
-    title: "GETTING NOTES BACK INTO YOUR NLE",
+    title: "FEEDBACK GETS LOST",
     description:
-      "Comments are useless if you have to manually re-type them into your timeline. Export frame-accurate comments with timecodes and bring them straight back to Premiere, Resolve, or Final Cut.",
+      "Slack threads and email attachments scatter decisions. loam stores comments on the video itself so decisions stay attached to the right moment.",
   },
   {
     id: "04",
-    title: "10 REVIEWERS = 10 SEATS = $$$",
+    title: "SEAT-LINEAR BILLING KILLS ADOPTION",
     description:
-      "The director, the producer, the client, the client's wife, the intern who somehow has opinions — they all need access. lawn is $5/month flat. Invite literally everyone.",
+      "Small teams and remote collaborators scale better when pricing is team-wide, not per-user. loam stays flat so every reviewer gets access when needed.",
   },
 ];
 
 const steps = [
   {
     step: "1",
-    action: "UPLOAD YOUR CUT",
+    action: "Record or upload",
     description:
-      "Drag and drop your export. H.264, ProRes, whatever. We process it instantly through Mux so playback is fast on any device, any connection.",
+      "Record a screen walkthrough or upload a local video. Playback is optimized for quick shareability, not post-production workflows.",
   },
   {
     step: "2",
-    action: "SHARE A LINK",
+    action: "Share instantly",
     description:
-      "Copy the review link and send it to your client. They don't need an account, they don't need to download anything. They just click and watch.",
+      "Send a private link by default. Add optional public share links only when you need broader distribution.",
   },
   {
     step: "3",
-    action: "COLLECT & EXPORT",
+    action: "Close the loop",
     description:
-      "Clients click anywhere on the video to leave comments at exact frames. You see every note with precise timecodes, ready to export back to your NLE timeline.",
+      "Collect replies from teammates and external viewers in one place, then continue work with fewer meetings and better traceability.",
   },
 ];
 
@@ -56,28 +56,29 @@ export default function ForVideoEditors() {
       <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[var(--background)]">
         <div className="max-w-5xl mx-auto">
           <div className="text-sm font-bold uppercase tracking-widest text-[#888] mb-6">
-            FOR VIDEO EDITORS
+            FOR SMALL TEAMS
           </div>
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tighter leading-[0.85] mb-8">
-            VIDEO REVIEW THAT EDITORS ACTUALLY WANT TO USE.
+            SCREEN RECORDINGS THAT KEEP TEAMS
+            <br />
+            MOVING ASYNCHRONOUSLY.
           </h1>
           <p className="text-xl md:text-2xl font-medium text-[#888] max-w-3xl mb-12">
-            Your client said "make it pop" on a 47-minute timeline. You deserve
-            a review tool that at least tells you where they meant. lawn gives
-            you frame-accurate feedback, instant playback, and a workflow that
-            doesn't fight your NLE.
+            For small teams that ship updates, walkthroughs, bug fixes, and product notes.
+            loam is focused on async sharing and simple playback without seat tax
+            or workflow bloat.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
               to="/sign-up"
               className="bg-[#1a1a1a] text-[#f0f0e8] px-8 py-4 border-2 border-[#1a1a1a] font-black text-lg uppercase tracking-wider hover:bg-[#2d5a2d] transition-colors shadow-[6px_6px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] text-center"
             >
-              START FREE TRIAL
+              START 7-DAY TRIAL
             </Link>
             <div className="flex items-center gap-3 px-4">
-              <span className="text-2xl font-black">$5/mo</span>
+              <span className="text-2xl font-black">$15/mo</span>
               <span className="text-sm font-bold text-[#888] uppercase tracking-wider">
-                flat, not per seat
+                Starter workspace, unlimited seats
               </span>
             </div>
           </div>
@@ -91,7 +92,7 @@ export default function ForVideoEditors() {
             THE PAIN IS REAL.
           </h2>
           <p className="text-lg text-[#888] font-medium text-center mb-16 max-w-2xl mx-auto">
-            Every editor knows these problems. We built lawn to fix them.
+            Small teams hit these same bottlenecks. loam removes the friction layer.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -122,7 +123,7 @@ export default function ForVideoEditors() {
         </div>
       </section>
 
-      {/* How It Works for Editors */}
+      {/* How It Works for Teams */}
       <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[var(--background)]">
         <div className="max-w-7xl mx-auto">
           <h2 className="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none mb-4 text-center">
@@ -165,16 +166,14 @@ export default function ForVideoEditors() {
       <section className="px-6 py-24 md:py-32 border-b-2 border-[#1a1a1a] bg-[#2d5a2d] text-[#f0f0e8]">
         <div className="max-w-5xl mx-auto text-center">
           <h2 className="text-6xl md:text-8xl lg:text-9xl font-black uppercase tracking-tighter leading-[0.85] mb-8">
-            $5/MONTH.
+            $15/MONTH.
             <br />
             <span className="text-[#7cb87c]">NOT PER USER.</span>
             <br />
             TOTAL.
           </h2>
           <p className="text-xl md:text-2xl font-medium max-w-2xl mx-auto mb-4 text-[#f0f0e8]/80">
-            Unlimited seats. Unlimited projects. Unlimited reviewers. Your
-            entire team, your clients, your client's clients — everyone gets
-            access for one flat price.
+            Unlimited seats. Private-by-default sharing. Better async workflows.
           </p>
           <p className="text-lg font-bold text-[#7cb87c]">
             Stop paying per-seat tax on collaboration.
@@ -186,17 +185,17 @@ export default function ForVideoEditors() {
       <section className="px-6 py-32 bg-[var(--background)]">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           <h2 className="text-5xl md:text-7xl lg:text-8xl font-black uppercase tracking-tighter leading-[0.85] mb-6">
-            START EDITING FASTER.
+            START SHARING FASTER.
           </h2>
           <p className="text-xl text-[#888] font-medium mb-12 max-w-xl">
-            Free trial, no credit card. Set up your first review in under a
-            minute.
+            Start your 7-day trial. A card is required to prevent failed
+            subscriptions, then cancel anytime before renewal.
           </p>
           <Link
             to="/sign-up"
             className="bg-[#1a1a1a] text-[#f0f0e8] px-12 py-6 border-2 border-[#1a1a1a] text-2xl font-black uppercase tracking-wider hover:bg-[#2d5a2d] hover:border-[#2d5a2d] transition-colors shadow-[12px_12px_0px_0px_var(--shadow-accent)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[8px_8px_0px_0px_var(--shadow-accent)]"
           >
-            START FREE TRIAL
+            START 7-DAY TRIAL
           </Link>
         </div>
       </section>

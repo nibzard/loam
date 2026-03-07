@@ -20,8 +20,8 @@ export default function HomepageMono() {
     <div className="min-h-screen bg-[#f0f0e8] text-[#1a1a1a] font-mono">
       <nav className="sticky top-0 z-50 px-6 py-4 flex justify-between items-center bg-[#f0f0e8]">
         <div className="flex items-center gap-4">
-          <span className={`text-xl font-black transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>lawn</span>
-          <span className={`text-xs text-[#888] hidden sm:inline border-l border-[#ccc] pl-4 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>video review</span>
+          <span className={`text-xl font-black transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>loam</span>
+          <span className={`text-xs text-[#888] hidden sm:inline border-l border-[#ccc] pl-4 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>async video</span>
         </div>
         <div className="flex gap-4 text-sm">
           <Link to="/sign-in" className="hover:underline">Sign In</Link>
@@ -32,12 +32,12 @@ export default function HomepageMono() {
       <section className="px-6 pt-8 pb-16">
         <div className="max-w-6xl mx-auto">
           <h1 className="text-[20vw] sm:text-[18vw] font-black leading-[0.85] tracking-tight">
-            lawn
+            loam
           </h1>
 
           <div className="max-w-2xl mt-8">
             <p className="text-2xl sm:text-3xl font-bold leading-tight">
-              Video review for creative teams.
+              Async video sharing for teams.
               <br />
               <span className="text-[#2d5a2d]">Less features. No bull$#!t.</span>
             </p>
@@ -45,8 +45,8 @@ export default function HomepageMono() {
 
           <div className="mt-12 flex flex-wrap gap-6 items-center">
             <div className="bg-[#2d5a2d] text-[#f0f0e8] px-6 py-4">
-              <span className="text-3xl font-black">$5/mo</span>
-              <span className="text-sm ml-2 opacity-70">unlimited seats</span>
+              <span className="text-3xl font-black">from $15/mo</span>
+              <span className="text-sm ml-2 opacity-70">flat team pricing</span>
             </div>
             <Link
               to="/sign-up"
@@ -61,10 +61,10 @@ export default function HomepageMono() {
       <section className="border-y-2 border-[#1a1a1a]">
         <div className="max-w-6xl mx-auto grid grid-cols-2 lg:grid-cols-4">
           {[
-            { title: "Frame-accurate", desc: "Comments on exact frames" },
+            { title: "Context-rich", desc: "Replies tied to playback moments" },
             { title: "Unlimited seats", desc: "One price for everyone" },
             { title: "0.3s response", desc: "Built for speed" },
-            { title: "Any NLE", desc: "No lock-in" },
+            { title: "Async-ready", desc: "Built to move teams forward" },
           ].map((item, index) => (
             <div
               key={index}
@@ -79,45 +79,45 @@ export default function HomepageMono() {
 
       <section className="px-6 py-16">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-black mb-2">How lawn compares</h2>
-          <p className="text-[#888] mb-8">Frame.io is solid software. Here's where we differ.</p>
+          <h2 className="text-2xl font-black mb-2">How loam compares</h2>
+          <p className="text-[#888] mb-8">Loom is solid software. Here's where we differ.</p>
 
           <div className="space-y-6">
             <div className="bg-[#1a1a1a] text-[#f0f0e8] p-8">
               <div className="text-sm tracking-widest text-[#7cb87c] mb-4">PRICING MODEL</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                 <div>
-                  <div className="text-[#888] text-sm mb-1">Frame.io</div>
-                  <div className="text-2xl font-black">$19/editor/mo</div>
-                  <div className="text-sm text-[#888] mt-2">Team of 5 = $1,140/year</div>
+                  <div className="text-[#888] text-sm mb-1">Loom</div>
+                  <div className="text-2xl font-black">$18/user/mo</div>
+                  <div className="text-sm text-[#888] mt-2">Team of 5 = $1,080/year</div>
                 </div>
                 <div>
-                  <div className="text-[#7cb87c] text-sm mb-1">lawn</div>
-                  <div className="text-2xl font-black text-[#7cb87c]">$5/mo total</div>
-                  <div className="text-sm text-[#888] mt-2">Team of 5 = $60/year</div>
+                  <div className="text-[#7cb87c] text-sm mb-1">loam</div>
+                  <div className="text-2xl font-black text-[#7cb87c]">from $15/mo</div>
+                  <div className="text-sm text-[#888] mt-2">Team of 5 = $180/year</div>
                 </div>
               </div>
               <div className="mt-6 pt-6 border-t border-[#333]">
                 <span className="text-sm text-[#888]">Annual savings with 5 users: </span>
-                <span className="text-xl font-black text-[#7cb87c]">$1,080</span>
+                <span className="text-xl font-black text-[#7cb87c]">$900</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="border-2 border-[#1a1a1a] p-6">
-                <div className="font-black mb-2">Frame.io</div>
+                <div className="font-black mb-2">Loom</div>
                 <ul className="text-sm text-[#888] space-y-1">
-                  <li>• Deep Adobe integration</li>
-                  <li>• More enterprise features</li>
-                  <li>• Larger ecosystem</li>
+                  <li>• Broader workplace suite</li>
+                  <li>• Meeting and AI extras</li>
+                  <li>• Per-seat pricing</li>
                 </ul>
               </div>
               <div className="border-2 border-[#2d5a2d] p-6">
-                <div className="font-black text-[#2d5a2d] mb-2">lawn</div>
+                <div className="font-black text-[#2d5a2d] mb-2">loam</div>
                 <ul className="text-sm space-y-1">
-                  <li>• Works with any software</li>
-                  <li>• Simpler, faster interface</li>
-                  <li>• No per-seat pricing</li>
+                  <li>• Focused async sharing</li>
+                  <li>• Simpler, faster viewer</li>
+                  <li>• Flat team pricing</li>
                 </ul>
               </div>
             </div>
@@ -152,12 +152,10 @@ export default function HomepageMono() {
       <section className="px-6 py-16 border-b-2 border-[#1a1a1a]">
         <div className="max-w-3xl mx-auto text-center">
           <blockquote className="text-2xl sm:text-3xl font-bold leading-tight">
-            "I built lawn because I got tired of waiting for Frame.io to load.
-            Video review should be instant."
+            "Record it once. Share the link. Let the team watch on their own
+            time."
           </blockquote>
-          <p className="mt-4 text-[#888]">
-            — <a href="https://x.com/theo" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#1a1a1a]">Theo</a>
-          </p>
+          <p className="mt-4 text-[#888]">Built for async teams</p>
         </div>
       </section>
 
@@ -167,13 +165,13 @@ export default function HomepageMono() {
             Pick your plan
           </h2>
           <p className="text-xl text-[#888] mt-4 mb-8">
-            Basic is $5/month. Pro is $25/month.
+            Starter is $15/month. Pro is $49/month.
           </p>
           <Link
             to="/sign-up"
             className="inline-block bg-[#2d5a2d] text-[#f0f0e8] px-12 py-5 text-xl font-black hover:bg-[#3a6a3a] transition-colors"
           >
-            Start with Basic
+            Start with Starter
           </Link>
           <p className="mt-4 text-sm text-[#888]">Upgrade to Pro anytime</p>
         </div>
@@ -181,7 +179,7 @@ export default function HomepageMono() {
 
       <footer className="border-t-2 border-[#1a1a1a] px-6 py-8">
         <div className="max-w-5xl mx-auto flex justify-between items-center text-sm">
-          <span className="font-black text-xl">lawn</span>
+          <span className="font-black text-xl">loam</span>
           <div className="flex gap-6 text-[#888]">
             <a href="/github" className="hover:text-[#1a1a1a]">GitHub</a>
           </div>

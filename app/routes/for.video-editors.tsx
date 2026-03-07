@@ -5,9 +5,9 @@ import ForVideoEditors from "./-for-video-editors";
 export const Route = createFileRoute("/for/video-editors")({
   head: () =>
     seoHead({
-      title: "Video review for editors — frame-accurate feedback",
+      title: "Async video for teams — faster asynchronous updates",
       description:
-        "Video review built for editors. Frame-accurate comments, instant playback, no account required for reviewers. $5/month flat.",
+        "Async video built for small teams. Fast playback, private-by-default sharing, unlimited seats, and flat team pricing from $15/month.",
       path: "/for/video-editors",
       ogImage: "/og/for-editors.png",
     }),

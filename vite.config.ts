@@ -25,8 +25,8 @@ export default defineConfig({
       },
       pages: [
         { path: "/" },
-        { path: "/compare/frameio" },
-        { path: "/compare/wipster" },
+        { path: "/compare/loom" },
+        { path: "/compare/tella" },
         { path: "/for/video-editors" },
         { path: "/for/agencies" },
         { path: "/pricing" },

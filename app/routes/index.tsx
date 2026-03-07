@@ -5,9 +5,9 @@ import Homepage from "./-home";
 export const Route = createFileRoute("/")({
   head: () =>
     seoHead({
-      title: "lawn — video review for creative teams",
+      title: "loam — async video sharing for teams",
       description:
-        "Video review and collaboration for creative teams. Frame-accurate comments, unlimited seats, $5/month flat. The open source Frame.io alternative.",
+        "Async video sharing for teams. Share screen recordings, walkthroughs, and video feedback with fast playback and simple links.",
       path: "/",
       ogImage: "/og/home.png",
     }),

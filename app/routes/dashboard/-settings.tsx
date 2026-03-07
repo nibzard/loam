@@ -29,15 +29,15 @@ const BILLING_PLANS: Record<
   }
 > = {
   basic: {
-    label: "Basic",
-    monthlyPriceUsd: 5,
+    label: "Starter",
+    monthlyPriceUsd: 15,
     storageLimitBytes: 100 * GIBIBYTE,
     seats: "Unlimited",
   },
   pro: {
     label: "Pro",
-    monthlyPriceUsd: 25,
-    storageLimitBytes: TEBIBYTE,
+    monthlyPriceUsd: 49,
+    storageLimitBytes: 500 * GIBIBYTE,
     seats: "Unlimited",
   },
 };
@@ -424,8 +424,8 @@ export default function TeamSettingsPage() {
               {!hasActiveSubscription && (
                 <p className="text-sm text-[#888] mt-3">
                   An active subscription is required to create projects and upload
-                  videos. Eligible teams receive a {TEAM_TRIAL_DAYS}-day trial before
-                  billing starts.
+                  videos. New teams receive a {TEAM_TRIAL_DAYS}-day trial before
+                  billing starts, and a valid card is required to begin it.
                 </p>
               )}
             </div>

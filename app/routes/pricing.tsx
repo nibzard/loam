@@ -5,9 +5,9 @@ import PricingPage from "./-pricing";
 export const Route = createFileRoute("/pricing")({
   head: () =>
     seoHead({
-      title: "Pricing — $5/month, unlimited seats",
+      title: "Pricing — flat team plans from $15/month",
       description:
-        "lawn pricing is simple. $5/month for unlimited seats, projects, and clients. $25/month if you need more storage. No per-user fees.",
+        "loam pricing is simple. Starter is $15/month and Pro is $49/month, both with unlimited seats, private-by-default sharing, and clear guest usage limits.",
       path: "/pricing",
       ogImage: "/og/pricing.png",
     }),

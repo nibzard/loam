@@ -7,9 +7,9 @@ import SignUpPage from "./auth/-sign-up";
 export const Route = createFileRoute("/sign-up")({
   head: () =>
     seoHead({
-      title: "Start your free trial",
+      title: "Start your 7-day trial",
       description:
-        "Sign up for lawn — video review for creative teams. $5/month flat, unlimited seats.",
+        "Sign up for loam and start a 7-day trial with a card. Fast playback, simple links, and fewer meetings for async teams.",
       path: "/sign-up",
     }),
   validateSearch: (search: Record<string, unknown>) => ({

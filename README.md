@@ -1,21 +1,44 @@
-# lawn
+# loam
 
-Video review platform for creative teams. Built by Theo.
+Screen recording and async video sharing for teams.
 
-## IMPORTANT NOTICE
+> `loam` is a fork of [`lawn`](https://github.com/pingdotgg/lawn), originally created by Theo / Ping Labs.
+> This fork adapts the original codebase for async communication: sharing screen recordings, walkthroughs, updates, and feedback by video.
+> Current fork: [`nibzard/loam`](https://github.com/nibzard/loam)
 
-I am, effectively, not accepting PRs at this time. This may change in the future. My preferred "PR" method is to describe problems in the issues tab and give me detailed prompts I can quickly copy/paste into my agent of choice.
+## Why This Fork Exists
 
-## ...why did you build this?
+The upstream project is a strong foundation for video review. This fork is focused on a different workflow:
 
-I got tired of Frame.io slowly regressing. I wanted something simple, fast and reliable.
+- sharing screen recordings quickly
+- sending product updates and walkthroughs asynchronously
+- explaining bugs visually
+- giving feedback by video instead of scheduling another meeting
+- keeping playback fast and link sharing frictionless
 
-I don't know how much time I'll have to maintain this long term, so I decided to open source it. I have no idea where this project is going long term.
+## What This Fork Prioritizes
 
-My team is using lawn every day already. We intend to continue, and we intend to keep adding things we need throughout.
+- fast playback and responsive navigation
+- good defaults with minimal setup
+- simple share links for async teams
+- lightweight commenting and reactions around video
+- open source ownership of the stack
+
+## Attribution
+
+This project is based on the original `lawn` codebase by Theo / Ping Labs.
+Upstream repository: [`pingdotgg/lawn`](https://github.com/pingdotgg/lawn)
+Please keep the upstream license notice intact when redistributing substantial portions of this fork.
 
 ## Docs
 
 - [Setup](docs/setup.md)
 - [Deployment](docs/deployment.md)
+- [Deployment Costs](docs/deployment-costs.md)
 - [Philosophy](docs/philosophy.md)
+- [Pricing Strategy](docs/pricing-strategy.md)
+- [Upstream Sync](docs/upstream.md)
+
+## License
+
+MIT. See [LICENSE](LICENSE).

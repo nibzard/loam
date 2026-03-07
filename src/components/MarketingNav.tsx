@@ -18,7 +18,7 @@ export function MarketingNav() {
     >
       <div className="flex items-center gap-4">
         <Link to="/" className="text-xl font-black tracking-tighter">
-          lawn.
+          loam.
         </Link>
       </div>
       <div className="flex gap-6 items-center text-sm font-bold uppercase tracking-wide">
@@ -29,7 +29,7 @@ export function MarketingNav() {
           Pricing
         </Link>
         <Link
-          to="/compare/frameio"
+          to="/compare/loom"
           className="hover:underline underline-offset-4 hidden sm:block"
         >
           Compare

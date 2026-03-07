@@ -10,7 +10,8 @@ import {
   useState,
 } from "react";
 
-const THEME_STORAGE_KEY = "lawn-theme";
+const THEME_STORAGE_KEY = "loam-theme";
+const LEGACY_THEME_STORAGE_KEY = "lawn-theme";
 
 type Theme = "light" | "dark";
 
@@ -32,6 +33,12 @@ function getInitialTheme(): Theme {
   const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
   if (storedTheme === "dark" || storedTheme === "light") {
     return storedTheme;
+  }
+
+  const legacyStoredTheme = localStorage.getItem(LEGACY_THEME_STORAGE_KEY);
+  if (legacyStoredTheme === "dark" || legacyStoredTheme === "light") {
+    localStorage.setItem(THEME_STORAGE_KEY, legacyStoredTheme);
+    return legacyStoredTheme;
   }
 
   return getSystemTheme();

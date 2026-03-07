@@ -26,38 +26,8 @@ function createUploadId() {
   return Math.random().toString(36).slice(2);
 }
 
-async function copyTextToClipboard(text: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-
-  if (typeof document === "undefined") {
-    return false;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  let copied = false;
-  try {
-    copied = document.execCommand("copy");
-  } finally {
-    document.body.removeChild(textarea);
-  }
-
-  return copied;
-}
-
 export function useVideoUploadManager() {
   const createVideo = useMutation(api.videos.create);
-  const createShareLink = useMutation(api.shareLinks.create);
   const getUploadUrl = useAction(api.videoActions.getUploadUrl);
   const markUploadComplete = useAction(api.videoActions.markUploadComplete);
   const markUploadFailed = useAction(api.videoActions.markUploadFailed);
@@ -65,8 +35,6 @@ export function useVideoUploadManager() {
 
   const uploadFilesToProject = useCallback(
     async (projectId: Id<"projects">, files: File[]) => {
-      const shouldAutoCopyShareLink = files.length === 1;
-
       for (const file of files) {
         const uploadId = createUploadId();
         const title = file.name.replace(/\.[^/.]+$/, "");
@@ -85,8 +53,6 @@ export function useVideoUploadManager() {
         ]);
 
         let createdVideoId: Id<"videos"> | undefined;
-        let createdPublicId: string | undefined;
-        let shareLinkUrl: string | undefined;
 
         try {
           const createdVideo = await createVideo({
@@ -96,7 +62,6 @@ export function useVideoUploadManager() {
             contentType: file.type || "video/mp4",
           });
           createdVideoId = createdVideo.videoId;
-          createdPublicId = createdVideo.publicId;
 
           setUploads((prev) =>
             prev.map((upload) =>
@@ -184,25 +149,6 @@ export function useVideoUploadManager() {
 
           await markUploadComplete({ videoId: createdVideoId });
 
-          if (shouldAutoCopyShareLink && typeof window !== "undefined") {
-            try {
-              const shareLink = await createShareLink({
-                videoId: createdVideoId,
-              });
-              shareLinkUrl = `${window.location.origin}/share/${shareLink.token}`;
-            } catch (error) {
-              console.error("Failed to create default share link:", error);
-              if (createdPublicId) {
-                shareLinkUrl = `${window.location.origin}/watch/${createdPublicId}`;
-              }
-            }
-          }
-
-          let shareLinkCopied = false;
-          if (shareLinkUrl && shouldAutoCopyShareLink) {
-            shareLinkCopied = await copyTextToClipboard(shareLinkUrl);
-          }
-
           setUploads((prev) =>
             prev.map((upload) =>
               upload.id === uploadId
@@ -210,8 +156,6 @@ export function useVideoUploadManager() {
                     ...upload,
                     status: "complete",
                     progress: 100,
-                    shareLinkUrl,
-                    shareLinkCopied,
                   }
                 : upload,
             ),
@@ -238,7 +182,7 @@ export function useVideoUploadManager() {
         }
       }
     },
-    [createShareLink, createVideo, getUploadUrl, markUploadComplete, markUploadFailed],
+    [createVideo, getUploadUrl, markUploadComplete, markUploadFailed],
   );
 
   const cancelUpload = useCallback(

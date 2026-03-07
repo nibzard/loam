@@ -1,7 +1,15 @@
 {
-  "name": "l2",
+  "name": "loam",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://github.com/nibzard/loam",
+  "bugs": {
+    "url": "https://github.com/nibzard/loam/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nibzard/loam.git"
+  },
   "packageManager": "bun@1.3.6",
   "scripts": {
     "dev": "concurrently -n web,convex -c blue,magenta \"vite dev --port 5296\" \"bunx convex dev\"",

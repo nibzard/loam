@@ -79,7 +79,7 @@ export const create = mutation({
       status: "uploading",
       muxAssetStatus: "preparing",
       workflowStatus: "review",
-      visibility: "public",
+      visibility: "private",
       publicId,
     });
 

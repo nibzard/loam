@@ -54,7 +54,7 @@ function formatTeamPlanLabel(
     return "Pro";
   }
 
-  return "Basic";
+  return "Starter";
 }
 
 function DashboardProjectCard({
@@ -114,7 +114,7 @@ export default function DashboardPage() {
               </div>
               <CardTitle className="text-lg">Create your first team</CardTitle>
               <CardDescription>
-                Teams help you organize projects and collaborate on video reviews.
+                Teams help you organize projects and collaborate around shared videos.
               </CardDescription>
             </CardHeader>
             <CardContent>

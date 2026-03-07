@@ -1,7 +1,7 @@
-const SITE_URL = "https://lawn.video";
-const SITE_NAME = "lawn";
+const SITE_URL = "https://loam.you";
+const SITE_NAME = "loam";
 const DEFAULT_OG_IMAGE = "/og/default.png";
-const TWITTER_HANDLE = "@theo";
+const TWITTER_HANDLE = "";
 
 export const muxPreconnectLinks = [
   { rel: "preconnect", href: "https://stream.mux.com", crossOrigin: "anonymous" },
@@ -27,9 +27,9 @@ export function seoHead({
   type = "website",
   noIndex = false,
 }: SeoOptions) {
-  const fullTitle = title.toLowerCase().includes("lawn")
+  const fullTitle = title.toLowerCase().includes(SITE_NAME.toLowerCase())
     ? title
-    : `${title} | lawn`;
+    : `${title} | ${SITE_NAME}`;
   const url = `${SITE_URL}${path}`;
   const imageUrl = ogImage.startsWith("http")
     ? ogImage
@@ -50,8 +50,11 @@ export function seoHead({
     { name: "twitter:title", content: fullTitle },
     { name: "twitter:description", content: description },
     { name: "twitter:image", content: imageUrl },
-    { name: "twitter:site", content: TWITTER_HANDLE },
   ];
+
+  if (TWITTER_HANDLE) {
+    meta.push({ name: "twitter:site", content: TWITTER_HANDLE });
+  }
 
   if (noIndex) {
     meta.push({ name: "robots", content: "noindex,nofollow" });

@@ -99,7 +99,7 @@ export function UploadProgress({
             ? "Share link copied. It will start working as soon as processing finishes."
             : shareLinkUrl
               ? "Share link ready."
-              : "Upload complete."}
+              : "Upload complete. Video is private until you share it."}
         </p>
       )}
 

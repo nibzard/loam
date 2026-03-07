@@ -5,9 +5,9 @@ import ForAgencies from "./-for-agencies";
 export const Route = createFileRoute("/for/agencies")({
   head: () =>
     seoHead({
-      title: "Video review for agencies — stop paying per seat",
+      title: "Async video for agencies — flat pricing, no seat tax",
       description:
-        "Video review built for agencies. Unlimited seats for $5/month. No per-user pricing, no client accounts needed, instant sharing.",
+        "Async video built for agencies. Flat team pricing from $15/month, no per-user pricing, no client accounts needed, and clear storage and guest-sharing limits.",
       path: "/for/agencies",
       ogImage: "/og/for-agencies.png",
     }),

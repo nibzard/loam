@@ -226,7 +226,7 @@ export default function TeamPage() {
             <CardHeader>
               <CardTitle>Set up billing to create projects</CardTitle>
               <CardDescription>
-                This team has no active subscription. Go to Billing to start Basic or Pro before
+                This team has no active subscription. Go to Billing to start Starter or Pro before
                 creating projects.
               </CardDescription>
             </CardHeader>

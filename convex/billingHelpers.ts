@@ -7,13 +7,13 @@ export type TeamPlan = "basic" | "pro";
 const GIBIBYTE = 1024 ** 3;
 
 export const TEAM_PLAN_MONTHLY_PRICE_USD: Record<TeamPlan, number> = {
-  basic: 5,
-  pro: 25,
+  basic: 15,
+  pro: 49,
 };
 
 export const TEAM_PLAN_STORAGE_LIMIT_BYTES: Record<TeamPlan, number> = {
   basic: 100 * GIBIBYTE,
-  pro: 1024 * GIBIBYTE,
+  pro: 500 * GIBIBYTE,
 };
 
 function hasText(value: string | undefined | null): value is string {
@@ -121,7 +121,7 @@ export async function assertTeamHasActiveSubscription(
 ) {
   const state = await getTeamSubscriptionState(ctx, teamId);
   if (!state.hasActiveSubscription) {
-    throw new Error("An active Basic or Pro subscription is required.");
+    throw new Error("An active Starter or Pro subscription is required.");
   }
   return state;
 }

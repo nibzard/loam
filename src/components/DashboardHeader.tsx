@@ -56,7 +56,7 @@ export function DashboardHeader({
           className="hover:text-[#2d5a2d] transition-colors mr-2 flex-shrink-0"
           {...prewarmHomeIntentHandlers}
         >
-          lawn.
+          loam.
         </Link>
         {paths.map((path, index) => {
           const isIntermediate = paths.length >= 2 && index < paths.length - 1;

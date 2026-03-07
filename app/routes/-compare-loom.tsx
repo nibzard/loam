@@ -1,92 +1,91 @@
 import { Link } from "@tanstack/react-router";
 import { MarketingLayout } from "@/components/MarketingLayout";
 
-const WIPSTER_PRICE_PER_USER = 15;
-const LAWN_PRICE_FLAT = 5;
+const LOOM_PRICE_PER_USER = 18;
+const LOAM_STARTER_PRICE = 15;
 
 const comparisonRows = [
   {
-    feature: "Pricing",
-    wipster: "Per-user/month",
-    lawn: "$5/month. Total.",
-    note: "Your accountant will love you.",
+    feature: "Price",
+    loom: "$18/user/month",
+    loam: "From $15/workspace/month",
+    note: "Still flat team pricing. Just no longer fantasy-priced.",
+  },
+  {
+    feature: "Seats",
+    loom: "Per user",
+    loam: "Unlimited",
+    note: "Adding teammates should not trigger procurement.",
+  },
+  {
+    feature: "Scope",
+    loom: "Video messaging + meetings + AI",
+    loam: "Screen recordings and async feedback",
+    note: "We stay narrower on purpose.",
+  },
+  {
+    feature: "Complexity",
+    loom: "Broad workplace suite",
+    loam: "Focused sharing workflow",
+    note: "Less surface area. Fewer places to get lost.",
   },
   {
     feature: "Open source",
-    wipster: "No",
-    lawn: "Yes",
-    note: "You can literally read our code.",
+    loom: "No",
+    loam: "Yes",
+    note: "Fork it, audit it, keep it.",
   },
   {
-    feature: "Speed",
-    wipster: "Solid, no complaints",
-    lawn: "Instant Mux playback",
-    note: "We're unreasonably competitive about this.",
-  },
-  {
-    feature: "Sharing",
-    wipster: "Invite to workspace",
-    lawn: "Just a link",
-    note: "Your clients don't want another login.",
-  },
-  {
-    feature: "Simplicity",
-    wipster: "Full-featured platform",
-    lawn: "Fewer features (on purpose)",
-    note: "We call this a feature, not a bug.",
-  },
-  {
-    feature: "Approvals",
-    wipster: "Built-in workflows",
-    lawn: "Comments + thumbs up",
-    note: "If that's not enough, we respect that.",
+    feature: "Playback",
+    loom: "Polished, heavier stack",
+    loam: "Fast share-first viewer",
+    note: "We care a lot about time-to-watch.",
   },
 ];
 
-const teamSizes = [3, 5, 10, 25];
+const teamSizes = [3, 5, 10, 20];
 
 function annualSavings(teamSize: number) {
-  return (WIPSTER_PRICE_PER_USER * teamSize - LAWN_PRICE_FLAT) * 12;
+  return (LOOM_PRICE_PER_USER * teamSize - LOAM_STARTER_PRICE) * 12;
 }
 
 const savingsCommentary: Record<number, string> = {
-  3: "A very nice dinner for the team.",
-  5: "That's a new camera lens.",
-  10: "A weekend at a cabin to celebrate shipping.",
-  25: "Genuinely, that's a lot of money.",
+  3: "Enough to stop calling it a rounding error.",
+  5: "A decent team dinner every month.",
+  10: "Budget you can spend on actual work.",
+  20: "The spreadsheet starts looking personal.",
 };
 
-export default function CompareWipster() {
+export default function CompareLoom() {
   return (
     <MarketingLayout>
-      {/* Hero */}
       <section className="px-6 pt-20 pb-24 md:pt-28 md:pb-32 border-b-2 border-[var(--border)] bg-[var(--background)]">
         <div className="max-w-5xl mx-auto">
           <h1 className="text-[14vw] sm:text-[10vw] md:text-[8vw] font-black leading-[0.85] tracking-tighter uppercase">
-            lawn vs
+            loam vs
             <br />
-            Wipster
+            Loom
           </h1>
           <div className="mt-10 md:mt-14 max-w-2xl">
             <p className="text-2xl md:text-3xl font-black uppercase tracking-tight leading-tight">
-              Two video review tools
+              Loom is great.
               <br />
-              walk into a bar.
+              We just want less of it.
               <br />
               <span className="text-[var(--foreground-muted)]">
-                One costs less. That's the whole joke.
+                That is the strategy.
               </span>
             </p>
             <p className="mt-6 text-lg text-[var(--foreground-muted)] font-medium max-w-lg">
-              Wipster is a solid tool with real approval workflows and a proper
-              feature set. lawn is smaller, cheaper, and open source. We do less
-              for less money, and that's the whole pitch.
+              Loom is a broad video messaging platform for work. loam is a
+              narrower tool for screen recordings, walkthroughs, bug reports,
+              and async feedback. Less platform. Less seat math. Faster path
+              from record to watch.
             </p>
           </div>
         </div>
       </section>
 
-      {/* Side-by-side comparison table */}
       <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--surface-alt)]">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-16 text-center">
@@ -96,20 +95,18 @@ export default function CompareWipster() {
           </h2>
 
           <div className="border-2 border-[var(--border)] shadow-[8px_8px_0px_0px_var(--shadow-color)] bg-[var(--background)]">
-            {/* Header row */}
             <div className="grid grid-cols-3 border-b-2 border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground-inverse)]">
               <div className="p-4 md:p-6 font-black uppercase tracking-wider text-sm">
                 Feature
               </div>
               <div className="p-4 md:p-6 font-black uppercase tracking-wider text-sm border-l-2 border-[var(--border)]">
-                Wipster
+                Loom
               </div>
               <div className="p-4 md:p-6 font-black uppercase tracking-wider text-sm border-l-2 border-[var(--border)] text-[var(--accent-light)]">
-                lawn
+                loam
               </div>
             </div>
 
-            {/* Data rows */}
             {comparisonRows.map((row, i) => (
               <div
                 key={row.feature}
@@ -124,23 +121,21 @@ export default function CompareWipster() {
                   </span>
                 </div>
                 <div className="p-4 md:p-6 border-l-2 border-[var(--border)] flex items-center text-[var(--foreground-muted)] font-medium">
-                  {row.wipster}
+                  {row.loom}
                 </div>
                 <div className="p-4 md:p-6 border-l-2 border-[var(--border)] flex items-center font-bold text-[var(--accent)]">
-                  {row.lawn}
+                  {row.loam}
                 </div>
               </div>
             ))}
           </div>
 
           <p className="text-center text-sm text-[var(--foreground-muted)] mt-6 md:hidden">
-            * Wipster pricing based on their per-user model. Actual pricing may
-            vary by plan.
+            * Loom pricing based on Loom Business at $18/user/month.
           </p>
         </div>
       </section>
 
-      {/* Cost savings calculator */}
       <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--background)]">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-4 text-center">
@@ -149,15 +144,16 @@ export default function CompareWipster() {
             MATH.
           </h2>
           <p className="text-center text-lg text-[var(--foreground-muted)] font-medium mb-16 max-w-lg mx-auto">
-            Wipster charges per user. lawn charges $5 per month total. Not per
-            user. Just $5. The math gets increasingly silly as your team grows.
+            Loom Business starts at $18 per user per month. loam Starter starts
+            at $15 per workspace per month. If everyone on the team needs
+            access, flat pricing still compounds in your favor.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {teamSizes.map((size) => {
               const savings = annualSavings(size);
-              const wipsterAnnual = WIPSTER_PRICE_PER_USER * size * 12;
-              const lawnAnnual = LAWN_PRICE_FLAT * 12;
+              const loomAnnual = LOOM_PRICE_PER_USER * size * 12;
+              const loamAnnual = LOAM_STARTER_PRICE * 12;
 
               return (
                 <div
@@ -167,24 +163,24 @@ export default function CompareWipster() {
                   <div className="border-b-2 border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground-inverse)] p-5">
                     <span className="text-4xl font-black">{size}</span>
                     <span className="text-sm font-bold uppercase tracking-wider text-[var(--foreground-muted)] ml-2">
-                      people
+                      {size === 1 ? "person" : "people"}
                     </span>
                   </div>
                   <div className="p-5 flex flex-col flex-grow">
                     <div className="flex justify-between items-baseline mb-1">
                       <span className="text-xs font-bold uppercase tracking-wider text-[var(--foreground-muted)]">
-                        Wipster
+                        Loom
                       </span>
                       <span className="font-black text-[var(--foreground-muted)] line-through">
-                        ${wipsterAnnual.toLocaleString()}/yr
+                        ${loomAnnual.toLocaleString()}/yr
                       </span>
                     </div>
                     <div className="flex justify-between items-baseline mb-4">
                       <span className="text-xs font-bold uppercase tracking-wider text-[var(--accent)]">
-                        lawn
+                        loam
                       </span>
                       <span className="font-black text-[var(--accent)]">
-                        ${lawnAnnual}/yr
+                        ${loamAnnual}/yr
                       </span>
                     </div>
                     <div className="border-t-2 border-[var(--border-subtle)] pt-4 mt-auto">
@@ -203,33 +199,9 @@ export default function CompareWipster() {
               );
             })}
           </div>
-
-          {/* Open source callout */}
-          <div className="mt-16 border-2 border-[var(--accent)] bg-[var(--accent)] text-[var(--foreground-inverse)] p-8 shadow-[8px_8px_0px_0px_var(--shadow-color)]">
-            <p className="text-sm font-bold uppercase tracking-widest mb-3 text-[var(--accent-light)]">
-              THE OPEN SOURCE THING
-            </p>
-            <p className="text-xl md:text-2xl font-black uppercase tracking-tight leading-tight mb-3">
-              You can literally read our code.
-            </p>
-            <p className="text-base font-medium opacity-90 max-w-2xl">
-              lawn is fully open source. Every line. The elegant parts and the
-              parts where we left a TODO from three months ago. No black box. No
-              trust required. Just code you can read, fork, and judge silently.
-            </p>
-            <a
-              href="https://github.com/pingdotgg/lawn"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-4 text-sm font-black uppercase tracking-wider underline underline-offset-4 hover:text-[var(--accent-light)] transition-colors"
-            >
-              View on GitHub
-            </a>
-          </div>
         </div>
       </section>
 
-      {/* Honest "who should use what" */}
       <section className="px-6 py-24 md:py-32 border-b-2 border-[var(--border)] bg-[var(--surface-alt)]">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-none mb-4 text-center">
@@ -238,17 +210,15 @@ export default function CompareWipster() {
             ADVICE.
           </h2>
           <p className="text-center text-lg text-[var(--foreground-muted)] font-medium mb-16 max-w-lg mx-auto">
-            Wipster is genuinely good software built by people who care about
-            video review. We just think there's room for something simpler. Here
-            are the facts.
+            Loom is good software. If you want the bigger platform, use the
+            bigger platform. Here is where we actually differ.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Use Wipster if... */}
             <div className="border-2 border-[var(--border)] bg-[var(--background)] shadow-[8px_8px_0px_0px_var(--shadow-color)]">
               <div className="border-b-2 border-[var(--border)] p-6">
                 <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">
-                  Use Wipster if...
+                  Use Loom if...
                 </h3>
               </div>
               <div className="p-6">
@@ -258,8 +228,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You need built-in approval workflows with multiple review
-                      stages, status tracking, and the whole production pipeline
+                      You want a broad workplace video platform with meeting
+                      capture, AI summaries, transcripts, and admin layers
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -267,8 +237,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You're an established media team that's already invested in
-                      a full review ecosystem and switching costs are real
+                      You are standardizing video across a larger company and
+                      per-seat pricing is not the deciding factor
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -276,8 +246,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You want deep review stages with version comparisons,
-                      granular permissions, and structured feedback rounds
+                      You want one vendor for recorded updates, meeting capture,
+                      and a lot of workplace workflow around them
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -285,23 +255,22 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      Per-user pricing is fine because your budget is already
-                      approved and nobody's counting
+                      More product breadth matters more to you than having a
+                      narrower, faster path to sharing a recording
                     </span>
                   </li>
                 </ul>
                 <p className="text-sm text-[var(--foreground-muted)] mt-6 pt-4 border-t-2 border-[var(--border-subtle)]">
-                  Seriously, Wipster is good. If this is you, go use it. We'll
-                  be here if you change your mind later.
+                  Genuinely: Loom is strong software. We are not trying to win
+                  by becoming a smaller purple Loom clone.
                 </p>
               </div>
             </div>
 
-            {/* Use lawn if... */}
             <div className="border-2 border-[var(--border)] bg-[var(--surface-strong)] text-[var(--foreground-inverse)] shadow-[8px_8px_0px_0px_var(--shadow-accent)]">
               <div className="border-b-2 border-[var(--border)] p-6">
                 <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-[var(--accent-light)]">
-                  Use lawn if...
+                  Use loam if...
                 </h3>
               </div>
               <div className="p-6">
@@ -311,8 +280,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You're a small team or agency that just needs to share cuts
-                      and collect feedback without a 45-minute onboarding
+                      You mostly share screen recordings, product walkthroughs,
+                      bug reports, and async feedback videos
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -320,8 +289,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You hate per-seat pricing with a passion that concerns your
-                      friends and family
+                      You want one flat bill no matter how many teammates,
+                      contractors, or clients need access
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -329,8 +298,8 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You want clients to review with just a link, no account
-                      creation, no "please check your email" nonsense
+                      You want an open source codebase that you can inspect,
+                      fork, and keep under your control
                     </span>
                   </li>
                   <li className="flex items-start gap-3">
@@ -338,14 +307,14 @@ export default function CompareWipster() {
                       --
                     </span>
                     <span className="font-medium">
-                      You value open source and want to know exactly what
-                      software you're trusting with your work
+                      You care a lot about a fast watch page and very little
+                      about a giant workplace suite
                     </span>
                   </li>
                 </ul>
                 <p className="text-sm text-[var(--foreground-muted)] mt-6 pt-4 border-t border-[#333]">
-                  We do less than Wipster. Proudly. Upload, share, comment. Go
-                  home. That's 90% of what anyone actually needs.
+                  loam is deliberately narrower than Loom. That is a feature,
+                  not a missing roadmap.
                 </p>
               </div>
             </div>
@@ -353,7 +322,6 @@ export default function CompareWipster() {
         </div>
       </section>
 
-      {/* CTA */}
       <section className="px-6 py-32 bg-[var(--background)]">
         <div className="max-w-4xl mx-auto text-center flex flex-col items-center">
           <h2 className="text-7xl md:text-9xl font-black uppercase tracking-tighter leading-[0.8] mb-4">
@@ -362,18 +330,19 @@ export default function CompareWipster() {
             NOW.
           </h2>
           <p className="text-xl md:text-2xl text-[var(--foreground-muted)] font-medium mb-12 max-w-md">
-            $5/month. Unlimited seats. Open source. No per-user nonsense.
+            Starter is $15/month for the whole workspace. Pro is $49 if you
+            need more storage and more guest headroom.
           </p>
           <Link
             to="/sign-up"
             className="bg-[var(--surface-strong)] text-[var(--foreground-inverse)] px-12 py-6 border-2 border-[var(--border)] text-2xl font-black uppercase tracking-wider hover:bg-[var(--accent)] hover:border-[var(--accent)] transition-colors shadow-[12px_12px_0px_0px_var(--shadow-accent)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[8px_8px_0px_0px_var(--shadow-accent)]"
           >
-            START FREE TRIAL
+            TRY LOAM FREE
           </Link>
           <p className="text-sm text-[var(--foreground-muted)] mt-6">
-            No credit card required. No per-seat gotchas.
+            Or keep paying $18/user/month.
             <br />
-            Just video review that doesn't require a spreadsheet to budget.
+            We are not your finance department.
           </p>
         </div>
       </section>

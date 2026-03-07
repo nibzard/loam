@@ -146,9 +146,20 @@ export default defineSchema({
     firstWatchedAt: v.number(),
     lastWatchedAt: v.number(),
     watchCount: v.number(),
+    watchSeconds: v.number(),
   })
     .index("by_video", ["videoId"])
     .index("by_video_and_fingerprint", ["videoId", "fingerprint"]),
+
+  teamWatchUsage: defineTable({
+    teamId: v.id("teams"),
+    monthKey: v.string(),
+    memberWatchSeconds: v.number(),
+    sharedWatchSeconds: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_team", ["teamId"])
+    .index("by_team_and_month", ["teamId", "monthKey"]),
 
   shareLinks: defineTable({
     videoId: v.id("videos"),

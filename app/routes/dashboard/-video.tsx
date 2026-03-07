@@ -37,6 +37,7 @@ import { Id } from "@convex/_generated/dataModel";
 import { projectPath, teamHomePath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { useWatchProgress } from "@/lib/useWatchProgress";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
 import { useVideoData } from "./-video.data";
@@ -190,9 +191,20 @@ export default function VideoPage() {
     prefetchMuxPlaybackManifest(video.muxPlaybackId);
   }, [activePlaybackUrl, playbackUrl, video?.muxPlaybackId]);
 
-  const handleTimeUpdate = useCallback((time: number) => {
-    setCurrentTime(time);
-  }, []);
+  const { trackTime: trackWatchTime } = useWatchProgress({
+    enabled: Boolean(activePlaybackUrl && resolvedVideoId),
+    trackerKey: resolvedVideoId?.toString() ?? null,
+    getTarget: () => ({ videoId: resolvedVideoId! }),
+    recordWatch,
+  });
+
+  const handleTimeUpdate = useCallback(
+    (time: number) => {
+      setCurrentTime(time);
+      trackWatchTime(time);
+    },
+    [trackWatchTime],
+  );
 
   const handleMarkerClick = useCallback((comment: { _id: string }) => {
     setHighlightedCommentId(comment._id as Id<"comments">);
@@ -209,13 +221,6 @@ export default function VideoPage() {
       return null;
     }
   }, [getDownloadUrl, video, resolvedVideoId]);
-
-  const handlePlaybackStarted = useCallback(() => {
-    if (!resolvedVideoId) return;
-    void recordWatch({ videoId: resolvedVideoId }).catch(() => {
-      // Watch tracking is best effort and should not interrupt playback.
-    });
-  }, [recordWatch, resolvedVideoId]);
 
   const reactionSummary = useMemo(
     () => summarizeReactions(reactions),
@@ -482,7 +487,6 @@ export default function VideoPage() {
                 allowDownload={video.status === "ready"}
                 downloadFilename={`${video.title}.mp4`}
                 onRequestDownload={requestDownload}
-                onPlaybackStarted={handlePlaybackStarted}
                 controlsBelow
                 qualityOptionsConfig={[
                   {

@@ -12,6 +12,7 @@ import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayba
 import { AlertCircle, MessageSquare, Clock, X } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
+import { useWatchProgress } from "@/lib/useWatchProgress";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -122,15 +123,27 @@ export default function WatchPage() {
     }
   };
 
-  const handlePlaybackStarted = useCallback(() => {
-    const clientId = viewerClientId ?? getOrCreateViewerClientId() ?? undefined;
-    void recordWatch({
-      publicId,
-      clientId,
-    }).catch(() => {
-      // Watch tracking is best effort and should not interrupt playback.
-    });
-  }, [publicId, recordWatch, viewerClientId]);
+  const { trackTime } = useWatchProgress({
+    enabled: Boolean(playbackSession?.url && videoData?.video?._id),
+    trackerKey: videoData?.video?._id ?? publicId,
+    getTarget: () => ({ publicId }),
+    getClientId: () => {
+      const nextClientId = viewerClientId ?? getOrCreateViewerClientId();
+      if (!viewerClientId && nextClientId) {
+        setViewerClientId(nextClientId);
+      }
+      return nextClientId ?? undefined;
+    },
+    recordWatch,
+  });
+
+  const handleTimeUpdate = useCallback(
+    (time: number) => {
+      setCurrentTime(time);
+      trackTime(time);
+    },
+    [trackTime],
+  );
 
   const reactionSummary = useMemo(
     () => summarizeReactions(reactions),
@@ -245,8 +258,7 @@ export default function WatchPage() {
                 src={playbackSession.url}
                 poster={playbackSession.posterUrl}
                 comments={flattenedComments}
-                onTimeUpdate={setCurrentTime}
-                onPlaybackStarted={handlePlaybackStarted}
+                onTimeUpdate={handleTimeUpdate}
                 allowDownload={false}
                 controlsBelow
               />

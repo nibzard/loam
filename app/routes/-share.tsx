@@ -15,6 +15,7 @@ import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
+import { useWatchProgress } from "@/lib/useWatchProgress";
 import { useShareData } from "./-share.data";
 
 export default function SharePage() {
@@ -176,16 +177,27 @@ export default function SharePage() {
     }
   };
 
-  const handlePlaybackStarted = useCallback(() => {
-    if (!grantToken) return;
-    const clientId = viewerClientId ?? getOrCreateViewerClientId() ?? undefined;
-    void recordWatch({
-      grantToken,
-      clientId,
-    }).catch(() => {
-      // Watch tracking is best effort and should not interrupt playback.
-    });
-  }, [grantToken, recordWatch, viewerClientId]);
+  const { trackTime } = useWatchProgress({
+    enabled: Boolean(playbackSession?.url && videoData?.video?._id && grantToken),
+    trackerKey: `${token}:${videoData?.video?._id ?? "pending"}:${grantToken ?? "pending"}`,
+    getTarget: () => ({ grantToken: grantToken ?? "" }),
+    getClientId: () => {
+      const nextClientId = viewerClientId ?? getOrCreateViewerClientId();
+      if (!viewerClientId && nextClientId) {
+        setViewerClientId(nextClientId);
+      }
+      return nextClientId ?? undefined;
+    },
+    recordWatch,
+  });
+
+  const handleTimeUpdate = useCallback(
+    (time: number) => {
+      setCurrentTime(time);
+      trackTime(time);
+    },
+    [trackTime],
+  );
 
   const reactionSummary = useMemo(
     () => summarizeReactions(reactions),
@@ -402,8 +414,7 @@ export default function SharePage() {
                 src={playbackSession.url}
                 poster={playbackSession.posterUrl}
                 comments={flattenedComments}
-                onTimeUpdate={setCurrentTime}
-                onPlaybackStarted={handlePlaybackStarted}
+                onTimeUpdate={handleTimeUpdate}
                 allowDownload={false}
               />
             </Suspense>

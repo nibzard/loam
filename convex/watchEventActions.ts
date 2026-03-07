@@ -7,6 +7,26 @@ import { api, components, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
 type WatchSource = "dashboard" | "public" | "share";
+type WatchEventActionResult = {
+  recorded: boolean;
+  firstWatch: boolean;
+  notificationSent: boolean;
+  capReached: boolean;
+  consumedWatchSeconds: number;
+  requestedWatchSeconds: number;
+};
+type WatchMutationResult = {
+  recorded: boolean;
+  capReached: boolean;
+  consumedWatchSeconds: number;
+  isFirstWatch: boolean;
+  watchedAt: number;
+  viewerLabel: string;
+  videoTitle: string;
+  videoPublicId: string;
+  uploaderClerkId: string;
+  uploaderEmail: string | null;
+};
 
 const watchEventRateLimiter = new RateLimiter(components.rateLimiter, {
   recordWatchByViewer: {
@@ -191,13 +211,22 @@ export const recordWatch = action({
     publicId: v.optional(v.string()),
     grantToken: v.optional(v.string()),
     clientId: v.optional(v.string()),
+    watchedSeconds: v.optional(v.number()),
   },
   returns: v.object({
     recorded: v.boolean(),
     firstWatch: v.boolean(),
     notificationSent: v.boolean(),
+    capReached: v.boolean(),
+    consumedWatchSeconds: v.number(),
+    requestedWatchSeconds: v.number(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<WatchEventActionResult> => {
+    const requestedWatchSeconds =
+      Number.isFinite(args.watchedSeconds) && args.watchedSeconds !== undefined
+        ? Math.max(0, Math.floor(args.watchedSeconds))
+        : 0;
+
     const source = resolveSource({
       videoId: args.videoId,
       publicId: args.publicId,
@@ -210,7 +239,14 @@ export const recordWatch = action({
         videoId: args.videoId as Id<"videos">,
       });
       if (!video || video.status !== "ready") {
-        return { recorded: false, firstWatch: false, notificationSent: false };
+        return {
+          recorded: false,
+          firstWatch: false,
+          notificationSent: false,
+          capReached: false,
+          consumedWatchSeconds: 0,
+          requestedWatchSeconds,
+        };
       }
       resolvedVideoId = args.videoId as Id<"videos">;
     } else if (source === "public") {
@@ -218,7 +254,14 @@ export const recordWatch = action({
         publicId: args.publicId as string,
       });
       if (!result?.video?._id) {
-        return { recorded: false, firstWatch: false, notificationSent: false };
+        return {
+          recorded: false,
+          firstWatch: false,
+          notificationSent: false,
+          capReached: false,
+          consumedWatchSeconds: 0,
+          requestedWatchSeconds,
+        };
       }
       resolvedVideoId = result.video._id;
     } else {
@@ -226,7 +269,14 @@ export const recordWatch = action({
         grantToken: args.grantToken as string,
       });
       if (!result?.video?._id) {
-        return { recorded: false, firstWatch: false, notificationSent: false };
+        return {
+          recorded: false,
+          firstWatch: false,
+          notificationSent: false,
+          capReached: false,
+          consumedWatchSeconds: 0,
+          requestedWatchSeconds,
+        };
       }
       resolvedVideoId = result.video._id;
     }
@@ -243,7 +293,14 @@ export const recordWatch = action({
     } else {
       const clientId = (args.clientId ?? "").trim().slice(0, 64);
       if (!clientId) {
-        return { recorded: false, firstWatch: false, notificationSent: false };
+        return {
+          recorded: false,
+          firstWatch: false,
+          notificationSent: false,
+          capReached: false,
+          consumedWatchSeconds: 0,
+          requestedWatchSeconds,
+        };
       }
 
       fingerprint = `guest:${clientId}`;
@@ -257,7 +314,14 @@ export const recordWatch = action({
       { key: `${resolvedVideoId}:${fingerprint}` },
     );
     if (!watchLimit.ok) {
-      return { recorded: false, firstWatch: false, notificationSent: false };
+      return {
+        recorded: false,
+        firstWatch: false,
+        notificationSent: false,
+        capReached: false,
+        consumedWatchSeconds: 0,
+        requestedWatchSeconds,
+      };
     }
 
     if (viewerKind === "guest") {
@@ -267,28 +331,72 @@ export const recordWatch = action({
         { key: `${resolvedVideoId}:${source}` },
       );
       if (!guestVolumeLimit.ok) {
-        return { recorded: false, firstWatch: false, notificationSent: false };
+        return {
+          recorded: false,
+          firstWatch: false,
+          notificationSent: false,
+          capReached: false,
+          consumedWatchSeconds: 0,
+          requestedWatchSeconds,
+        };
       }
     }
 
-    const watchEvent = await ctx.runMutation(internal.watchEvents.recordWatchEvent, {
+    const watchEvent: WatchMutationResult = await ctx.runMutation(
+      internal.watchEvents.recordWatchEvent,
+      {
       videoId: resolvedVideoId,
       fingerprint,
       viewerKind,
       viewerLabel,
+      viewerSubject: identity?.subject,
       source,
-    });
+      watchedSeconds: requestedWatchSeconds,
+      },
+    );
+
+    if (!watchEvent.recorded) {
+      return {
+        recorded: false,
+        firstWatch: false,
+        notificationSent: false,
+        capReached: watchEvent.capReached,
+        consumedWatchSeconds: 0,
+        requestedWatchSeconds,
+      };
+    }
 
     if (!watchEvent.isFirstWatch) {
-      return { recorded: true, firstWatch: false, notificationSent: false };
+      return {
+        recorded: true,
+        firstWatch: false,
+        notificationSent: false,
+        capReached: watchEvent.capReached,
+        consumedWatchSeconds: watchEvent.consumedWatchSeconds,
+        requestedWatchSeconds,
+      };
     }
 
     if (identity?.subject === watchEvent.uploaderClerkId) {
-      return { recorded: true, firstWatch: true, notificationSent: false };
+      return {
+        recorded: true,
+        firstWatch: true,
+        notificationSent: false,
+        capReached: watchEvent.capReached,
+        consumedWatchSeconds: watchEvent.consumedWatchSeconds,
+        requestedWatchSeconds,
+      };
     }
 
     if (!watchEvent.uploaderEmail) {
-      return { recorded: true, firstWatch: true, notificationSent: false };
+      return {
+        recorded: true,
+        firstWatch: true,
+        notificationSent: false,
+        capReached: watchEvent.capReached,
+        consumedWatchSeconds: watchEvent.consumedWatchSeconds,
+        requestedWatchSeconds,
+      };
     }
 
     if (
@@ -298,7 +406,14 @@ export const recordWatch = action({
         videoId: resolvedVideoId,
       }))
     ) {
-      return { recorded: true, firstWatch: true, notificationSent: false };
+      return {
+        recorded: true,
+        firstWatch: true,
+        notificationSent: false,
+        capReached: watchEvent.capReached,
+        consumedWatchSeconds: watchEvent.consumedWatchSeconds,
+        requestedWatchSeconds,
+      };
     }
 
     const notification = await sendWatchNotificationEmail({
@@ -314,6 +429,9 @@ export const recordWatch = action({
       recorded: true,
       firstWatch: true,
       notificationSent: notification.sent,
+      capReached: watchEvent.capReached,
+      consumedWatchSeconds: watchEvent.consumedWatchSeconds,
+      requestedWatchSeconds,
     };
   },
 });

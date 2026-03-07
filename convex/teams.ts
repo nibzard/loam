@@ -415,6 +415,15 @@ export const deleteTeam = mutation({
       await ctx.db.delete(invite._id);
     }
 
+    // Delete all watch usage records.
+    const watchUsages = await ctx.db
+      .query("teamWatchUsage")
+      .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
+      .collect();
+    for (const watchUsage of watchUsages) {
+      await ctx.db.delete(watchUsage._id);
+    }
+
     // Delete all projects and their videos/comments
     const projects = await ctx.db
       .query("projects")

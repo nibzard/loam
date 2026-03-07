@@ -16,6 +16,22 @@ export const TEAM_PLAN_STORAGE_LIMIT_BYTES: Record<TeamPlan, number> = {
   pro: 500 * GIBIBYTE,
 };
 
+export const TEAM_PLAN_SHARED_LINK_WATCH_MINUTES_LIMIT: Record<TeamPlan, number> = {
+  basic: 5000,
+  pro: 15000,
+};
+
+export const TEAM_PLAN_MEMBER_WATCH_MINUTES_LIMIT: Record<TeamPlan, number> = {
+  basic: 4000,
+  pro: 10000,
+};
+
+export function getCurrentBillingMonthKey(date: Date = new Date()): string {
+  const year = date.getUTCFullYear();
+  const month = (date.getUTCMonth() + 1).toString().padStart(2, "0");
+  return `${year}-${month}`;
+}
+
 function hasText(value: string | undefined | null): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { MarketingFooter } from "@/components/MarketingFooter";
+import { SITE_URL } from "@/lib/seo";
 
 export default function Homepage() {
   const [scrolled, setScrolled] = useState(false);
@@ -300,7 +301,7 @@ export default function Homepage() {
             name: "loam",
             description:
               "Async video sharing for teams. Share screen recordings, walkthroughs, and video feedback with fast playback and simple links.",
-            url: "https://loam.you",
+            url: SITE_URL,
             applicationCategory: "MultimediaApplication",
             operatingSystem: "Web",
             offers: [

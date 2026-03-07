@@ -1,7 +1,29 @@
-const SITE_URL = "https://loam.you";
+const DEFAULT_SITE_URL = "https://loam.you";
 const SITE_NAME = "loam";
 const DEFAULT_OG_IMAGE = "/og/default.png";
 const TWITTER_HANDLE = "";
+
+const SITE_URL_ENV =
+  import.meta.env.VITE_CONVEX_SITE_URL ?? DEFAULT_SITE_URL;
+
+function normalizeSiteUrl(raw: string): string {
+  const normalized = raw.trim();
+  if (!normalized) return DEFAULT_SITE_URL;
+
+  try {
+    const parsed = new URL(normalized);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return DEFAULT_SITE_URL;
+    }
+
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return DEFAULT_SITE_URL;
+  }
+}
+
+export const SITE_URL = normalizeSiteUrl(SITE_URL_ENV);
 
 export const muxPreconnectLinks = [
   { rel: "preconnect", href: "https://stream.mux.com", crossOrigin: "anonymous" },

@@ -20,6 +20,7 @@ import {
   getMuxAsset,
 } from "./mux";
 import { BUCKET_NAME, getS3Client } from "./s3";
+import { generateOpaqueToken } from "./security";
 
 const GIBIBYTE = 1024 ** 3;
 const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 5 * GIBIBYTE;
@@ -264,7 +265,7 @@ export const getUploadUrl = action({
 
     const s3 = getS3Client();
     const ext = getExtensionFromKey(args.filename);
-    const key = `videos/${args.videoId}/${Date.now()}.${ext}`;
+    const key = `videos/${args.videoId}/${Date.now()}-${generateOpaqueToken(16)}.${ext}`;
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,

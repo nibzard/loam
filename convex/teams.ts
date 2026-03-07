@@ -1,8 +1,10 @@
+import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { getUser, identityAvatarUrl, identityEmail, identityName, requireUser, requireTeamAccess } from "./auth";
 import { getTeamSubscriptionState } from "./billingHelpers";
+import { generateUniqueToken } from "./security";
 
 function normalizedEmail(value: string) {
   return value.trim().toLowerCase();
@@ -16,14 +18,14 @@ function generateSlug(name: string): string {
     .substring(0, 50);
 }
 
-function generateToken(): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 32; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+const teamInviteRateLimiter = new RateLimiter(components.rateLimiter, {
+  inviteMember: {
+    kind: "fixed window",
+    rate: 20,
+    period: MINUTE,
+    shards: 8,
+  },
+});
 
 export const create = mutation({
   args: {
@@ -188,6 +190,12 @@ export const inviteMember = mutation({
   },
   handler: async (ctx, args) => {
     const { user } = await requireTeamAccess(ctx, args.teamId, "admin");
+    const inviteLimit = await teamInviteRateLimiter.limit(ctx, "inviteMember", {
+      key: `${args.teamId}`,
+    });
+    if (!inviteLimit.ok) {
+      throw new Error("Too many invite requests. Please wait and try again.");
+    }
 
     const inviteEmail = normalizedEmail(args.email);
 
@@ -212,7 +220,15 @@ export const inviteMember = mutation({
       await ctx.db.delete(existingInvite._id);
     }
 
-    const token = generateToken();
+    const token = await generateUniqueToken(
+      32,
+      async (candidate) =>
+        (await ctx.db
+          .query("teamInvites")
+          .withIndex("by_token", (q) => q.eq("token", candidate))
+          .unique()) !== null,
+      5,
+    );
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
 
     await ctx.db.insert("teamInvites", {

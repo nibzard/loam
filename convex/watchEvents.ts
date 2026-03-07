@@ -35,6 +35,33 @@ function normalizeString(input: string, maxLength: number) {
   return input.trim().slice(0, maxLength);
 }
 
+type UsageRowLike<TId = unknown> = {
+  _id: TId;
+  memberWatchSeconds: number;
+  sharedWatchSeconds: number;
+};
+
+export function planUsageCompaction<T extends UsageRowLike>(usageRows: T[]) {
+  if (usageRows.length === 0) return null;
+
+  const [primary, ...duplicates] = usageRows;
+  const totals = usageRows.reduce(
+    (acc, row) => ({
+      memberWatchSeconds: acc.memberWatchSeconds + row.memberWatchSeconds,
+      sharedWatchSeconds: acc.sharedWatchSeconds + row.sharedWatchSeconds,
+    }),
+    { memberWatchSeconds: 0, sharedWatchSeconds: 0 },
+  );
+
+  return {
+    primary,
+    duplicateIds: duplicates.map((row) => row._id) as Array<T["_id"]>,
+    memberWatchSeconds: totals.memberWatchSeconds,
+    sharedWatchSeconds: totals.sharedWatchSeconds,
+    hasDuplicates: duplicates.length > 0,
+  };
+}
+
 export const recordWatchEvent = internalMutation({
   args: {
     videoId: v.id("videos"),
@@ -99,12 +126,34 @@ export const recordWatchEvent = internalMutation({
     if (requestedWatchSeconds > 0) {
       const subscriptionState = await getTeamSubscriptionState(ctx, project.teamId);
       const monthKey = getCurrentBillingMonthKey(new Date());
-      const usage = await ctx.db
+      const usageRows = await ctx.db
         .query("teamWatchUsage")
         .withIndex("by_team_and_month", (q) =>
           q.eq("teamId", project.teamId).eq("monthKey", monthKey),
         )
-        .unique();
+        .collect();
+
+      const compactedUsage = planUsageCompaction(usageRows);
+      let usage = null;
+      if (compactedUsage) {
+        if (compactedUsage.hasDuplicates) {
+          // Defensive compaction keeps quota math consistent if duplicate rows were created.
+          await ctx.db.patch(compactedUsage.primary._id, {
+            memberWatchSeconds: compactedUsage.memberWatchSeconds,
+            sharedWatchSeconds: compactedUsage.sharedWatchSeconds,
+            updatedAt: now,
+          });
+          for (const duplicateId of compactedUsage.duplicateIds) {
+            await ctx.db.delete(duplicateId);
+          }
+        }
+
+        usage = {
+          ...compactedUsage.primary,
+          memberWatchSeconds: compactedUsage.memberWatchSeconds,
+          sharedWatchSeconds: compactedUsage.sharedWatchSeconds,
+        };
+      }
 
       const limitMinutes =
         resolvedViewerKind === "member"

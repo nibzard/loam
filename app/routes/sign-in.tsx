@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ClerkClientProvider } from "@/lib/clerk";
 import { seoHead } from "@/lib/seo";
+import { sanitizeRedirectPath } from "@/lib/redirect";
 import { AuthShell } from "./auth/-layout";
 import SignInPage from "./auth/-sign-in";
 
@@ -14,7 +15,9 @@ export const Route = createFileRoute("/sign-in")({
     }),
   validateSearch: (search: Record<string, unknown>) => ({
     redirect_url:
-      typeof search.redirect_url === "string" ? search.redirect_url : undefined,
+      typeof search.redirect_url === "string"
+        ? sanitizeRedirectPath(search.redirect_url)
+        : undefined,
   }),
   component: SignInRoute,
 });

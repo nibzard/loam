@@ -100,7 +100,18 @@ function resolveSource(args: {
 function resolveSiteUrl() {
   const raw = process.env.VITE_CONVEX_SITE_URL || process.env.APP_SITE_URL;
   if (!raw) return null;
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  try {
+    const normalized = raw.trim();
+    if (!normalized) return null;
+
+    const parsed = new URL(normalized);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+
+    const pathname = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(value: string) {

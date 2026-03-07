@@ -8,7 +8,7 @@ import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmDashboardIndex } from "../../app/routes/dashboard/-index.data";
 
 function ThemeToggleButton() {
-  const { theme, toggleTheme, themeLook, toggleThemeLook, mounted } = useTheme();
+  const { theme, toggleTheme, mounted } = useTheme();
 
   if (!mounted) return <div className="w-8 h-8" />;
 

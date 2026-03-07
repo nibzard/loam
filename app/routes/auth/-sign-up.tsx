@@ -1,11 +1,15 @@
 import { SignUp } from "@clerk/tanstack-react-start";
 import { useRouterState } from "@tanstack/react-router";
+import { sanitizeRedirectPath } from "@/lib/redirect";
 
 export default function SignUpPage() {
   const search = useRouterState({
     select: (state) => state.location.searchStr,
   });
-  const redirectUrl = new URLSearchParams(search).get("redirect_url");
+  const redirectUrl = sanitizeRedirectPath(
+    new URLSearchParams(search).get("redirect_url"),
+    "/dashboard",
+  );
 
   return (
     <SignUp

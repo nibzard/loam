@@ -18,6 +18,14 @@ import {
 const stripeClient = new StripeSubscriptions(components.stripe, {});
 const stripe = new Stripe(stripeClient.apiKey);
 const TEAM_TRIAL_DAYS = 7;
+const DEFAULT_APP_SITE_URL = "https://loam.you";
+
+const DEV_ALLOWED_REDIRECT_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:5296",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5296",
+];
 
 const teamPlanValidator = v.union(v.literal("basic"), v.literal("pro"));
 const teamRoleValidator = v.union(
@@ -26,6 +34,64 @@ const teamRoleValidator = v.union(
   v.literal("member"),
   v.literal("viewer"),
 );
+
+function parseAllowedOrigin(input: string | undefined | null): string | null {
+  if (typeof input !== "string") return null;
+  const normalized = input.trim();
+  if (!normalized) return null;
+
+  try {
+    const parsed = new URL(normalized);
+    if (!["http:", "https:"].includes(parsed.protocol)) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function getAllowedRedirectOrigins() {
+  const origins = new Set<string>();
+
+  const appSiteOrigin = parseAllowedOrigin(process.env.APP_SITE_URL);
+  if (appSiteOrigin) origins.add(appSiteOrigin);
+
+  const viteSiteOrigin = parseAllowedOrigin(process.env.VITE_CONVEX_SITE_URL);
+  if (viteSiteOrigin) origins.add(viteSiteOrigin);
+
+  const defaultOrigin = parseAllowedOrigin(DEFAULT_APP_SITE_URL);
+  if (defaultOrigin) origins.add(defaultOrigin);
+
+  for (const origin of DEV_ALLOWED_REDIRECT_ORIGINS) {
+    origins.add(origin);
+  }
+
+  return origins;
+}
+
+function assertAllowedRedirectUrl(value: string, fieldName: string) {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${fieldName} must be a non-empty absolute URL.`);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    throw new Error(`${fieldName} must be a valid absolute URL.`);
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error(`${fieldName} must use http or https.`);
+  }
+
+  const allowedOrigins = getAllowedRedirectOrigins();
+  if (!allowedOrigins.has(parsed.origin)) {
+    throw new Error(`${fieldName} origin is not allowed.`);
+  }
+
+  return parsed.toString();
+}
 
 export const createSubscriptionCheckout = action({
   args: {
@@ -39,6 +105,9 @@ export const createSubscriptionCheckout = action({
     url: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args): Promise<{ sessionId: string; url: string | null }> => {
+    const successUrl = assertAllowedRedirectUrl(args.successUrl, "successUrl");
+    const cancelUrl = assertAllowedRedirectUrl(args.cancelUrl, "cancelUrl");
+
     const identity = await getIdentity(ctx);
     const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
 
@@ -95,8 +164,8 @@ export const createSubscriptionCheckout = action({
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "subscription",
       line_items: [{ price: stripePriceId, quantity: 1 }],
-      success_url: args.successUrl,
-      cancel_url: args.cancelUrl,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         orgId: team._id,
         plan: args.plan,
@@ -133,6 +202,8 @@ export const createCustomerPortalSession = action({
     url: v.string(),
   }),
   handler: async (ctx, args): Promise<{ url: string }> => {
+    const returnUrl = assertAllowedRedirectUrl(args.returnUrl, "returnUrl");
+
     const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
 
     if (!team) {
@@ -157,7 +228,7 @@ export const createCustomerPortalSession = action({
 
     return await stripeClient.createCustomerPortalSession(ctx, {
       customerId: stripeCustomerId,
-      returnUrl: args.returnUrl,
+      returnUrl,
     });
   },
 });

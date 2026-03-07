@@ -108,7 +108,7 @@ export default function Homepage() {
             { id: "01", title: "OPEN SOURCE", desc: "Fully open source. Read the code, fork it, make it yours." },
             { id: "02", title: "FAST PLAYBACK", desc: "Share videos that open fast and start playing without drama." },
             { id: "03", title: "ASYNC FIRST", desc: "Walkthroughs, bug reports, and feedback built for teams in different time zones." },
-            { id: "04", title: "PRIVATE BY DEFAULT", desc: "Videos start private. Share them when you mean to, with clear guest limits that keep costs sane." },
+            { id: "04", title: "PRIVATE BY DEFAULT", desc: "Videos start private. Optional share links count to workspace watch budgets." },
           ].map((item, i) => (
             <div key={i} className="p-8 lg:p-12 group hover:bg-[#1a1a1a] hover:text-[#f0f0e8] transition-colors flex flex-col">
               <div className="text-sm font-black text-[#888] group-hover:text-[#7cb87c] mb-8">/{item.id}</div>
@@ -260,9 +260,8 @@ export default function Homepage() {
               <ul className="space-y-4 text-lg font-bold flex-grow mb-8">
                 <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> Unlimited seats</li>
                 <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 100GB Storage</li>
-                <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 25 guest views per video / month</li>
-                <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 1,000 guest views per workspace / month</li>
-                <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 3,000 soft / 4,000 hard member watch minutes</li>
+                <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 5,000 shared-link watch minutes / month</li>
+                <li className="flex items-center gap-3"><span className="text-[#2d5a2d] text-2xl">✓</span> 4,000 member watch minutes / month</li>
               </ul>
               
               <Link to="/sign-up" className="bg-[#1a1a1a] text-[#f0f0e8] text-center py-4 border-2 border-[#1a1a1a] font-black uppercase hover:bg-[#2d5a2d] transition-colors">Start Starter</Link>
@@ -279,9 +278,8 @@ export default function Homepage() {
               <ul className="space-y-4 text-lg font-bold flex-grow mb-8">
                 <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> Unlimited seats</li>
                 <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 500GB Storage</li>
-                <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 100 guest views per video / month</li>
-                <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 3,000 guest views per workspace / month</li>
-                <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 8,000 soft / 10,000 hard member watch minutes</li>
+                <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 15,000 shared-link watch minutes / month</li>
+                <li className="flex items-center gap-3"><span className="text-[#7cb87c] text-2xl">✓</span> 10,000 member watch minutes / month</li>
               </ul>
               
               <Link to="/sign-up" className="bg-[#f0f0e8] text-[#1a1a1a] text-center py-4 border-2 border-[#f0f0e8] font-black uppercase hover:bg-[#d8d8d0] transition-colors">Start Pro</Link>
@@ -329,7 +327,7 @@ export default function Homepage() {
                 price: "15.00",
                 priceCurrency: "USD",
                 description:
-                  "Unlimited seats, 100GB storage, 25 guest views per video, 1,000 guest views per workspace, and account-level fair use for member playback",
+                  "Unlimited seats, 100GB storage, 5,000 shared-link watch minutes, and 4,000 member watch minutes per month",
               },
               {
                 "@type": "Offer",
@@ -337,7 +335,7 @@ export default function Homepage() {
                 price: "49.00",
                 priceCurrency: "USD",
                 description:
-                  "Unlimited seats, 500GB storage, 100 guest views per video, 3,000 guest views per workspace, and higher account-level fair use for member playback",
+                  "Unlimited seats, 500GB storage, 15,000 shared-link watch minutes, and 10,000 member watch minutes per month",
               },
             ],
           }),

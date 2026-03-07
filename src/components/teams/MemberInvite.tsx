@@ -40,7 +40,7 @@ const roleLabels: Record<Role, string> = {
 
 export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) {
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("member");
+  const [role, setRole] = useState<Role>("viewer");
   const [isLoading, setIsLoading] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -104,8 +104,8 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Team members</DialogTitle>
-          <DialogDescription>
-            Invite new members or manage existing ones.
+        <DialogDescription>
+            Invite new collaborators first as viewers, then upgrade trusted people to edit roles.
           </DialogDescription>
         </DialogHeader>
 

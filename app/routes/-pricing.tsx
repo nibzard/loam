@@ -11,9 +11,8 @@ const plans = [
     features: [
       "Unlimited seats",
       "100GB storage",
-      "25 guest views per video / month",
-      "1,000 guest views per workspace / month",
-      "3,000 soft / 4,000 hard member watch minutes",
+      "5,000 shared-link watch minutes / month",
+      "4,000 team watch minutes / month",
       "Private by default sharing",
     ],
     cta: "Start Starter",
@@ -28,9 +27,8 @@ const plans = [
     features: [
       "Unlimited seats",
       "500GB storage",
-      "100 guest views per video / month",
-      "3,000 guest views per workspace / month",
-      "8,000 soft / 10,000 hard member watch minutes",
+      "15,000 shared-link watch minutes / month",
+      "10,000 team watch minutes / month",
       "Private by default sharing",
     ],
     cta: "Start Pro",
@@ -44,12 +42,12 @@ const guardrails = [
     body: "Every video starts private. External sharing is explicit, which keeps accidental public delivery from turning into your bill.",
   },
   {
-    title: "Soft Video Caps",
-    body: "Each plan has a soft guest-view cap per video so one link cannot eat the whole month by itself.",
+    title: "No Per-Video Caps",
+    body: "Limits are set at the workspace level. We don't cap views per video, which keeps the model simple.",
   },
   {
-    title: "Hard Workspace Caps",
-    body: "Guest playback is hard-capped at the workspace level, and member playback is covered by account-level fair use.",
+    title: "Workspace Watch Budgets",
+    body: "Each plan has separate monthly caps for external shared-link watch minutes and internal team watch minutes.",
   },
 ] as const;
 
@@ -59,16 +57,16 @@ const faqItems = [
     a: "Anyone on your team. Both plans keep seats unlimited. The pricing guardrails are about delivery usage, not headcount.",
   },
   {
-    q: "Do guests count toward usage limits?",
-    a: "Yes. Public watch pages and restricted share links both count toward the workspace guest cap.",
+    q: "What is a watch minute?",
+    a: "A watch minute is one full minute of playback time. If a video is partly watched, only the time actually watched is counted.",
   },
   {
-    q: "What does member fair use mean?",
-    a: "Internal viewing is included for normal team use. Starter includes 3,000 soft / 4,000 hard member watch minutes per month. Pro includes 8,000 soft / 10,000 hard.",
+    q: "What counts as a team watch minute?",
+    a: "All logged-in member and invited-viewer playback counts toward the team watch minute budget. That is the cost-control side for internal usage.",
   },
   {
-    q: "What happens if I hit the storage or usage limit?",
-    a: "Upgrade to Pro, delete older videos, or wait for the monthly reset if you hit a playback cap. We prefer clear limits over surprise overage bills.",
+    q: "What happens if I hit a cap?",
+    a: "You can upgrade to Pro, move older videos behind a share and re-upload the most critical content, or wait for the monthly reset.",
   },
   {
     q: "Is there a free trial?",

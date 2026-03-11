@@ -29,6 +29,46 @@ export type MicrophoneDevice = {
   isDefault: boolean;
 };
 
+export type CaptureTarget =
+  | {
+      kind: "display";
+      id: string;
+      name: string;
+    }
+  | {
+      kind: "window";
+      id: string;
+      name: string;
+      ownerName: string;
+    };
+
+export type StartRecordingInput = {
+  target: CaptureTarget;
+  microphoneName: string | null;
+  captureSystemAudio: boolean;
+  countdownSeconds: number;
+};
+
+export type RecordingPhase = "recording" | "paused" | "stopping";
+
+export type RecordingSnapshot = {
+  phase: RecordingPhase;
+  recordingDir: string;
+  videoPath: string;
+  thumbnailPath: string | null;
+  target: CaptureTarget;
+  microphoneName: string | null;
+  captureSystemAudio: boolean;
+};
+
+export type RecordingStopped = {
+  recordingDir: string;
+  videoPath: string;
+  thumbnailPath: string | null;
+  durationSeconds: number | null;
+  fileSizeBytes: number | null;
+};
+
 export type DesktopShellStatus = {
   appName: string;
   platform: string;
@@ -44,6 +84,12 @@ type CommandMap = {
   list_capture_windows: CaptureWindow[];
   list_microphones: MicrophoneDevice[];
   is_system_audio_supported: boolean;
+  start_recording: RecordingSnapshot;
+  pause_recording: RecordingSnapshot;
+  resume_recording: RecordingSnapshot;
+  stop_recording: RecordingStopped;
+  cancel_recording: void;
+  get_current_recording: RecordingSnapshot | null;
 };
 
 declare global {
@@ -56,6 +102,15 @@ const DEFAULT_PERMISSIONS: PermissionSnapshot = {
   screen: "notNeeded",
   microphone: "notNeeded",
 };
+
+let browserRecording:
+  | {
+      snapshot: RecordingSnapshot;
+      startedAt: number;
+      pausedAt: number | null;
+      pausedMs: number;
+    }
+  | undefined;
 
 function isTauriDesktop() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -94,6 +149,13 @@ function getBrowserFallback<K extends keyof CommandMap>(
       return [] as unknown as CommandMap[K];
     case "is_system_audio_supported":
       return false as CommandMap[K];
+    case "start_recording":
+    case "pause_recording":
+    case "resume_recording":
+    case "stop_recording":
+    case "cancel_recording":
+    case "get_current_recording":
+      throw new Error(`Command ${command} requires runtime handling`);
     default: {
       const exhaustiveCheck: never = command;
       throw new Error(`Missing browser fallback for ${exhaustiveCheck}`);
@@ -131,4 +193,118 @@ export function listMicrophones() {
 
 export function isSystemAudioSupported() {
   return invokeDesktop("is_system_audio_supported");
+}
+
+export async function startRecording(
+  input: StartRecordingInput,
+): Promise<RecordingSnapshot> {
+  if (!isTauriDesktop()) {
+    const snapshot: RecordingSnapshot = {
+      phase: "recording",
+      recordingDir: "/tmp/loam-desktop/browser-recording",
+      videoPath: "/tmp/loam-desktop/browser-recording/content/output.mp4",
+      thumbnailPath: null,
+      target: input.target,
+      microphoneName: input.microphoneName,
+      captureSystemAudio: input.captureSystemAudio,
+    };
+
+    browserRecording = {
+      snapshot,
+      startedAt: Date.now(),
+      pausedAt: null,
+      pausedMs: 0,
+    };
+
+    return snapshot;
+  }
+
+  return invokeDesktop("start_recording", { input });
+}
+
+export async function pauseRecording(): Promise<RecordingSnapshot> {
+  if (!isTauriDesktop()) {
+    if (!browserRecording) {
+      throw new Error("No active recording");
+    }
+
+    browserRecording.snapshot = {
+      ...browserRecording.snapshot,
+      phase: "paused",
+    };
+    browserRecording.pausedAt = Date.now();
+    return browserRecording.snapshot;
+  }
+
+  return invokeDesktop("pause_recording");
+}
+
+export async function resumeRecording(): Promise<RecordingSnapshot> {
+  if (!isTauriDesktop()) {
+    if (!browserRecording) {
+      throw new Error("No active recording");
+    }
+
+    if (browserRecording.pausedAt !== null) {
+      browserRecording.pausedMs += Date.now() - browserRecording.pausedAt;
+    }
+
+    browserRecording.pausedAt = null;
+    browserRecording.snapshot = {
+      ...browserRecording.snapshot,
+      phase: "recording",
+    };
+    return browserRecording.snapshot;
+  }
+
+  return invokeDesktop("resume_recording");
+}
+
+export async function stopRecording(): Promise<RecordingStopped> {
+  if (!isTauriDesktop()) {
+    if (!browserRecording) {
+      throw new Error("No active recording");
+    }
+
+    const activePauseMs =
+      browserRecording.pausedAt === null
+        ? 0
+        : Date.now() - browserRecording.pausedAt;
+    const durationSeconds =
+      (Date.now() -
+        browserRecording.startedAt -
+        browserRecording.pausedMs -
+        activePauseMs) /
+      1000;
+
+    const stopped: RecordingStopped = {
+      recordingDir: browserRecording.snapshot.recordingDir,
+      videoPath: browserRecording.snapshot.videoPath,
+      thumbnailPath: browserRecording.snapshot.thumbnailPath,
+      durationSeconds,
+      fileSizeBytes: null,
+    };
+
+    browserRecording = undefined;
+    return stopped;
+  }
+
+  return invokeDesktop("stop_recording");
+}
+
+export async function cancelRecording(): Promise<void> {
+  if (!isTauriDesktop()) {
+    browserRecording = undefined;
+    return;
+  }
+
+  return invokeDesktop("cancel_recording");
+}
+
+export async function getCurrentRecording(): Promise<RecordingSnapshot | null> {
+  if (!isTauriDesktop()) {
+    return browserRecording?.snapshot ?? null;
+  }
+
+  return invokeDesktop("get_current_recording");
 }

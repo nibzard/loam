@@ -1,6 +1,7 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { RecorderControls } from "./components/RecorderControls";
 import { LoginRoute } from "./routes/login";
 
 type AppScreen = "booting" | "login" | "recorder";
@@ -134,6 +135,8 @@ function RecorderShell() {
             </aside>
           </div>
         </div>
+
+        <RecorderControls shellReady={isAuthenticated} />
       </section>
     </main>
   );
@@ -402,6 +405,125 @@ function GlobalStyles() {
         color: rgba(240, 240, 232, 0.74);
       }
 
+      .recorder-controls {
+        display: grid;
+        gap: 18px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.74);
+        padding: 24px;
+        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.24);
+      }
+
+      .controls-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .field,
+      .toggle {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field span,
+      .toggle span {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .field select,
+      .field input {
+        min-height: 48px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        padding: 0 14px;
+      }
+
+      .toggle {
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        padding: 14px;
+      }
+
+      .toggle input {
+        width: 18px;
+        height: 18px;
+      }
+
+      .toggle small {
+        display: block;
+        margin-top: 4px;
+        color: var(--foreground-muted);
+        font-family: "IBM Plex Sans", system-ui, sans-serif;
+        font-size: 0.9rem;
+        font-weight: 400;
+        letter-spacing: normal;
+        text-transform: none;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .button {
+        min-height: 46px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        padding: 0 18px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .button-primary {
+        background: var(--accent);
+        color: var(--foreground-inverse);
+      }
+
+      .button-danger {
+        background: #9c3026;
+        color: var(--foreground-inverse);
+      }
+
+      .recording-summary {
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.76);
+        padding: 14px;
+      }
+
+      .recording-summary.success {
+        background: rgba(124, 184, 124, 0.24);
+      }
+
+      .recording-summary strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .recording-summary p,
+      .recording-summary code {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .error-copy {
+        margin: 0;
+        color: #8c1e16;
+        font-weight: 700;
+      }
+
       .login-shell {
         min-height: calc(100vh - 64px);
         display: grid;
@@ -466,6 +588,10 @@ function GlobalStyles() {
         .login-layout,
         .preview-body,
         .status-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .controls-grid {
           grid-template-columns: 1fr;
         }
 

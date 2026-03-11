@@ -128,7 +128,7 @@ pub(crate) fn microphone_permission_status() -> PermissionStatus {
     }
 }
 
-fn screen_permission_status(initial_check: bool) -> PermissionStatus {
+pub(crate) fn screen_permission_status(initial_check: bool) -> PermissionStatus {
     #[cfg(target_os = "macos")]
     {
         let granted = unsafe { CGPreflightScreenCaptureAccess() };

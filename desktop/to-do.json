@@ -101,19 +101,31 @@
         "T001"
       ],
       "files": [
-        "package.json",
-        "tsconfig.json",
-        "vite.config.ts",
+        "desktop/index.html",
+        "desktop/package.json",
+        "desktop/src-tauri/Cargo.toml",
+        "desktop/src-tauri/build.rs",
+        "desktop/src-tauri/capabilities/default.json",
+        "desktop/src-tauri/src/main.rs",
+        "desktop/src-tauri/tauri.conf.json",
+        "desktop/src/App.tsx",
+        "desktop/src/main.tsx",
+        "desktop/to-do.json",
+        "desktop/tsconfig.json",
+        "desktop/vite.config.ts",
         "index.html",
-        "src/main.tsx",
-        "src/App.tsx",
+        "package.json",
         "src-tauri/Cargo.toml",
         "src-tauri/build.rs",
-        "src-tauri/tauri.conf.json",
+        "src-tauri/capabilities/default.json",
         "src-tauri/src/main.rs",
-        "src-tauri/capabilities/default.json"
+        "src-tauri/tauri.conf.json",
+        "src/App.tsx",
+        "src/main.tsx",
+        "tsconfig.json",
+        "vite.config.ts"
       ],
-      "updated_at": "2026-03-11T20:45:00Z"
+      "updated_at": "2026-03-11T20:38:28Z"
     },
     {
       "id": "T004",
@@ -138,14 +150,15 @@
         "T003"
       ],
       "files": [
-        "src/main.tsx",
         "src/App.tsx",
         "src/lib/clerk.tsx",
         "src/lib/convex.tsx",
         "src/lib/desktopAuth.ts",
-        "src/routes/login.tsx"
+        "src/main.tsx",
+        "src/routes/login.tsx",
+        "to-do.json"
       ],
-      "updated_at": "2026-03-11T20:42:03Z"
+      "updated_at": "2026-03-11T20:43:33Z"
     },
     {
       "id": "T005",
@@ -170,13 +183,13 @@
       ],
       "files": [
         "src-tauri/Cargo.toml",
+        "src-tauri/src/devices.rs",
         "src-tauri/src/main.rs",
         "src-tauri/src/permissions.rs",
-        "src-tauri/src/devices.rs",
         "src/lib/tauri.ts",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:05:00Z"
+      "updated_at": "2026-03-11T20:49:35Z"
     },
     {
       "id": "T006",
@@ -250,7 +263,7 @@
       "id": "T008",
       "title": "Implement the native recording lifecycle and normalized stop payload",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Wrap Cap-style instant recording behavior in a small command set that the renderer can drive without inheriting Cap's larger product surface.",
       "steps": [
         "Implement startRecording, pauseRecording, resumeRecording, stopRecording, cancelRecording, and getCurrentRecording",
@@ -269,17 +282,18 @@
         "T007"
       ],
       "files": [
-        "src-tauri/src/recorder.rs",
-        "src-tauri/src/state.rs",
-        "src-tauri/src/errors.rs",
-        "src/components/RecorderControls.tsx",
-        "src/lib/tauri.ts",
+        "src-tauri/Cargo.toml",
         "src-tauri/src/main.rs",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "src-tauri/src/permissions.rs",
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/state.rs",
+        "src-tauri/src/recorder.rs",
+        "src/lib/tauri.ts",
+        "src/components/RecorderControls.tsx",
+        "src/App.tsx",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:15:00Z"
     },
     {
       "id": "T009",

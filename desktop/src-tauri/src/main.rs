@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod devices;
+mod errors;
 mod permissions;
+mod recorder;
+mod state;
 
 use serde::Serialize;
 
@@ -24,6 +27,7 @@ fn get_shell_status() -> DesktopShellStatus {
 
 fn main() {
     tauri::Builder::default()
+        .manage(state::RecorderState::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_status,
             permissions::check_permissions,
@@ -32,7 +36,13 @@ fn main() {
             devices::list_capture_displays,
             devices::list_capture_windows,
             devices::list_microphones,
-            devices::is_system_audio_supported
+            devices::is_system_audio_supported,
+            recorder::start_recording,
+            recorder::pause_recording,
+            recorder::resume_recording,
+            recorder::stop_recording,
+            recorder::cancel_recording,
+            recorder::get_current_recording
         ])
         .run(tauri::generate_context!())
         .expect("failed to run loam desktop shell");

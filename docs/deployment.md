@@ -24,13 +24,22 @@ bun install
 ```bash
 bun run lint
 bun run typecheck
-bun test
+bun run typecheck:convex
+```
+
+4. Use the included env templates as a starting point:
+5. `env/convex.production.env.example`
+6. `env/vercel.production.env.example`
+7. Optional readiness check from your local shell:
+
+```bash
+bun run deploy:check -- --target=all
 ```
 
 ## 2. Choose your production domain
 
-1. Decide the canonical production URL (example: `https://loam.you`).
-2. If your domain is not `https://loam.you`, update these files before deploy:
+1. Decide the canonical production URL (default: `https://loam.video`).
+2. If your domain is not `https://loam.video`, update these files before deploy:
 3. `src/lib/seo.ts` default site URL.
 4. `public/robots.txt` sitemap URL.
 5. `public/sitemap.xml` `<loc>` entries.
@@ -95,11 +104,16 @@ bun test
 15. `RAILWAY_BUCKET_NAME` (optional, default `videos`)
 16. `RAILWAY_REGION` (optional, default `us-east-1`)
 17. `RAILWAY_PUBLIC_URL_INCLUDE_BUCKET` (optional)
-18. `APP_SITE_URL` (recommended, example `https://loam.you`)
-19. `VITE_CONVEX_SITE_URL` (recommended, same value as `APP_SITE_URL`)
+18. `APP_SITE_URL` (required unless your public site is exactly `https://loam.video`)
+19. `VITE_CONVEX_SITE_URL` (set this to the same value as `APP_SITE_URL`)
 20. Optional email notifications:
 21. `RESEND_API_KEY`
 22. `NOTIFICATION_FROM_EMAIL`
+
+Important:
+
+- If your production domain is anything other than `https://loam.video`, set both `APP_SITE_URL` and `VITE_CONVEX_SITE_URL`.
+- Billing redirect allowlists and canonical/share URLs fall back to `https://loam.video` otherwise.
 
 ## 8. Configure Vercel project
 
@@ -111,7 +125,7 @@ bun test
 6. `CONVEX_DEPLOY_KEY` (from Convex deployment settings, production deploy key)
 7. `VITE_CLERK_PUBLISHABLE_KEY`
 8. `CLERK_SECRET_KEY`
-9. `VITE_CONVEX_SITE_URL` (canonical public URL, example `https://loam.you`)
+9. `VITE_CONVEX_SITE_URL` (required unless your public site is exactly `https://loam.video`)
 
 Note: `build:vercel` runs:
 
@@ -120,6 +134,7 @@ bunx convex deploy --cmd 'bun run build' --cmd-url-env-var-name VITE_CONVEX_URL
 ```
 
 This injects the correct production `VITE_CONVEX_URL` during build.
+Do not add `VITE_CONVEX_URL` manually in Vercel.
 
 ## 9. Deploy
 

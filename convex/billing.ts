@@ -18,7 +18,7 @@ import {
 const stripeClient = new StripeSubscriptions(components.stripe, {});
 const stripe = new Stripe(stripeClient.apiKey);
 const TEAM_TRIAL_DAYS = 7;
-const DEFAULT_APP_SITE_URL = "https://loam.you";
+const DEFAULT_APP_SITE_URL = "https://loam.video";
 
 const DEV_ALLOWED_REDIRECT_ORIGINS = [
   "http://localhost:3000",

@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = "https://loam.you";
+const DEFAULT_SITE_URL = "https://loam.video";
 const SITE_NAME = "loam";
 const DEFAULT_OG_IMAGE = "/og/default.png";
 const TWITTER_HANDLE = "";

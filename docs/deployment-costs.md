@@ -76,7 +76,7 @@ That assumes:
 ### Domain
 
 - Separate from infrastructure.
-- `loam.you` was checked as roughly low-to-mid `$20s` for first-year registration, subject to registrar and timing.
+- `loam.video` should be checked directly at your registrar before launch, because premium TLD pricing can vary materially by provider and renewal term.
 
 ## Practical Launch Floor
 

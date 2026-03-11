@@ -1,18 +1,48 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
-import { useConvexAuth, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { RecorderControls } from "./components/RecorderControls";
+import {
+  completeUploadAction,
+  failUploadAction,
+  prepareUploadAction,
+  startUploadFlow,
+  type UploadFlowController,
+  type UploadFlowSnapshot,
+} from "./lib/uploadFlow";
+import type { RecordingStopped } from "./lib/tauri";
 import { LoginRoute } from "./routes/login";
+import { UploadingRoute } from "./routes/uploading";
 
-type AppScreen = "booting" | "login" | "recorder";
+type AppScreen = "booting" | "login" | "recorder" | "uploading";
+type DesktopRoute = "recorder" | "uploading";
+
+type UploadTarget = {
+  projectId: Id<"projects">;
+  projectName: string;
+  teamName: string;
+  teamSlug: string;
+};
+
+const RECORDER_PATH = "/";
+const UPLOADING_PATH = "/uploading";
+const RUNNING_UPLOAD_STEPS = new Set([
+  "preparing",
+  "uploading",
+  "cancelling",
+  "finalizing",
+]);
 
 export function App() {
   const { isLoaded, isSignedIn } = useAuth();
+  const [route, setRoute] = useState<DesktopRoute>(() => readRoute());
 
   let screen: AppScreen = "booting";
 
   if (isLoaded) {
-    screen = isSignedIn ? "recorder" : "login";
+    screen = isSignedIn ? (route === "uploading" ? "uploading" : "recorder") : "login";
   }
 
   return (
@@ -23,7 +53,9 @@ export function App() {
         <div className="hero-glow hero-glow-right" />
         {screen === "booting" ? <BootScreen /> : null}
         {screen === "login" ? <LoginRoute /> : null}
-        {screen === "recorder" ? <RecorderShell /> : null}
+        {screen === "recorder" || screen === "uploading" ? (
+          <RecorderShell route={route} setRoute={setRoute} />
+        ) : null}
       </div>
     </>
   );
@@ -44,19 +76,102 @@ function BootScreen() {
   );
 }
 
-function RecorderShell() {
+function RecorderShell({
+  route,
+  setRoute,
+}: {
+  route: DesktopRoute;
+  setRoute: (route: DesktopRoute) => void;
+}) {
   const { user } = useUser();
   const { isLoading, isAuthenticated } = useConvexAuth();
   const uploadTargets = useQuery(
     api.projects.listUploadTargets,
     isAuthenticated ? {} : "skip",
   );
+  const prepareUpload = useAction(prepareUploadAction);
+  const completeUpload = useAction(completeUploadAction);
+  const failUpload = useAction(failUploadAction);
+  const [lastStopped, setLastStopped] = useState<RecordingStopped | null>(null);
+  const [uploadSnapshot, setUploadSnapshot] = useState<UploadFlowSnapshot | null>(null);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const uploadControllerRef = useRef<UploadFlowController | null>(null);
+
+  const selectedTarget = uploadTargets?.[0] as UploadTarget | undefined;
+  const navigationLocked =
+    uploadSnapshot !== null && RUNNING_UPLOAD_STEPS.has(uploadSnapshot.step);
 
   const authStatus = isLoading
     ? "Exchanging Clerk session for a Convex token"
     : isAuthenticated
       ? "Authenticated"
       : "Waiting for auth";
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (navigationLocked) {
+        navigateTo("uploading", setRoute, true);
+        return;
+      }
+
+      setRoute(readRoute());
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [navigationLocked, setRoute]);
+
+  async function handleBeginUpload() {
+    if (!lastStopped || !selectedTarget || uploadControllerRef.current) {
+      return;
+    }
+
+    setUploadMessage(null);
+
+    const controller = startUploadFlow({
+      recording: lastStopped,
+      projectId: selectedTarget.projectId,
+      prepareUpload,
+      completeUpload,
+      failUpload,
+      onStateChange: setUploadSnapshot,
+    });
+
+    uploadControllerRef.current = controller;
+    navigateTo("uploading", setRoute);
+
+    const result = await controller.finished;
+    uploadControllerRef.current = null;
+
+    if (result.status === "complete") {
+      setLastStopped(null);
+      setUploadMessage(`Upload finished. Share link ready at ${result.completion.shareUrl}`);
+    } else if (result.status === "cancelled") {
+      setUploadMessage("Upload cancelled. The local recording is still available for retry.");
+    } else {
+      setUploadMessage(result.error);
+    }
+
+    navigateTo("recorder", setRoute, true);
+  }
+
+  async function handleCancelUpload() {
+    await uploadControllerRef.current?.cancel();
+  }
+
+  if (route === "uploading" && uploadSnapshot) {
+    return (
+      <UploadingRoute
+        snapshot={uploadSnapshot}
+        navigationLocked={navigationLocked}
+        onCancel={() => {
+          void handleCancelUpload();
+        }}
+      />
+    );
+  }
 
   return (
     <main className="layout">
@@ -136,10 +251,85 @@ function RecorderShell() {
           </div>
         </div>
 
-        <RecorderControls shellReady={isAuthenticated} />
+        <RecorderControls
+          shellReady={isAuthenticated}
+          onStopped={(recording) => {
+            setLastStopped(recording);
+            setUploadMessage(null);
+          }}
+        />
+
+        {lastStopped ? (
+          <section className="upload-launcher">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">renderer upload</p>
+                <h2>Send the latest recording to Loam</h2>
+              </div>
+              <div className="metric">
+                <span>Default project</span>
+                <strong>
+                  {selectedTarget
+                    ? `${selectedTarget.teamName} / ${selectedTarget.projectName}`
+                    : "Unavailable"}
+                </strong>
+              </div>
+            </div>
+            <p className="lede">
+              The desktop renderer prepares the upload in Convex first, streams
+              the local file through Rust, then finalizes the share link in one
+              guarded flow.
+            </p>
+            <div className="button-row">
+              <button
+                className="button button-primary"
+                disabled={!selectedTarget || uploadTargets === undefined}
+                onClick={() => {
+                  void handleBeginUpload();
+                }}
+              >
+                Upload latest recording
+              </button>
+            </div>
+            {!selectedTarget && uploadTargets !== undefined ? (
+              <p className="error-copy">
+                No uploadable Loam project is available for this account.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
+        {uploadMessage ? <p className="upload-message">{uploadMessage}</p> : null}
       </section>
     </main>
   );
+}
+
+function readRoute(): DesktopRoute {
+  if (typeof window === "undefined") {
+    return "recorder";
+  }
+
+  return window.location.pathname === UPLOADING_PATH ? "uploading" : "recorder";
+}
+
+function navigateTo(
+  route: DesktopRoute,
+  setRoute: (route: DesktopRoute) => void,
+  replace = false,
+) {
+  const path = route === "uploading" ? UPLOADING_PATH : RECORDER_PATH;
+  const currentPath = window.location.pathname;
+
+  if (currentPath !== path) {
+    if (replace) {
+      window.history.replaceState({ route }, "", path);
+    } else {
+      window.history.pushState({ route }, "", path);
+    }
+  }
+
+  setRoute(route);
 }
 
 function StatusCard({
@@ -522,6 +712,44 @@ function GlobalStyles() {
         margin: 0;
         color: #8c1e16;
         font-weight: 700;
+      }
+
+      .upload-launcher,
+      .upload-progress {
+        display: grid;
+        gap: 18px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.74);
+        padding: 24px;
+        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.18);
+      }
+
+      .progress-bar {
+        height: 16px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.88);
+        overflow: hidden;
+      }
+
+      .progress-bar span {
+        display: block;
+        height: 100%;
+        background:
+          linear-gradient(90deg, var(--accent) 0%, var(--accent-light) 100%);
+        transition: width 180ms ease-out;
+      }
+
+      .upload-stats {
+        align-items: stretch;
+      }
+
+      .upload-message {
+        margin: 0;
+        border: 2px solid var(--border);
+        background: rgba(124, 184, 124, 0.24);
+        padding: 16px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
       }
 
       .login-shell {

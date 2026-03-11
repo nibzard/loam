@@ -317,24 +317,25 @@
         "T008"
       ],
       "files": [
-        "src-tauri/Cargo.toml",
-        "src-tauri/src/upload.rs",
-        "src-tauri/src/errors.rs",
-        "src-tauri/src/state.rs",
-        "src-tauri/src/main.rs",
-        "src/lib/tauri.ts",
-        "README.md",
         "ARCHITECTURE.md",
+        "BACKLOG.md",
         "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
+        "README.md",
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/main.rs",
+        "src-tauri/src/state.rs",
+        "src-tauri/src/upload.rs",
+        "src/lib/tauri.ts",
+        "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:00:57Z"
+      "updated_at": "2026-03-11T21:01:21Z"
     },
     {
       "id": "T010",
       "title": "Build the renderer upload orchestration and uploading route",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Coordinate prepareUpload, native uploadFile, completeUpload, and failUpload in one renderer-side flow with clear progress and guarded navigation.",
       "steps": [
         "Create uploadFlow as the single orchestration point",
@@ -355,14 +356,14 @@
         "T009"
       ],
       "files": [
+        "src/App.tsx",
+        "src/components/RecorderControls.tsx",
+        "src/components/UploadProgress.tsx",
         "src/lib/uploadFlow.ts",
         "src/routes/uploading.tsx",
-        "src/components/UploadProgress.tsx",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:14:00Z"
     },
     {
       "id": "T011",

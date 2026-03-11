@@ -22,9 +22,10 @@ import {
 
 type ControlsProps = {
   shellReady: boolean;
+  onStopped?: (recording: RecordingStopped) => void;
 };
 
-export function RecorderControls({ shellReady }: ControlsProps) {
+export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
   const [displays, setDisplays] = useState<CaptureDisplay[]>([]);
   const [windows, setWindows] = useState<CaptureWindow[]>([]);
   const [microphones, setMicrophones] = useState<MicrophoneDevice[]>([]);
@@ -242,6 +243,7 @@ export function RecorderControls({ shellReady }: ControlsProps) {
               const stopped = await stopRecording();
               setLastStopped(stopped);
               setRecording(null);
+              onStopped?.(stopped);
             })
           }
         >

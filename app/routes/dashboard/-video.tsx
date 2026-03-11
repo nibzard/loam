@@ -34,7 +34,11 @@ import { Id } from "@convex/_generated/dataModel";
 import { projectPath, teamHomePath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
-import { PLAYBACK_SESSION_REFRESH_LEAD_MS, type PlaybackSession } from "@/lib/playbackSession";
+import {
+  PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
+  PLAYBACK_SESSION_REFRESH_LEAD_MS,
+  type PlaybackSession,
+} from "@/lib/playbackSession";
 import { useWatchProgress } from "@/lib/useWatchProgress";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
@@ -83,6 +87,9 @@ export default function VideoPage() {
   const [preferredSource, setPreferredSource] = useState<"mux720" | "original">("original");
   const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const playbackRefreshInFlightRef = useRef(false);
+  const playbackSessionKeyRef = useRef(0);
+  const lastPlaybackAccessErrorAtRef = useRef(0);
   const isPlayable = video?.status === "ready" && Boolean(video?.muxPlaybackId);
   const playbackUrl = playbackSession?.url ?? null;
   const activePlaybackUrl =
@@ -127,33 +134,59 @@ export default function VideoPage() {
   }, [video]);
 
   useEffect(() => {
+    playbackRefreshInFlightRef.current = false;
+    playbackSessionKeyRef.current += 1;
+    lastPlaybackAccessErrorAtRef.current = 0;
+  }, [resolvedVideoId, video?.muxPlaybackId]);
+
+  const refreshPlaybackSession = useCallback(
+    async (options?: { preserveExisting?: boolean }) => {
+      if (!resolvedVideoId || playbackRefreshInFlightRef.current) {
+        return;
+      }
+
+      const requestKey = playbackSessionKeyRef.current;
+      playbackRefreshInFlightRef.current = true;
+      setIsLoadingPlayback(true);
+
+      if (!options?.preserveExisting) {
+        setPlaybackSession(null);
+      }
+
+      try {
+        const session = await getPlaybackSession({ videoId: resolvedVideoId });
+        if (requestKey !== playbackSessionKeyRef.current) {
+          return;
+        }
+
+        setPlaybackSession(session);
+      } catch {
+        if (requestKey !== playbackSessionKeyRef.current) {
+          return;
+        }
+
+        if (!options?.preserveExisting) {
+          setPlaybackSession(null);
+        }
+      } finally {
+        if (requestKey === playbackSessionKeyRef.current) {
+          setIsLoadingPlayback(false);
+        }
+        playbackRefreshInFlightRef.current = false;
+      }
+    },
+    [getPlaybackSession, resolvedVideoId],
+  );
+
+  useEffect(() => {
     if (!resolvedVideoId || !isPlayable) {
       setPlaybackSession(null);
       setIsLoadingPlayback(false);
       return;
     }
 
-    let cancelled = false;
-    setIsLoadingPlayback(true);
-
-    void getPlaybackSession({ videoId: resolvedVideoId })
-      .then((session) => {
-        if (cancelled) return;
-        setPlaybackSession(session);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPlaybackSession(null);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsLoadingPlayback(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [getPlaybackSession, isPlayable, resolvedVideoId, video?.muxPlaybackId]);
+    void refreshPlaybackSession();
+  }, [isPlayable, refreshPlaybackSession, resolvedVideoId, video?.muxPlaybackId]);
 
   useEffect(() => {
     if (!resolvedVideoId || !video || video.status === "uploading" || video.status === "failed") {
@@ -204,30 +237,31 @@ export default function VideoPage() {
       playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
     );
 
-    let cancelled = false;
     const timeout = window.setTimeout(() => {
-      setIsLoadingPlayback(true);
-
-      void getPlaybackSession({ videoId: resolvedVideoId })
-        .then((session) => {
-          if (cancelled) return;
-          setPlaybackSession(session);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setPlaybackSession(null);
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setIsLoadingPlayback(false);
-        });
+      void refreshPlaybackSession({ preserveExisting: true });
     }, refreshDelay);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [getPlaybackSession, playbackSession, resolvedVideoId]);
+  }, [playbackSession, refreshPlaybackSession, resolvedVideoId]);
+
+  const handlePlaybackAccessError = useCallback(() => {
+    if (!resolvedVideoId || playbackSession?.accessMode !== "signed") {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      now - lastPlaybackAccessErrorAtRef.current <
+      PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    lastPlaybackAccessErrorAtRef.current = now;
+    void refreshPlaybackSession({ preserveExisting: true });
+  }, [playbackSession?.accessMode, refreshPlaybackSession, resolvedVideoId]);
 
   const { trackTime: trackWatchTime } = useWatchProgress({
     enabled: Boolean(activePlaybackUrl && resolvedVideoId && !watchCapKind),
@@ -501,6 +535,7 @@ export default function VideoPage() {
                 comments={comments || []}
                 onTimeUpdate={handleTimeUpdate}
                 onMarkerClick={handleMarkerClick}
+                onPlaybackAccessError={handlePlaybackAccessError}
                 allowDownload={video.status === "ready"}
                 downloadFilename={`${video.title}.mp4`}
                 onRequestDownload={requestDownload}

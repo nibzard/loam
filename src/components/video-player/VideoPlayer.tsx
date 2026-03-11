@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn, formatDuration, formatTimestamp } from "@/lib/utils";
 import { triggerDownload } from "@/lib/download";
+import { isPlaybackAccessError } from "@/lib/playbackErrors";
 
 interface Comment {
   _id: string;
@@ -44,6 +45,7 @@ interface VideoPlayerProps {
   downloadFilename?: string;
   onRequestDownload?: () => Promise<DownloadResult | null | undefined> | DownloadResult | null | undefined;
   onPlaybackStarted?: () => void;
+  onPlaybackAccessError?: () => void;
   qualityOptionsConfig?: Array<{
     id: string;
     label: string;
@@ -89,6 +91,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     downloadFilename,
     onRequestDownload,
     onPlaybackStarted,
+    onPlaybackAccessError,
     qualityOptionsConfig,
     selectedQualityId,
     onSelectQuality,
@@ -129,6 +132,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const isPlayingRef = useRef(false);
   const isScrubbingRef = useRef(false);
   const resumeTimeOnSourceChangeRef = useRef<number | null>(null);
+  const resumePlaybackOnSourceChangeRef = useRef(false);
+  const reportedPlaybackAccessErrorRef = useRef(false);
   const playbackStartedRef = useRef(false);
 
   const groupedMarkers = useMemo(() => {
@@ -440,6 +445,16 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (cancelled) return;
       setIsMediaReady(true);
       setIsBuffering(false);
+
+      if (resumePlaybackOnSourceChangeRef.current) {
+        resumePlaybackOnSourceChangeRef.current = false;
+        const playPromise = video.play();
+        if (playPromise) {
+          playPromise.catch(() => {
+            // Ignore resume failures after signed-session rotation.
+          });
+        }
+      }
     };
 
     const handleDurationChange = () => {
@@ -520,6 +535,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       const currentSourceTime = video.currentTime;
       resumeTimeOnSourceChangeRef.current =
         currentSourceTime > 0 ? currentSourceTime : resumeTimeOnSourceChangeRef.current;
+      resumePlaybackOnSourceChangeRef.current = !video.paused && !video.ended;
+      reportedPlaybackAccessErrorRef.current = false;
 
       // Clean up any previous HLS instance.
       if (hlsRef.current) {
@@ -576,6 +593,15 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             if (hls.autoLevelEnabled) {
               setSelectedQualityLevel(AUTO_QUALITY_LEVEL);
             }
+          });
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (cancelled) return;
+            if (!isPlaybackAccessError(data) || reportedPlaybackAccessErrorRef.current) {
+              return;
+            }
+
+            reportedPlaybackAccessErrorRef.current = true;
+            onPlaybackAccessError?.();
           });
         } else {
           video.src = src;
@@ -637,7 +663,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, initialTime, onPlaybackStarted, onTimeUpdate, showControls, updateBuffered]);
+  }, [initialTime, onPlaybackAccessError, onPlaybackStarted, onTimeUpdate, showControls, src, updateBuffered]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

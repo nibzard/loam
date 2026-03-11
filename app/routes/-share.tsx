@@ -14,7 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
-import { PLAYBACK_SESSION_REFRESH_LEAD_MS, type PlaybackSession } from "@/lib/playbackSession";
+import {
+  PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
+  PLAYBACK_SESSION_REFRESH_LEAD_MS,
+  type PlaybackSession,
+} from "@/lib/playbackSession";
 import { formatDuration, formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
@@ -47,6 +51,9 @@ export default function SharePage() {
   const [viewerClientId, setViewerClientId] = useState<string | null>(null);
   const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const playbackRefreshInFlightRef = useRef(false);
+  const playbackSessionKeyRef = useRef(0);
+  const lastPlaybackAccessErrorAtRef = useRef(0);
 
   useEffect(() => {
     setBootstrap(loaderBootstrap);
@@ -75,6 +82,9 @@ export default function SharePage() {
     setPlaybackSession(readyBootstrap?.playbackSession ?? null);
     setPlaybackError(null);
     setIsLoadingPlayback(false);
+    playbackRefreshInFlightRef.current = false;
+    playbackSessionKeyRef.current += 1;
+    lastPlaybackAccessErrorAtRef.current = 0;
   }, [readyBootstrap?.grantToken, readyBootstrap?.playbackSession]);
 
   useEffect(() => {
@@ -96,6 +106,51 @@ export default function SharePage() {
     prefetchPlaybackSource(playbackSession.url);
   }, [playbackSession?.url]);
 
+  const refreshPlaybackSession = useCallback(
+    async (options?: {
+      failureMessage?: string;
+      preserveExisting?: boolean;
+    }) => {
+      if (!grantToken || playbackRefreshInFlightRef.current) {
+        return;
+      }
+
+      const requestKey = playbackSessionKeyRef.current;
+      playbackRefreshInFlightRef.current = true;
+      setIsLoadingPlayback(true);
+      setPlaybackError(null);
+
+      if (!options?.preserveExisting) {
+        setPlaybackSession(null);
+      }
+
+      try {
+        const session = await getPlaybackSession({ grantToken });
+        if (requestKey !== playbackSessionKeyRef.current) {
+          return;
+        }
+
+        setPlaybackSession(session);
+      } catch {
+        if (requestKey !== playbackSessionKeyRef.current) {
+          return;
+        }
+
+        if (!options?.preserveExisting) {
+          setPlaybackSession(null);
+        }
+
+        setPlaybackError(options?.failureMessage ?? "Unable to refresh playback session.");
+      } finally {
+        if (requestKey === playbackSessionKeyRef.current) {
+          setIsLoadingPlayback(false);
+        }
+        playbackRefreshInFlightRef.current = false;
+      }
+    },
+    [getPlaybackSession, grantToken],
+  );
+
   useEffect(() => {
     if (
       !grantToken ||
@@ -110,31 +165,37 @@ export default function SharePage() {
       playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
     );
 
-    let cancelled = false;
     const timeout = window.setTimeout(() => {
-      setIsLoadingPlayback(true);
-      setPlaybackError(null);
-
-      void getPlaybackSession({ grantToken })
-        .then((session) => {
-          if (cancelled) return;
-          setPlaybackSession(session);
-        })
-        .catch(() => {
-          if (cancelled) return;
-          setPlaybackError("Unable to refresh playback session.");
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setIsLoadingPlayback(false);
-        });
+      void refreshPlaybackSession({
+        failureMessage: "Unable to refresh playback session.",
+        preserveExisting: true,
+      });
     }, refreshDelay);
 
     return () => {
-      cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [getPlaybackSession, grantToken, playbackSession]);
+  }, [grantToken, playbackSession, refreshPlaybackSession]);
+
+  const handlePlaybackAccessError = useCallback(() => {
+    if (!grantToken || playbackSession?.accessMode !== "signed") {
+      return;
+    }
+
+    const now = Date.now();
+    if (
+      now - lastPlaybackAccessErrorAtRef.current <
+      PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS
+    ) {
+      return;
+    }
+
+    lastPlaybackAccessErrorAtRef.current = now;
+    void refreshPlaybackSession({
+      failureMessage: "Playback access expired. Try refreshing the page.",
+      preserveExisting: true,
+    });
+  }, [grantToken, playbackSession?.accessMode, refreshPlaybackSession]);
 
   const flattenedComments = useMemo(() => {
     if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; resolved: boolean }>;
@@ -430,14 +491,15 @@ export default function SharePage() {
               <WatchCapNotice usageKind={watchCapKind} />
             ) : playbackSession?.url ? (
               <Suspense fallback={playerFallback}>
-                <LazyVideoPlayer
-                  ref={playerRef}
-                  src={playbackSession.url}
-                  poster={playbackSession.posterUrl}
-                  comments={flattenedComments}
-                  onTimeUpdate={handleTimeUpdate}
-                  allowDownload={false}
-                />
+              <LazyVideoPlayer
+                ref={playerRef}
+                src={playbackSession.url}
+                poster={playbackSession.posterUrl}
+                comments={flattenedComments}
+                onTimeUpdate={handleTimeUpdate}
+                onPlaybackAccessError={handlePlaybackAccessError}
+                allowDownload={false}
+              />
               </Suspense>
             ) : (
               playerFallback

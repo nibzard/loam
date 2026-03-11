@@ -7,22 +7,7 @@ import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
 import { assertTeamCanStoreBytes } from "./billingHelpers";
 
-const workflowStatusValidator = v.union(
-  v.literal("review"),
-  v.literal("rework"),
-  v.literal("done"),
-);
-
 const visibilityValidator = v.union(v.literal("public"), v.literal("private"));
-
-type WorkflowStatus =
-  | "review"
-  | "rework"
-  | "done";
-
-function normalizeWorkflowStatus(status: WorkflowStatus | undefined): WorkflowStatus {
-  return status ?? "review";
-}
 
 async function generatePublicId(ctx: MutationCtx) {
   return await generateUniqueToken(
@@ -78,6 +63,7 @@ export const create = mutation({
       contentType: args.contentType,
       status: "uploading",
       muxAssetStatus: "preparing",
+      // Legacy field kept only for schema compatibility while the feature is retired.
       workflowStatus: "review",
       visibility: "private",
       publicId,
@@ -108,7 +94,6 @@ export const list = query({
         return {
           ...video,
           uploaderName: video.uploaderName ?? "Unknown",
-          workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
           commentCount: comments.length,
         };
       }),
@@ -123,7 +108,6 @@ export const get = query({
     return {
       ...video,
       uploaderName: video.uploaderName ?? "Unknown",
-      workflowStatus: normalizeWorkflowStatus(video.workflowStatus),
       role: membership.role,
     };
   },
@@ -232,20 +216,6 @@ export const setVisibility = mutation({
 
     await ctx.db.patch(args.videoId, {
       visibility: args.visibility,
-    });
-  },
-});
-
-export const updateWorkflowStatus = mutation({
-  args: {
-    videoId: v.id("videos"),
-    workflowStatus: workflowStatusValidator,
-  },
-  handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
-
-    await ctx.db.patch(args.videoId, {
-      workflowStatus: args.workflowStatus,
     });
   },
 });

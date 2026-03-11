@@ -10,10 +10,6 @@ import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/c
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
-import {
-  VideoWorkflowStatusControl,
-  type VideoWorkflowStatus,
-} from "@/components/videos/VideoWorkflowStatusControl";
 import { formatDuration } from "@/lib/utils";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
@@ -66,7 +62,6 @@ export default function VideoPage() {
     videoId,
   });
   const updateVideo = useMutation(api.videos.update);
-  const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const getPlaybackSession = useAction(api.videoActions.getPlaybackSession);
   const getOriginalPlaybackUrl = useAction(api.videoActions.getOriginalPlaybackUrl);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
@@ -261,18 +256,6 @@ export default function VideoPage() {
     }
   };
 
-  const handleUpdateWorkflowStatus = useCallback(
-    async (workflowStatus: VideoWorkflowStatus) => {
-      if (!resolvedVideoId) return;
-      try {
-        await updateVideoWorkflowStatus({ videoId: resolvedVideoId, workflowStatus });
-      } catch (error) {
-        console.error("Failed to update review status:", error);
-      }
-    },
-    [resolvedVideoId, updateVideoWorkflowStatus],
-  );
-
   const startEditingTitle = () => {
     if (video) {
       setEditedTitle(video.title);
@@ -409,14 +392,6 @@ export default function VideoPage() {
           <VideoWatchers watchers={watchers} />
         </div>
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[var(--border)]/20 pl-3 ml-1">
-          <VideoWorkflowStatusControl
-            status={video.workflowStatus}
-            size="lg"
-            disabled={!canEdit}
-            onChange={(workflowStatus) => {
-              void handleUpdateWorkflowStatus(workflowStatus);
-            }}
-          />
           <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
             <LinkIcon className="mr-1.5 h-4 w-4" />
             Share
@@ -433,16 +408,8 @@ export default function VideoPage() {
           </Button>
         </div>
 
-        {/* Mobile: workflow status + menu button */}
+        {/* Mobile: compact actions */}
         <div className="flex sm:hidden items-center gap-2">
-          <VideoWorkflowStatusControl
-            status={video.workflowStatus}
-            size="lg"
-            disabled={!canEdit}
-            onChange={(workflowStatus) => {
-              void handleUpdateWorkflowStatus(workflowStatus);
-            }}
-          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
@@ -465,7 +432,7 @@ export default function VideoPage() {
 
       {/* Main content - horizontal split */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Video player area - full black, review-focused layout */}
+        {/* Video player area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--media-background)]">
           {video.status === "processing" && isUsingOriginalFallback && activePlaybackUrl ? (
             <div className="flex-shrink-0 flex items-center gap-2 bg-[var(--surface-strong)] px-4 py-2 text-sm text-[var(--media-text)]">

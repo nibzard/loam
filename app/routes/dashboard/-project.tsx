@@ -30,10 +30,6 @@ import { teamHomePath, videoPath } from "@/lib/routes";
 import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
 import { preloadVideoPlayer } from "@/components/video-player/lazy";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
-import {
-  VideoWorkflowStatusControl,
-  type VideoWorkflowStatus,
-} from "@/components/videos/VideoWorkflowStatusControl";
 import { useProjectData } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
 import { prewarmVideo } from "./-video.data";
@@ -138,7 +134,6 @@ export default function ProjectPage({
   );
   const { requestUpload } = useDashboardUploadContext();
   const deleteVideo = useMutation(api.videos.remove);
-  const updateVideoWorkflowStatus = useMutation(api.videos.updateWorkflowStatus);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -201,17 +196,6 @@ export default function ProjectPage({
       }
     },
     [getDownloadUrl],
-  );
-
-  const handleUpdateWorkflowStatus = useCallback(
-    async (videoId: Id<"videos">, workflowStatus: VideoWorkflowStatus) => {
-      try {
-        await updateVideoWorkflowStatus({ videoId, workflowStatus });
-      } catch (error) {
-        console.error("Failed to update video workflow status:", error);
-      }
-    },
-    [updateVideoWorkflowStatus],
   );
 
   const showShareToast = useCallback((tone: ShareToastState["tone"], message: string) => {
@@ -442,14 +426,6 @@ export default function ProjectPage({
                       {video.title}
                     </p>
                     <div className="mt-1.5 flex items-center gap-3">
-                      <VideoWorkflowStatusControl
-                        status={video.workflowStatus}
-                        stopPropagation
-                        disabled={!canUpload}
-                        onChange={(workflowStatus) =>
-                          void handleUpdateWorkflowStatus(video._id, workflowStatus)
-                        }
-                      />
                       {video.commentCount > 0 && (
                         <span className="inline-flex items-center gap-1 text-[11px] text-[var(--foreground-muted)]">
                           <MessageSquare className="h-3 w-3" />
@@ -535,14 +511,6 @@ export default function ProjectPage({
                     {video.title}
                   </p>
                   <div className="flex items-center gap-3 mt-1">
-                    <VideoWorkflowStatusControl
-                      status={video.workflowStatus}
-                      stopPropagation
-                      disabled={!canUpload}
-                      onChange={(workflowStatus) =>
-                        void handleUpdateWorkflowStatus(video._id, workflowStatus)
-                      }
-                    />
                     {video.commentCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
                         <MessageSquare className="h-3.5 w-3.5" />

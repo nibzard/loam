@@ -91,11 +91,11 @@ export async function getTeamSubscriptionState(
   }
 
   const subscription = await getTeamSubscriptionByOrgId(ctx, teamId);
-  const subscriptionPlan = resolvePlanFromStripePriceId(subscription?.priceId);
+  const effectiveStripePriceId = subscription?.priceId ?? team.stripePriceId;
+  const subscriptionPlan = resolvePlanFromStripePriceId(effectiveStripePriceId);
   const plan = subscriptionPlan ?? normalizeStoredTeamPlan(team.plan);
-  const hasActiveSubscription = hasActiveTeamSubscriptionStatus(
-    subscription?.status,
-  );
+  const effectiveStatus = subscription?.status ?? team.billingStatus;
+  const hasActiveSubscription = hasActiveTeamSubscriptionStatus(effectiveStatus);
 
   return { team, subscription, plan, hasActiveSubscription };
 }

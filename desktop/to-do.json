@@ -1,0 +1,535 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "Loam Desktop Recorder",
+    "root": "."
+  },
+  "source_files": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "IMPLEMENTATION-PLAN.md",
+    "BACKLOG.md"
+  ],
+  "tasks": [
+    {
+      "id": "T001",
+      "title": "Prove native macOS recording feasibility with a short local capture spike",
+      "priority": 1,
+      "status": "blocked",
+      "details": "Validate that the project can reliably record a short display capture to a local mp4 before broader app scaffolding begins.",
+      "steps": [
+        "Create a temporary Rust or Tauri spike that records the primary display for about 5 seconds",
+        "Confirm local file output, duration metadata, and repeat-run stability",
+        "Verify microphone capture can be layered on without destabilizing the base recording path"
+      ],
+      "tags": [
+        "native",
+        "recording",
+        "macos"
+      ],
+      "files": [
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "to-do.json",
+        "README.md",
+        "BACKLOG.md"
+      ],
+      "updated_at": "2026-03-11T20:27:00Z",
+      "blockers": [
+        "This Codex run is on Linux (uname: Linux claude-code-vm 6.8.0-101-generic x86_64), but the validated capture path depends on macOS ScreenCaptureKit APIs and Cap's macOS-only shareable content bootstrap. No prior macOS spike output or validation artifact exists in the repo, so feasibility cannot be proven from this environment without fabricating evidence."
+      ]
+    },
+    {
+      "id": "T002",
+      "title": "Implement the Convex desktop recorder backend contract",
+      "priority": 1,
+      "status": "blocked",
+      "details": "Add a small desktop-focused Convex surface so the renderer can prepare, complete, and fail uploads with single-purpose calls.",
+      "steps": [
+        "Create convex/desktopRecorder.ts",
+        "Add listUploadTargets wrapper around the existing project upload target query",
+        "Add prepareUpload action that creates the video record and returns a presigned upload URL",
+        "Add completeUpload action that marks upload complete, resolves a share link, and returns canonical URLs",
+        "Add failUpload action that marks upload failure cleanly",
+        "Run Convex code generation and verify auth and authorization stay backend-owned"
+      ],
+      "tags": [
+        "backend",
+        "convex",
+        "upload"
+      ],
+      "depends_on": [
+        "T001"
+      ],
+      "files": [
+        "../convex/desktopRecorder.ts",
+        "../convex/shareLinks.ts",
+        "../convex/videoActions.ts",
+        "../convex/videos.ts",
+        "../convex/workspace.ts",
+        "ARCHITECTURE.md",
+        "BACKLOG.md",
+        "IMPLEMENTATION-PLAN.md",
+        "README.md",
+        "convex/desktopRecorder.ts",
+        "desktop/to-do.json"
+      ],
+      "updated_at": "2026-03-11T20:34:26Z",
+      "blockers": [
+        "Convex codegen/typecheck is blocked in this checkout because CONVEX_DEPLOYMENT is not configured, so convex/_generated cannot be refreshed for desktopRecorder."
+      ]
+    },
+    {
+      "id": "T003",
+      "title": "Scaffold the desktop React and Tauri application shell",
+      "priority": 1,
+      "status": "done",
+      "details": "Create the desktop app package, build configuration, renderer entrypoints, and native Tauri bootstrap described in the planning docs.",
+      "steps": [
+        "Create the desktop package and TypeScript build config",
+        "Create the Vite and Tauri configuration files",
+        "Add renderer entrypoints and a minimal app shell",
+        "Add Cargo manifest and narrow native boot wiring for the initial command surface"
+      ],
+      "tags": [
+        "desktop",
+        "scaffold",
+        "tauri",
+        "react"
+      ],
+      "depends_on": [
+        "T001"
+      ],
+      "files": [
+        "package.json",
+        "tsconfig.json",
+        "vite.config.ts",
+        "index.html",
+        "src/main.tsx",
+        "src/App.tsx",
+        "src-tauri/Cargo.toml",
+        "src-tauri/build.rs",
+        "src-tauri/tauri.conf.json",
+        "src-tauri/src/main.rs",
+        "src-tauri/capabilities/default.json"
+      ],
+      "updated_at": "2026-03-11T20:45:00Z"
+    },
+    {
+      "id": "T004",
+      "title": "Integrate Clerk and Convex auth inside the desktop renderer",
+      "priority": 1,
+      "status": "todo",
+      "details": "Use the existing loam auth model in the renderer and only introduce desktop-specific auth fallback code if Clerk-in-webview proves insufficient.",
+      "steps": [
+        "Create desktop Clerk and Convex provider wiring",
+        "Mount providers at the renderer root",
+        "Implement login handling for unauthenticated app boots",
+        "Validate that authenticated Convex calls work from the desktop webview",
+        "Decide whether a desktopAuth fallback layer is necessary"
+      ],
+      "tags": [
+        "auth",
+        "clerk",
+        "convex",
+        "renderer"
+      ],
+      "depends_on": [
+        "T003"
+      ],
+      "files": [
+        "src/lib/clerk.tsx",
+        "src/lib/convex.tsx",
+        "src/routes/login.tsx",
+        "src/lib/desktopAuth.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T005",
+      "title": "Implement native permissions and device enumeration commands",
+      "priority": 1,
+      "status": "todo",
+      "details": "Expose a minimal typed command surface for screen and microphone permissions plus capture target and microphone discovery.",
+      "steps": [
+        "Implement screen and microphone permission status checks",
+        "Implement permission request and open-settings commands",
+        "Implement display, window, and microphone enumeration",
+        "Implement system-audio support detection",
+        "Expose typed wrappers for the command surface in the renderer"
+      ],
+      "tags": [
+        "native",
+        "permissions",
+        "devices"
+      ],
+      "depends_on": [
+        "T003"
+      ],
+      "files": [
+        "src-tauri/src/permissions.rs",
+        "src-tauri/src/devices.rs",
+        "src/lib/tauri.ts",
+        "src-tauri/src/main.rs",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T006",
+      "title": "Build desktop state models and persistent user defaults",
+      "priority": 2,
+      "status": "todo",
+      "details": "Model the recorder lifecycle cleanly in the renderer and persist only the high-value defaults called for in the architecture docs.",
+      "steps": [
+        "Create top-level app state for boot, auth, permissions, ready, recording, uploading, complete, and error states",
+        "Create recorder state for selected project, target, microphone, countdown, and upload result",
+        "Create settings persistence for last project, last microphone, audio settings, countdown, and post-upload behavior"
+      ],
+      "tags": [
+        "state",
+        "settings",
+        "renderer"
+      ],
+      "depends_on": [
+        "T003",
+        "T004",
+        "T005"
+      ],
+      "files": [
+        "src/state/app-state.ts",
+        "src/state/recorder-state.ts",
+        "src/state/settings-state.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T007",
+      "title": "Implement the pre-recording setup flow for permissions, target selection, and project selection",
+      "priority": 2,
+      "status": "todo",
+      "details": "Create a single fast setup screen that gets the user from launch to a valid recording request with minimal friction.",
+      "steps": [
+        "Build the permission gate UI with direct actions to request access or open settings",
+        "Build capture target selection for displays and windows",
+        "Build microphone selection including a no-microphone option",
+        "Build upload project selection using desktopRecorder.listUploadTargets",
+        "Persist the last used project and microphone and prefer good defaults"
+      ],
+      "tags": [
+        "ui",
+        "setup",
+        "recorder"
+      ],
+      "depends_on": [
+        "T002",
+        "T004",
+        "T005",
+        "T006"
+      ],
+      "files": [
+        "src/routes/recorder.tsx",
+        "src/components/PermissionGate.tsx",
+        "src/components/CaptureTargetPicker.tsx",
+        "src/components/MicrophonePicker.tsx",
+        "src/components/ProjectPicker.tsx",
+        "src/lib/routes.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T008",
+      "title": "Implement the native recording lifecycle and normalized stop payload",
+      "priority": 1,
+      "status": "todo",
+      "details": "Wrap Cap-style instant recording behavior in a small command set that the renderer can drive without inheriting Cap's larger product surface.",
+      "steps": [
+        "Implement startRecording, pauseRecording, resumeRecording, stopRecording, cancelRecording, and getCurrentRecording",
+        "Maintain explicit native recorder state ownership",
+        "Return normalized stop metadata including final video path, file size, duration, and optional thumbnail path",
+        "Connect recorder controls in the renderer to the native lifecycle"
+      ],
+      "tags": [
+        "native",
+        "recording",
+        "lifecycle"
+      ],
+      "depends_on": [
+        "T003",
+        "T005",
+        "T007"
+      ],
+      "files": [
+        "src-tauri/src/recorder.rs",
+        "src-tauri/src/state.rs",
+        "src-tauri/src/errors.rs",
+        "src/components/RecorderControls.tsx",
+        "src/lib/tauri.ts",
+        "src-tauri/src/main.rs",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T009",
+      "title": "Implement native file upload streaming with progress and cancellation",
+      "priority": 1,
+      "status": "todo",
+      "details": "Stream the recorded local file to the presigned S3 URL from Rust so large uploads do not block the renderer and progress can be surfaced immediately.",
+      "steps": [
+        "Implement uploadFile to accept a local video path and presigned upload URL",
+        "Stream bytes in a single-part upload compatible with the current loam limit",
+        "Emit progress events the renderer can subscribe to",
+        "Implement cancellation and coherent error reporting"
+      ],
+      "tags": [
+        "native",
+        "upload",
+        "progress"
+      ],
+      "depends_on": [
+        "T003",
+        "T008"
+      ],
+      "files": [
+        "src-tauri/src/upload.rs",
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/main.rs",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T010",
+      "title": "Build the renderer upload orchestration and uploading route",
+      "priority": 1,
+      "status": "todo",
+      "details": "Coordinate prepareUpload, native uploadFile, completeUpload, and failUpload in one renderer-side flow with clear progress and guarded navigation.",
+      "steps": [
+        "Create uploadFlow as the single orchestration point",
+        "Create the uploading route and progress component",
+        "Call desktopRecorder.prepareUpload before native streaming begins",
+        "Call desktopRecorder.completeUpload on success and failUpload on error or cancellation",
+        "Prevent accidental navigation during active uploads unless the user explicitly cancels"
+      ],
+      "tags": [
+        "renderer",
+        "upload",
+        "workflow"
+      ],
+      "depends_on": [
+        "T002",
+        "T004",
+        "T008",
+        "T009"
+      ],
+      "files": [
+        "src/lib/uploadFlow.ts",
+        "src/routes/uploading.tsx",
+        "src/components/UploadProgress.tsx",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T011",
+      "title": "Implement the completion flow that defaults to share links",
+      "priority": 2,
+      "status": "todo",
+      "details": "Make the default post-upload outcome immediate by copying the share URL, exposing browser and dashboard actions, and handling processing states cleanly.",
+      "steps": [
+        "Create the complete route",
+        "Copy the returned share URL by default",
+        "Offer Open in Browser and Open Dashboard actions",
+        "Show clear processing-state messaging while playback is still being prepared"
+      ],
+      "tags": [
+        "completion",
+        "share-links",
+        "ux"
+      ],
+      "depends_on": [
+        "T010"
+      ],
+      "files": [
+        "src/routes/complete.tsx",
+        "src/lib/uploadFlow.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T012",
+      "title": "Harden common failure and recovery paths across the recorder flow",
+      "priority": 2,
+      "status": "todo",
+      "details": "Close the fragility gaps that would force users to restart the app after expected permission, device, or upload problems.",
+      "steps": [
+        "Handle screen and microphone permission denial cleanly",
+        "Handle missing microphone devices and disappearing capture targets",
+        "Handle upload cancellation and app close during upload",
+        "Enforce the documented 5 GiB file-size constraint before upload begins",
+        "Make failures recoverable without a full app restart"
+      ],
+      "tags": [
+        "hardening",
+        "errors",
+        "ux"
+      ],
+      "depends_on": [
+        "T007",
+        "T008",
+        "T009",
+        "T010",
+        "T011"
+      ],
+      "files": [
+        "src/routes/recorder.tsx",
+        "src/components/PermissionGate.tsx",
+        "src-tauri/src/recorder.rs",
+        "src-tauri/src/upload.rs",
+        "../convex/videoActions.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T013",
+      "title": "Add backend tests for the desktop recorder contract",
+      "priority": 3,
+      "status": "todo",
+      "details": "Verify that desktopRecorder prepare, complete, and fail flows preserve loam's auth, upload, share-link, and canonical URL expectations.",
+      "steps": [
+        "Add tests for prepareUpload",
+        "Add tests for completeUpload",
+        "Add tests for failUpload",
+        "Verify share URL and dashboard URL behavior under expected success paths"
+      ],
+      "tags": [
+        "testing",
+        "backend",
+        "convex"
+      ],
+      "depends_on": [
+        "T002"
+      ],
+      "files": [
+        "../convex/desktopRecorder.ts",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T014",
+      "title": "Add native smoke coverage for recording output and stop metadata",
+      "priority": 3,
+      "status": "todo",
+      "details": "Create repeatable native validation so recording output, metadata, and lifecycle regressions are caught early on macOS.",
+      "steps": [
+        "Add a smoke script or native example that records a short clip locally",
+        "Validate that the stop payload points to a file that exists",
+        "Verify duration and file metadata are populated as expected"
+      ],
+      "tags": [
+        "testing",
+        "native",
+        "recording"
+      ],
+      "depends_on": [
+        "T008"
+      ],
+      "files": [
+        "src-tauri/src/recorder.rs",
+        "src-tauri/src/state.rs",
+        "README.md",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    },
+    {
+      "id": "T015",
+      "title": "Run end-to-end manual smoke validation for the macOS record-to-share flow",
+      "priority": 2,
+      "status": "todo",
+      "details": "Validate the product as a whole rather than only individual layers so the v1 flow is proven on a real machine.",
+      "steps": [
+        "Run display recording success flow",
+        "Run window recording success flow",
+        "Run mic on and mic off flows",
+        "Run upload success, cancel, and failure flows",
+        "Run permission denied recovery flows",
+        "Verify copied share links resolve correctly even while processing"
+      ],
+      "tags": [
+        "qa",
+        "manual",
+        "e2e"
+      ],
+      "depends_on": [
+        "T011",
+        "T012",
+        "T013",
+        "T014"
+      ],
+      "files": [
+        "README.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md",
+        "ARCHITECTURE.md"
+      ]
+    },
+    {
+      "id": "T016",
+      "title": "Prepare the macOS desktop app for internal release use",
+      "priority": 3,
+      "status": "todo",
+      "details": "Finish the packaging and release-readiness work needed to use the recorder beyond local development once the core flow is stable.",
+      "steps": [
+        "Verify desktop build and packaging configuration for macOS",
+        "Confirm runtime environment variables and auth configuration are documented",
+        "Document the record-to-share workflow, known constraints, and deferred work",
+        "Ensure the app opens the right share and dashboard destinations after upload when defaults are enabled"
+      ],
+      "tags": [
+        "release",
+        "packaging",
+        "docs"
+      ],
+      "depends_on": [
+        "T015"
+      ],
+      "files": [
+        "README.md",
+        "src-tauri/tauri.conf.json",
+        "package.json",
+        "ARCHITECTURE.md",
+        "IMPLEMENTATION-PLAN.md",
+        "BACKLOG.md"
+      ]
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useUser } from "@clerk/tanstack-react-start";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
+import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +44,7 @@ export default function SharePage() {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState<string | null>(null);
   const [viewerClientId, setViewerClientId] = useState<string | null>(null);
+  const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
   const { shareInfo, videoData, comments, reactions } = useShareData({ token, grantToken });
@@ -61,6 +63,10 @@ export default function SharePage() {
   useEffect(() => {
     setViewerClientId(getOrCreateViewerClientId());
   }, []);
+
+  useEffect(() => {
+    setWatchCapKind(null);
+  }, [token]);
 
   const acquireGrant = useCallback(
     async (password?: string) => {
@@ -218,7 +224,7 @@ export default function SharePage() {
   };
 
   const { trackTime } = useWatchProgress({
-    enabled: Boolean(playbackSession?.url && videoData?.video?._id && grantToken),
+    enabled: Boolean(playbackSession?.url && videoData?.video?._id && grantToken && !watchCapKind),
     trackerKey: `${token}:${videoData?.video?._id ?? "pending"}:${grantToken ?? "pending"}`,
     getTarget: () => ({ grantToken: grantToken ?? "" }),
     getClientId: () => {
@@ -229,6 +235,11 @@ export default function SharePage() {
       return nextClientId ?? undefined;
     },
     recordWatch,
+    onCapReached: ({ usageKind }) => {
+      if (usageKind) {
+        setWatchCapKind(usageKind);
+      }
+    },
   });
 
   const handleTimeUpdate = useCallback(
@@ -447,7 +458,9 @@ export default function SharePage() {
         </div>
 
         <div className="border-2 border-[var(--border)] overflow-hidden">
-          {playbackSession?.url ? (
+          {watchCapKind ? (
+            <WatchCapNotice usageKind={watchCapKind} />
+          ) : playbackSession?.url ? (
             <Suspense fallback={playerFallback}>
               <LazyVideoPlayer
                 ref={playerRef}

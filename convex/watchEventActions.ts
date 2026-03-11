@@ -12,12 +12,14 @@ type WatchEventActionResult = {
   firstWatch: boolean;
   notificationSent: boolean;
   capReached: boolean;
+  usageKind: "member" | "shared" | null;
   consumedWatchSeconds: number;
   requestedWatchSeconds: number;
 };
 type WatchMutationResult = {
   recorded: boolean;
   capReached: boolean;
+  usageKind: "member" | "shared";
   consumedWatchSeconds: number;
   isFirstWatch: boolean;
   watchedAt: number;
@@ -229,6 +231,7 @@ export const recordWatch = action({
     firstWatch: v.boolean(),
     notificationSent: v.boolean(),
     capReached: v.boolean(),
+    usageKind: v.union(v.literal("member"), v.literal("shared"), v.null()),
     consumedWatchSeconds: v.number(),
     requestedWatchSeconds: v.number(),
   }),
@@ -255,6 +258,7 @@ export const recordWatch = action({
           firstWatch: false,
           notificationSent: false,
           capReached: false,
+          usageKind: null,
           consumedWatchSeconds: 0,
           requestedWatchSeconds,
         };
@@ -270,6 +274,7 @@ export const recordWatch = action({
           firstWatch: false,
           notificationSent: false,
           capReached: false,
+          usageKind: null,
           consumedWatchSeconds: 0,
           requestedWatchSeconds,
         };
@@ -285,6 +290,7 @@ export const recordWatch = action({
           firstWatch: false,
           notificationSent: false,
           capReached: false,
+          usageKind: null,
           consumedWatchSeconds: 0,
           requestedWatchSeconds,
         };
@@ -309,6 +315,7 @@ export const recordWatch = action({
           firstWatch: false,
           notificationSent: false,
           capReached: false,
+          usageKind: null,
           consumedWatchSeconds: 0,
           requestedWatchSeconds,
         };
@@ -330,6 +337,7 @@ export const recordWatch = action({
         firstWatch: false,
         notificationSent: false,
         capReached: false,
+        usageKind: null,
         consumedWatchSeconds: 0,
         requestedWatchSeconds,
       };
@@ -347,6 +355,7 @@ export const recordWatch = action({
           firstWatch: false,
           notificationSent: false,
           capReached: false,
+          usageKind: null,
           consumedWatchSeconds: 0,
           requestedWatchSeconds,
         };
@@ -356,13 +365,13 @@ export const recordWatch = action({
     const watchEvent: WatchMutationResult = await ctx.runMutation(
       internal.watchEvents.recordWatchEvent,
       {
-      videoId: resolvedVideoId,
-      fingerprint,
-      viewerKind,
-      viewerLabel,
-      viewerSubject: identity?.subject,
-      source,
-      watchedSeconds: requestedWatchSeconds,
+        videoId: resolvedVideoId,
+        fingerprint,
+        viewerKind,
+        viewerLabel,
+        viewerSubject: identity?.subject,
+        source,
+        watchedSeconds: requestedWatchSeconds,
       },
     );
 
@@ -372,6 +381,7 @@ export const recordWatch = action({
         firstWatch: false,
         notificationSent: false,
         capReached: watchEvent.capReached,
+        usageKind: watchEvent.usageKind,
         consumedWatchSeconds: 0,
         requestedWatchSeconds,
       };
@@ -383,6 +393,7 @@ export const recordWatch = action({
         firstWatch: false,
         notificationSent: false,
         capReached: watchEvent.capReached,
+        usageKind: watchEvent.usageKind,
         consumedWatchSeconds: watchEvent.consumedWatchSeconds,
         requestedWatchSeconds,
       };
@@ -394,6 +405,7 @@ export const recordWatch = action({
         firstWatch: true,
         notificationSent: false,
         capReached: watchEvent.capReached,
+        usageKind: watchEvent.usageKind,
         consumedWatchSeconds: watchEvent.consumedWatchSeconds,
         requestedWatchSeconds,
       };
@@ -405,6 +417,7 @@ export const recordWatch = action({
         firstWatch: true,
         notificationSent: false,
         capReached: watchEvent.capReached,
+        usageKind: watchEvent.usageKind,
         consumedWatchSeconds: watchEvent.consumedWatchSeconds,
         requestedWatchSeconds,
       };
@@ -422,6 +435,7 @@ export const recordWatch = action({
         firstWatch: true,
         notificationSent: false,
         capReached: watchEvent.capReached,
+        usageKind: watchEvent.usageKind,
         consumedWatchSeconds: watchEvent.consumedWatchSeconds,
         requestedWatchSeconds,
       };
@@ -441,6 +455,7 @@ export const recordWatch = action({
       firstWatch: true,
       notificationSent: notification.sent,
       capReached: watchEvent.capReached,
+      usageKind: watchEvent.usageKind,
       consumedWatchSeconds: watchEvent.consumedWatchSeconds,
       requestedWatchSeconds,
     };

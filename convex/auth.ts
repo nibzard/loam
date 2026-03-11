@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
@@ -48,7 +49,10 @@ export async function getUser(ctx: QueryCtx | MutationCtx) {
 export async function requireUser(ctx: QueryCtx | MutationCtx) {
   const user = await getUser(ctx);
   if (!user) {
-    throw new Error("Not authenticated");
+    throw new ConvexError({
+      code: "UNAUTHENTICATED",
+      message: "Sign in again to continue.",
+    });
   }
   return user;
 }
@@ -56,7 +60,10 @@ export async function requireUser(ctx: QueryCtx | MutationCtx) {
 export async function getIdentity(ctx: ActionCtx) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
-    throw new Error("Not authenticated");
+    throw new ConvexError({
+      code: "UNAUTHENTICATED",
+      message: "Sign in again to continue.",
+    });
   }
   return identity;
 }
@@ -85,11 +92,17 @@ export async function requireTeamAccess(
     .unique();
 
   if (!membership) {
-    throw new Error("Not a team member");
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have access to this team.",
+    });
   }
 
   if (requiredRole && ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[requiredRole]) {
-    throw new Error(`Requires ${requiredRole} role or higher`);
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: `Requires ${requiredRole} role or higher.`,
+    });
   }
 
   return { user, membership };
@@ -104,7 +117,10 @@ export async function requireProjectAccess(
 
   const project = await ctx.db.get(projectId);
   if (!project) {
-    throw new Error("Project not found");
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Project not found.",
+    });
   }
 
   const { membership } = await requireTeamAccess(ctx, project.teamId, requiredRole);
@@ -121,7 +137,10 @@ export async function requireVideoAccess(
 
   const video = await ctx.db.get(videoId);
   if (!video) {
-    throw new Error("Video not found");
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Video not found.",
+    });
   }
 
   const { membership, project } = await requireProjectAccess(ctx, video.projectId, requiredRole);

@@ -30,7 +30,10 @@ bun run typecheck:convex
 4. Use the included env templates as a starting point:
 5. `env/convex.production.env.example`
 6. `env/vercel.production.env.example`
-7. Optional readiness check from your local shell:
+7. For local CLI usage in this repo, actual environment values live in root `.env.local`.
+8. The `env/` folder contains examples only and is not auto-loaded.
+9. If you need staging/preview environment separation, follow `SETUP-STAGING.md`.
+10. Optional readiness check from your local shell:
 
 ```bash
 bun run deploy:check -- --target=all
@@ -48,7 +51,7 @@ bun run deploy:check -- --target=all
 
 1. Create a Clerk application.
 2. Copy the publishable key and secret key.
-3. Copy JWT issuer domain and set Convex auth provider domain from it.
+3. Create or open the `Convex` JWT template in Clerk and copy its Issuer URL as `CLERK_JWT_ISSUER_DOMAIN`.
 4. Add production allowed origins/redirect URLs in Clerk for your Vercel/custom domain.
 
 ## 4. Create and configure Railway object storage
@@ -58,7 +61,7 @@ bun run deploy:check -- --target=all
 3. `RAILWAY_ACCESS_KEY_ID`
 4. `RAILWAY_SECRET_ACCESS_KEY`
 5. `RAILWAY_ENDPOINT`
-6. `RAILWAY_PUBLIC_URL` (or rely on endpoint as fallback)
+6. `RAILWAY_PUBLIC_URL` (optional; if unset the app can fall back to `RAILWAY_ENDPOINT`)
 7. Optional: `RAILWAY_BUCKET_NAME`, `RAILWAY_REGION`, `RAILWAY_PUBLIC_URL_INCLUDE_BUCKET`
 
 ## 5. Create and configure Mux
@@ -85,6 +88,11 @@ bun run deploy:check -- --target=all
 10. `customer.subscription.deleted`
 11. Save webhook signing secret as `STRIPE_WEBHOOK_SECRET`.
 
+Important:
+
+- Use Stripe `price_...` IDs for `STRIPE_PRICE_BASIC_MONTHLY` and `STRIPE_PRICE_PRO_MONTHLY`.
+- Do not use Stripe `prod_...` product IDs here.
+
 ## 7. Configure Convex production environment
 
 1. Create a Convex production deployment/project.
@@ -100,7 +108,7 @@ bun run deploy:check -- --target=all
 11. `RAILWAY_ACCESS_KEY_ID`
 12. `RAILWAY_SECRET_ACCESS_KEY`
 13. `RAILWAY_ENDPOINT`
-14. `RAILWAY_PUBLIC_URL` (recommended)
+14. `RAILWAY_PUBLIC_URL` (optional)
 15. `RAILWAY_BUCKET_NAME` (optional, default `videos`)
 16. `RAILWAY_REGION` (optional, default `us-east-1`)
 17. `RAILWAY_PUBLIC_URL_INCLUDE_BUCKET` (optional)
@@ -109,11 +117,13 @@ bun run deploy:check -- --target=all
 20. Optional email notifications:
 21. `RESEND_API_KEY`
 22. `NOTIFICATION_FROM_EMAIL`
+23. Generate a production Convex deploy key and store it in Vercel as `CONVEX_DEPLOY_KEY`.
 
 Important:
 
 - If your production domain is anything other than `https://loam.video`, set both `APP_SITE_URL` and `VITE_CONVEX_SITE_URL`.
 - Billing redirect allowlists and canonical/share URLs fall back to `https://loam.video` otherwise.
+- If `CONVEX_DEPLOY_KEY` is set in your shell or root `.env.local`, the Convex CLI will target that deployment and can ignore expected default targeting. Be deliberate when running Convex commands locally.
 
 ## 8. Configure Vercel project
 
@@ -126,6 +136,7 @@ Important:
 7. `VITE_CLERK_PUBLISHABLE_KEY`
 8. `CLERK_SECRET_KEY`
 9. `VITE_CONVEX_SITE_URL` (required unless your public site is exactly `https://loam.video`)
+10. If you also use Vercel Preview for staging, do not reuse production secrets there; use the staging split described in `SETUP-STAGING.md`.
 
 Note: `build:vercel` runs:
 

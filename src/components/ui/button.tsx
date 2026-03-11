@@ -9,11 +9,11 @@ const buttonVariants = cva(
       variants: {
       variant: {
         default:
-          "bg-[var(--foreground)] text-[var(--foreground-inverse)] hover:bg-[var(--accent)] border-2 border-[var(--border)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
+          "bg-[var(--foreground)] text-[var(--background)] hover:bg-[var(--accent)] hover:text-[var(--background)] border-2 border-[var(--border)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         primary:
-          "bg-[var(--accent)] text-[var(--foreground-inverse)] hover:bg-[var(--accent-hover)] border-2 border-[var(--accent)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
+          "bg-[var(--accent)] text-[var(--background)] hover:bg-[var(--accent-hover)] hover:text-[var(--background)] border-2 border-[var(--accent)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         destructive:
-          "bg-[var(--destructive)] text-[var(--foreground-inverse)] hover:bg-[var(--destructive)] border-2 border-[var(--destructive)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
+          "bg-[var(--destructive)] text-[var(--background)] hover:bg-[var(--destructive)] hover:text-[var(--background)] border-2 border-[var(--destructive)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         outline:
           "border-2 border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface)] hover:text-[var(--foreground-inverse)] shadow-[4px_4px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[2px_2px_0px_0px_var(--shadow-color)]",
         secondary:

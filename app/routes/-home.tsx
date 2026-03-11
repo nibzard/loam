@@ -28,7 +28,7 @@ export default function Homepage() {
           <Link to="/sign-in" className="hover:text-[var(--accent)] underline-offset-4">Log in</Link>
           <Link
             to="/sign-up"
-            className={`px-4 py-2 border-2 border-[var(--border)] transition-colors hover:bg-[var(--foreground)] hover:text-[var(--foreground-inverse)]`}
+            className={`px-4 py-2 border-2 border-[var(--border)] transition-colors hover:bg-[var(--foreground)] hover:text-[var(--background)]`}
           >
             Start
           </Link>

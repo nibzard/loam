@@ -44,6 +44,7 @@ Current native status:
 
 - recording lifecycle commands are implemented
 - single-part native upload streaming is implemented with progress events and cancellation
+- macOS smoke coverage is available via `cargo run --example recording-smoke -- 3` from `src-tauri/` to validate local output and stop metadata
 
 Do not start here:
 

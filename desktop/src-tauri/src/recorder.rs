@@ -62,6 +62,16 @@ pub struct RecordingStopped {
     pub file_size_bytes: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecordingOutputValidation {
+    pub recording_dir: String,
+    pub video_path: String,
+    pub thumbnail_path: Option<String>,
+    pub duration_seconds: f64,
+    pub file_size_bytes: u64,
+}
+
 pub enum NativeRecorderSlot {
     Idle,
     Active(ActiveRecording),
@@ -259,6 +269,19 @@ pub async fn get_current_recording(
     })
 }
 
+pub async fn run_smoke_recording(
+    input: StartRecordingInput,
+    capture_duration: Duration,
+) -> Result<RecordingOutputValidation, RecorderError> {
+    ensure_recording_preconditions(&input)?;
+
+    let recording = start_platform_recording(input).await?;
+    tokio::time::sleep(capture_duration).await;
+    let stopped = stop_platform_recording(recording).await?;
+
+    validate_recording_output(&stopped)
+}
+
 #[cfg(target_os = "macos")]
 async fn start_platform_recording(input: StartRecordingInput) -> Result<ActiveRecording, RecorderError> {
     use cap_recording::{
@@ -392,18 +415,102 @@ async fn cancel_platform_recording(_recording: ActiveRecording) -> Result<(), Re
 }
 
 fn build_stopped_payload(recording: ActiveRecording) -> Result<RecordingStopped, RecorderError> {
-    let file_size_bytes = std::fs::metadata(&recording.video_path)
+    stopped_payload_from_paths(
+        &recording.recording_dir,
+        &recording.video_path,
+        recording.thumbnail_path.as_ref(),
+        recording.duration_seconds(),
+    )
+}
+
+fn stopped_payload_from_paths(
+    recording_dir: &std::path::Path,
+    video_path: &std::path::Path,
+    thumbnail_path: Option<&PathBuf>,
+    duration_seconds: Option<f64>,
+) -> Result<RecordingStopped, RecorderError> {
+    let file_size_bytes = std::fs::metadata(video_path)
         .ok()
         .map(|metadata| metadata.len());
 
     Ok(RecordingStopped {
-        recording_dir: recording.recording_dir.display().to_string(),
-        video_path: recording.video_path.display().to_string(),
-        thumbnail_path: recording
-            .thumbnail_path
-            .as_ref()
-            .map(|path| path.display().to_string()),
-        duration_seconds: recording.duration_seconds(),
+        recording_dir: recording_dir.display().to_string(),
+        video_path: video_path.display().to_string(),
+        thumbnail_path: thumbnail_path.map(|path| path.display().to_string()),
+        duration_seconds,
+        file_size_bytes,
+    })
+}
+
+pub fn validate_recording_output(
+    stopped: &RecordingStopped,
+) -> Result<RecordingOutputValidation, RecorderError> {
+    let recording_dir = PathBuf::from(&stopped.recording_dir);
+    if !recording_dir.is_dir() {
+        return Err(RecorderError::InvalidRecordingOutput(format!(
+            "recording directory does not exist: {}",
+            recording_dir.display()
+        )));
+    }
+
+    let video_path = PathBuf::from(&stopped.video_path);
+    let video_metadata = std::fs::metadata(&video_path).map_err(|_| {
+        RecorderError::InvalidRecordingOutput(format!(
+            "video file does not exist: {}",
+            video_path.display()
+        ))
+    })?;
+
+    if !video_metadata.is_file() {
+        return Err(RecorderError::InvalidRecordingOutput(format!(
+            "video path is not a file: {}",
+            video_path.display()
+        )));
+    }
+
+    let file_size_bytes = stopped.file_size_bytes.ok_or_else(|| {
+        RecorderError::InvalidRecordingOutput("stop payload is missing fileSizeBytes".to_string())
+    })?;
+
+    if file_size_bytes == 0 {
+        return Err(RecorderError::InvalidRecordingOutput(
+            "stop payload reported an empty output file".to_string(),
+        ));
+    }
+
+    if video_metadata.len() != file_size_bytes {
+        return Err(RecorderError::InvalidRecordingOutput(format!(
+            "stop payload fileSizeBytes {} did not match disk metadata {}",
+            file_size_bytes,
+            video_metadata.len()
+        )));
+    }
+
+    let duration_seconds = stopped.duration_seconds.ok_or_else(|| {
+        RecorderError::InvalidRecordingOutput("stop payload is missing durationSeconds".to_string())
+    })?;
+
+    if !duration_seconds.is_finite() || duration_seconds <= 0.0 {
+        return Err(RecorderError::InvalidRecordingOutput(format!(
+            "stop payload reported an invalid duration: {duration_seconds}"
+        )));
+    }
+
+    if let Some(thumbnail_path) = stopped.thumbnail_path.as_ref() {
+        let thumbnail_path = PathBuf::from(thumbnail_path);
+        if !thumbnail_path.is_file() {
+            return Err(RecorderError::InvalidRecordingOutput(format!(
+                "thumbnail path does not exist: {}",
+                thumbnail_path.display()
+            )));
+        }
+    }
+
+    Ok(RecordingOutputValidation {
+        recording_dir: stopped.recording_dir.clone(),
+        video_path: stopped.video_path.clone(),
+        thumbnail_path: stopped.thumbnail_path.clone(),
+        duration_seconds,
         file_size_bytes,
     })
 }
@@ -464,5 +571,111 @@ fn into_screen_capture_target(
 
             Ok(ScreenCaptureTarget::Window { id: window_id })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_nanos();
+        std::env::temp_dir().join(format!("loam-desktop-{name}-{timestamp}"))
+    }
+
+    fn sample_recording_dir(name: &str) -> PathBuf {
+        let dir = unique_test_dir(name);
+        fs::create_dir_all(dir.join("content")).expect("create test recording directory");
+        dir
+    }
+
+    #[test]
+    fn stopped_payload_populates_duration_and_file_size() {
+        let recording_dir = sample_recording_dir("payload");
+        let video_path = recording_dir.join("content").join("output.mp4");
+        fs::write(&video_path, b"video-bytes").expect("write sample video");
+        let started_at = SystemTime::now()
+            .checked_sub(Duration::from_secs(3))
+            .expect("started_at");
+        let duration_seconds = SystemTime::now()
+            .duration_since(started_at)
+            .expect("duration")
+            .as_secs_f64();
+
+        let stopped = stopped_payload_from_paths(
+            &recording_dir,
+            &video_path,
+            None,
+            Some(duration_seconds),
+        )
+        .expect("build stop payload");
+
+        assert_eq!(stopped.recording_dir, recording_dir.display().to_string());
+        assert_eq!(stopped.video_path, video_path.display().to_string());
+        assert_eq!(stopped.file_size_bytes, Some(11));
+        assert!(stopped.duration_seconds.unwrap_or_default() > 0.0);
+
+        fs::remove_dir_all(recording_dir).expect("cleanup recording dir");
+    }
+
+    #[test]
+    fn validate_recording_output_accepts_existing_video_metadata() {
+        let recording_dir = sample_recording_dir("validate-ok");
+        let video_path = recording_dir.join("content").join("output.mp4");
+        fs::write(&video_path, b"123456789").expect("write sample video");
+
+        let stopped = RecordingStopped {
+            recording_dir: recording_dir.display().to_string(),
+            video_path: video_path.display().to_string(),
+            thumbnail_path: None,
+            duration_seconds: Some(2.5),
+            file_size_bytes: Some(9),
+        };
+
+        let validated = validate_recording_output(&stopped).expect("validate output");
+
+        assert_eq!(validated.video_path, stopped.video_path);
+        assert_eq!(validated.file_size_bytes, 9);
+        assert_eq!(validated.duration_seconds, 2.5);
+
+        fs::remove_dir_all(recording_dir).expect("cleanup recording dir");
+    }
+
+    #[test]
+    fn validate_recording_output_rejects_missing_duration_or_mismatched_size() {
+        let recording_dir = sample_recording_dir("validate-bad");
+        let video_path = recording_dir.join("content").join("output.mp4");
+        fs::write(&video_path, b"1234").expect("write sample video");
+
+        let missing_duration = RecordingStopped {
+            recording_dir: recording_dir.display().to_string(),
+            video_path: video_path.display().to_string(),
+            thumbnail_path: None,
+            duration_seconds: None,
+            file_size_bytes: Some(4),
+        };
+
+        let mismatched_size = RecordingStopped {
+            duration_seconds: Some(1.0),
+            file_size_bytes: Some(10),
+            ..missing_duration.clone()
+        };
+
+        assert!(matches!(
+            validate_recording_output(&missing_duration),
+            Err(RecorderError::InvalidRecordingOutput(message))
+                if message.contains("durationSeconds")
+        ));
+        assert!(matches!(
+            validate_recording_output(&mismatched_size),
+            Err(RecorderError::InvalidRecordingOutput(message))
+                if message.contains("fileSizeBytes")
+        ));
+
+        fs::remove_dir_all(recording_dir).expect("cleanup recording dir");
     }
 }

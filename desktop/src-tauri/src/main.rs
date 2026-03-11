@@ -1,12 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod devices;
-mod errors;
-mod permissions;
-mod recorder;
-mod state;
-mod upload;
-
+use loam_desktop::{devices, permissions, recorder, state, upload};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]

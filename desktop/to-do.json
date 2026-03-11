@@ -419,19 +419,19 @@
         "T011"
       ],
       "files": [
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/recorder.rs",
+        "src-tauri/src/upload.rs",
         "src/App.tsx",
-        "src/routes/recorder.tsx",
-        "src/routes/uploading.tsx",
         "src/components/PermissionGate.tsx",
         "src/components/RecorderControls.tsx",
         "src/lib/tauri.ts",
         "src/lib/uploadFlow.ts",
-        "src-tauri/src/recorder.rs",
-        "src-tauri/src/upload.rs",
-        "src-tauri/src/errors.rs",
+        "src/routes/recorder.tsx",
+        "src/routes/uploading.tsx",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:32:01Z"
+      "updated_at": "2026-03-11T21:32:21Z"
     },
     {
       "id": "T013",
@@ -459,16 +459,17 @@
         "ARCHITECTURE.md",
         "BACKLOG.md",
         "IMPLEMENTATION-PLAN.md",
-        "README.md"
+        "README.md",
+        "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:45:00Z"
+      "updated_at": "2026-03-11T21:36:47Z"
     },
     {
       "id": "T014",
       "title": "Add native smoke coverage for recording output and stop metadata",
       "priority": 3,
-      "status": "todo",
-      "details": "Create repeatable native validation so recording output, metadata, and lifecycle regressions are caught early on macOS.",
+      "status": "done",
+      "details": "Added a macOS smoke example that records a short clip through the native recorder path, validates the stopped payload against on-disk output, and adds deterministic unit coverage for stop metadata validation.",
       "steps": [
         "Add a smoke script or native example that records a short clip locally",
         "Validate that the stop payload points to a file that exists",
@@ -483,19 +484,26 @@
         "T008"
       ],
       "files": [
+        "ARCHITECTURE.md",
+        "BACKLOG.md",
+        "IMPLEMENTATION-PLAN.md",
+        "README.md",
+        "src-tauri/Cargo.toml",
+        "src-tauri/examples/recording-smoke.rs",
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/main.rs",
         "src-tauri/src/recorder.rs",
         "src-tauri/src/state.rs",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:40:14Z"
     },
     {
       "id": "T015",
       "title": "Run end-to-end manual smoke validation for the macOS record-to-share flow",
       "priority": 2,
-      "status": "todo",
+      "status": "blocked",
       "details": "Validate the product as a whole rather than only individual layers so the v1 flow is proven on a real machine.",
       "steps": [
         "Run display recording success flow",
@@ -517,10 +525,18 @@
         "T014"
       ],
       "files": [
-        "README.md",
-        "IMPLEMENTATION-PLAN.md",
+        "ARCHITECTURE.md",
         "BACKLOG.md",
-        "ARCHITECTURE.md"
+        "IMPLEMENTATION-PLAN.md",
+        "README.md",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:33:21Z",
+      "blockers": [
+        "Manual end-to-end validation for this task requires a real macOS machine running the desktop app, but this Codex run is on Linux, so ScreenCaptureKit permissions, native recording, upload, clipboard, and browser-open behavior cannot be exercised here.",
+        "Manual end-to-end validation for this task requires a real macOS machine running the desktop app. This Codex run is on Linux (`uname -a`: Linux claude-code-vm 6.8.0-101-generic x86_64), so ScreenCaptureKit permissions, native recording, upload, clipboard, and browser-open behavior cannot be exercised without fabricating results.",
+        "Task dependencies are not satisfied in the current backlog state: `T013` (backend tests for the desktop recorder contract) and `T014` (native smoke coverage for recording output and stop metadata) are still `todo`, so the full record-to-share flow is not yet ready for a meaningful sign-off pass.",
+        "Task dependencies are not satisfied: T013 (backend tests for the desktop recorder contract) and T014 (native smoke coverage for recording output and stop metadata) are still todo, so the full record-to-share flow is not ready for a meaningful sign-off pass."
       ]
     },
     {

@@ -120,6 +120,38 @@ test("share route preload resolves password state without issuing a grant action
   );
 });
 
+test("share route preload maps each non-ready share status without issuing actions", async () => {
+  const statuses = [
+    { shareStatus: "missing" as const, expectedState: "missing" as const },
+    { shareStatus: "expired" as const, expectedState: "expired" as const },
+    { shareStatus: "processing" as const, expectedState: "processing" as const },
+    { shareStatus: "failed" as const, expectedState: "failed" as const },
+  ];
+
+  for (const { shareStatus, expectedState } of statuses) {
+    resetPrewarmDedupeForTests();
+
+    const { calls, client } = createMockClient({
+      queryImpl: async (name) => {
+        assert.equal(name, getFunctionName(api.shareLinks.getByToken));
+        return { status: shareStatus };
+      },
+    });
+
+    const result = await loadShareRouteBootstrap(client, {
+      token: `share_${shareStatus}`,
+      preload: true,
+    });
+
+    assert.deepEqual(result, { state: expectedState });
+    assert.equal(calls.action.length, 0);
+    assert.deepEqual(
+      calls.prewarm.map((call) => call.name),
+      [getFunctionName(api.shareLinks.getByToken)],
+    );
+  }
+});
+
 test("share route preload keeps ready shares in a non-mutating bootstrapping state", async () => {
   resetPrewarmDedupeForTests();
 
@@ -186,5 +218,27 @@ test("share route enter fetches bootstrap once and prewarms granted queries", as
       "shareLinks:getByToken",
       "videos:getByShareGrant",
     ],
+  );
+});
+
+test("share route enter does not prewarm grant queries when bootstrap is not ready", async () => {
+  resetPrewarmDedupeForTests();
+
+  const { calls, client } = createMockClient({
+    actionImpl: async (name) => {
+      assert.equal(name, getFunctionName(api.videoActions.getSharePlaybackBootstrap));
+      return { state: "expired" as const };
+    },
+  });
+
+  const result = await loadShareRouteBootstrap(client, {
+    token: "share_123",
+    preload: false,
+  });
+
+  assert.deepEqual(result, { state: "expired" });
+  assert.deepEqual(
+    calls.prewarm.map((call) => call.name),
+    [getFunctionName(api.shareLinks.getByToken)],
   );
 });

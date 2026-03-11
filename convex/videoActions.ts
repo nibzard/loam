@@ -27,6 +27,10 @@ import {
   SIGNED_PLAYBACK_SESSION_TTL,
   type PlaybackSession,
 } from "./playbackSessions";
+import {
+  planPublicPlaybackAccess,
+  planSignedPlaybackAccess,
+} from "./playbackAccess";
 import { BUCKET_NAME, getS3Client } from "./s3";
 import { generateOpaqueToken } from "./security";
 import { buildMuxUploadPassthrough } from "./uploadSessions";
@@ -338,9 +342,12 @@ async function ensurePublicPlaybackIdForTarget(
     publicPlaybackId = created.id;
   }
 
-  const session = buildPublicPlaybackSession(publicPlaybackId);
-  if (target.visibility === "public" && target.thumbnailUrl !== session.posterUrl) {
-    await setThumbnailUrl(ctx, target._id, session.posterUrl);
+  const plan = planPublicPlaybackAccess({
+    publicPlaybackId,
+    target,
+  });
+  if (plan.thumbnailUrl !== undefined) {
+    await setThumbnailUrl(ctx, target._id, plan.thumbnailUrl);
   }
 
   return publicPlaybackId;
@@ -356,38 +363,37 @@ async function ensureSignedPlaybackIdForTarget(
     (asset.playback_ids ?? []) as Array<{ id?: string; policy?: string }>,
   );
 
-  const signedPlaybackId = playbackIds.signedPlaybackId;
-  if (!signedPlaybackId) {
-    throw new Error("Signed playback is not configured for this video");
-  }
+  const plan = planSignedPlaybackAccess({
+    publicPlaybackIds: playbackIds.publicPlaybackIds,
+    signedPlaybackId: playbackIds.signedPlaybackId,
+    target,
+  });
 
-  if (signedPlaybackId !== target.muxPlaybackId) {
+  if (plan.muxPlaybackId !== undefined) {
     await ctx.runMutation(internal.videos.setMuxPlaybackId, {
       videoId: target._id,
-      muxPlaybackId: signedPlaybackId,
+      muxPlaybackId: plan.muxPlaybackId,
     });
   }
 
-  if (target.visibility === "private") {
-    for (const publicPlaybackId of playbackIds.publicPlaybackIds) {
-      try {
-        await deletePlaybackId(muxAssetId, publicPlaybackId);
-      } catch (error) {
-        console.error("Failed to remove stale public playback id", {
-          videoId: target._id,
-          muxAssetId,
-          publicPlaybackId,
-          error,
-        });
-      }
-    }
-
-    if (target.thumbnailUrl) {
-      await setThumbnailUrl(ctx, target._id, null);
+  for (const publicPlaybackId of plan.publicPlaybackIdsToDelete) {
+    try {
+      await deletePlaybackId(muxAssetId, publicPlaybackId);
+    } catch (error) {
+      console.error("Failed to remove stale public playback id", {
+        videoId: target._id,
+        muxAssetId,
+        publicPlaybackId,
+        error,
+      });
     }
   }
 
-  return signedPlaybackId;
+  if (plan.thumbnailUrl !== undefined) {
+    await setThumbnailUrl(ctx, target._id, plan.thumbnailUrl);
+  }
+
+  return playbackIds.signedPlaybackId as string;
 }
 
 async function buildSignedMuxPlaybackSession(

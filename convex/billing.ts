@@ -9,11 +9,10 @@ import {
   getTeamStorageUsedBytes,
   getTeamSubscriptionState,
   hasActiveTeamSubscriptionStatus,
-  normalizeStoredTeamPlan,
-  resolvePlanFromStripePriceId,
   TEAM_PLAN_MONTHLY_PRICE_USD,
   TEAM_PLAN_STORAGE_LIMIT_BYTES,
 } from "./billingHelpers";
+import { syncTeamSubscriptionFromWebhookWithCtx } from "./billingWebhookSync";
 
 const stripeClient = new StripeSubscriptions(components.stripe, {});
 const stripe = new Stripe(stripeClient.apiKey);
@@ -311,45 +310,6 @@ export const syncTeamSubscriptionFromWebhook = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const normalizedOrgId = args.orgId
-      ? ctx.db.normalizeId("teams", args.orgId)
-      : null;
-
-    let team = normalizedOrgId ? await ctx.db.get(normalizedOrgId) : null;
-
-    if (!team) {
-      team = await ctx.db
-        .query("teams")
-        .withIndex("by_stripe_subscription_id", (q) =>
-          q.eq("stripeSubscriptionId", args.stripeSubscriptionId),
-        )
-        .unique();
-    }
-
-    if (!team && args.stripeCustomerId) {
-      team = await ctx.db
-        .query("teams")
-        .withIndex("by_stripe_customer_id", (q) =>
-          q.eq("stripeCustomerId", args.stripeCustomerId),
-        )
-        .unique();
-    }
-
-    if (!team) {
-      return null;
-    }
-
-    const mappedPlan = resolvePlanFromStripePriceId(args.stripePriceId);
-    const normalizedStoredPlan = normalizeStoredTeamPlan(team.plan);
-
-    await ctx.db.patch(team._id, {
-      plan: mappedPlan ?? normalizedStoredPlan,
-      stripeCustomerId: args.stripeCustomerId ?? team.stripeCustomerId,
-      stripeSubscriptionId: args.stripeSubscriptionId,
-      stripePriceId: args.stripePriceId ?? team.stripePriceId,
-      billingStatus: args.status,
-    });
-
-    return null;
+    return await syncTeamSubscriptionFromWebhookWithCtx(ctx as never, args);
   },
 });

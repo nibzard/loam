@@ -7,6 +7,7 @@ import type {
 } from "../lib/tauri";
 import {
   cancelRecording,
+  describeDesktopError,
   pauseRecording,
   resumeRecording,
   startRecording,
@@ -27,6 +28,7 @@ type ControlsProps = {
   onRecordingChange: (recording: RecordingSnapshot | null) => void;
   onStopped?: (recording: RecordingStopped) => void;
   onErrorChange?: (error: string | null) => void;
+  onRecoverableError?: (errorCode: string) => void;
 };
 
 export function RecorderControls({
@@ -43,6 +45,7 @@ export function RecorderControls({
   onRecordingChange,
   onStopped,
   onErrorChange,
+  onRecoverableError,
 }: ControlsProps) {
   const [pending, setPending] = useState<"start" | "pause" | "resume" | "stop" | "cancel" | null>(
     null,
@@ -64,7 +67,17 @@ export function RecorderControls({
     try {
       await fn();
     } catch (nextError) {
-      onErrorChange?.(getErrorMessage(nextError));
+      const details = describeDesktopError(nextError);
+      onErrorChange?.(details.message);
+
+      if (
+        details.code === "MissingScreenPermission" ||
+        details.code === "MissingMicrophonePermission" ||
+        details.code === "MicrophoneNotFound" ||
+        details.code === "TargetNotFound"
+      ) {
+        onRecoverableError?.(details.code);
+      }
     } finally {
       setPending(null);
     }
@@ -194,15 +207,6 @@ export function RecorderControls({
     </section>
   );
 }
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  return "Unknown recorder error";
-}
-
 function formatMaybeNumber(value: number | null) {
   return value === null ? "unknown" : value.toFixed(value > 10 ? 0 : 1);
 }

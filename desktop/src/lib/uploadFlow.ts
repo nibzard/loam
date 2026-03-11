@@ -2,10 +2,14 @@ import { makeFunctionReference, type FunctionReference } from "convex/server";
 import type { Id } from "../../../convex/_generated/dataModel";
 import {
   cancelUpload,
+  describeDesktopError,
   listenToUploadProgress,
   uploadFile,
   type RecordingStopped,
 } from "./tauri";
+
+const GIBIBYTE = 1024 ** 3;
+export const MAX_DIRECT_UPLOAD_BYTES = 5 * GIBIBYTE;
 
 export type PrepareUploadArgs = {
   projectId: Id<"projects">;
@@ -122,15 +126,11 @@ export type UploadFlowController = {
 };
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Upload failed.";
+  return describeDesktopError(error).message;
 }
 
 function isCancellationError(error: unknown) {
-  return getErrorMessage(error) === "Upload cancelled";
+  return describeDesktopError(error).code === "UploadCancelled";
 }
 
 function buildInitialSnapshot(recording: RecordingStopped, title: string): UploadFlowSnapshot {
@@ -231,6 +231,14 @@ export function startUploadFlow(input: StartUploadFlowInput): UploadFlowControll
 
   const finished = (async (): Promise<UploadFlowResult> => {
     try {
+      if (totalBytes === null || totalBytes <= 0) {
+        throw new Error("Recording file size is unavailable. Stop the recording again before uploading.");
+      }
+
+      if (totalBytes > MAX_DIRECT_UPLOAD_BYTES) {
+        throw new Error("UploadTooLarge");
+      }
+
       publish({
         step: "preparing",
         statusText: "Preparing upload...",

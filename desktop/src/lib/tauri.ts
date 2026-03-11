@@ -98,6 +98,11 @@ export type UploadCompleted = {
   statusCode: number;
 };
 
+export type DesktopErrorDetails = {
+  code: string;
+  message: string;
+};
+
 type CommandMap = {
   get_shell_status: DesktopShellStatus;
   check_permissions: PermissionSnapshot;
@@ -356,4 +361,58 @@ export async function listenToUploadProgress(
   return listen<UploadProgressEvent>("upload-progress", ({ payload }) => {
     onProgress(payload);
   });
+}
+
+export function describeDesktopError(error: unknown): DesktopErrorDetails {
+  const rawMessage =
+    error instanceof Error && error.message ? error.message : "Unknown desktop error";
+  const [code, detail] = rawMessage.split(/\/(.+)/, 2);
+
+  switch (code) {
+    case "MissingScreenPermission":
+      return {
+        code,
+        message:
+          "Screen recording permission is still blocked. Grant access in system settings, then refresh targets.",
+      };
+    case "MissingMicrophonePermission":
+      return {
+        code,
+        message:
+          "Microphone access is blocked. Enable it in system settings or record with the microphone turned off.",
+      };
+    case "MicrophoneNotFound":
+      return {
+        code,
+        message:
+          "The selected microphone is no longer available. Refresh devices and choose another microphone or turn it off.",
+      };
+    case "TargetNotFound":
+      return {
+        code,
+        message:
+          "The selected display or window disappeared. Refresh targets and choose another capture target.",
+      };
+    case "UploadCancelled":
+      return {
+        code,
+        message: "Upload cancelled.",
+      };
+    case "UploadTooLarge":
+      return {
+        code,
+        message:
+          "This recording is larger than Loam's 5 GiB direct-upload limit. Keep the local file or record a shorter clip.",
+      };
+    case "UploadFailed":
+      return {
+        code,
+        message: detail ? `Upload failed: ${detail}` : "Upload failed.",
+      };
+    default:
+      return {
+        code,
+        message: rawMessage,
+      };
+  }
 }

@@ -397,7 +397,7 @@
       "id": "T012",
       "title": "Harden common failure and recovery paths across the recorder flow",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Close the fragility gaps that would force users to restart the app after expected permission, device, or upload problems.",
       "steps": [
         "Handle screen and microphone permission denial cleanly",
@@ -419,16 +419,19 @@
         "T011"
       ],
       "files": [
+        "src/App.tsx",
         "src/routes/recorder.tsx",
+        "src/routes/uploading.tsx",
         "src/components/PermissionGate.tsx",
+        "src/components/RecorderControls.tsx",
+        "src/lib/tauri.ts",
+        "src/lib/uploadFlow.ts",
         "src-tauri/src/recorder.rs",
         "src-tauri/src/upload.rs",
-        "../convex/videoActions.ts",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "src-tauri/src/errors.rs",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:32:01Z"
     },
     {
       "id": "T013",

@@ -28,6 +28,8 @@ use crate::{
 
 pub const UPLOAD_PROGRESS_EVENT: &str = "upload-progress";
 const UPLOAD_CHUNK_SIZE: usize = 1024 * 1024;
+const GIBIBYTE: u64 = 1024 * 1024 * 1024;
+const MAX_DIRECT_UPLOAD_FILE_SIZE_BYTES: u64 = 5 * GIBIBYTE;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -135,6 +137,11 @@ async fn perform_upload(
 ) -> Result<UploadCompleted, RecorderError> {
     let file = File::open(&video_path).await?;
     let total_bytes = file.metadata().await?.len();
+
+    if total_bytes > MAX_DIRECT_UPLOAD_FILE_SIZE_BYTES {
+        return Err(RecorderError::UploadTooLarge);
+    }
+
     let reader = BufReader::new(file);
     let bytes_sent = Arc::new(AtomicU64::new(0));
     let body_stream = build_upload_stream(

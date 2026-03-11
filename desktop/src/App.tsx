@@ -11,6 +11,7 @@ import {
 } from "./lib/uploadFlow";
 import {
   checkPermissions,
+  describeDesktopError,
   getCurrentRecording,
   isSystemAudioSupported,
   listCaptureDisplays,
@@ -31,6 +32,7 @@ import { RecorderRoute } from "./routes/recorder";
 import { UploadingRoute } from "./routes/uploading";
 import { deriveAppLifecycleState } from "./state/app-state";
 import {
+  resolveTarget,
   createRecorderState,
   resolvePreferredMicrophone,
   resolvePreferredProject,
@@ -174,8 +176,46 @@ function RecorderShell({
 
     setRecorderState((currentState) => {
       let nextSelection = currentState.selection;
+      let nextError = currentState.error;
 
-      if (!nextSelection.target) {
+      const resolvedSelectedTarget = resolveTarget(
+        nextSelection.target
+          ? `${nextSelection.target.kind}:${nextSelection.target.id}`
+          : "",
+        nextDisplays,
+        nextWindows,
+      );
+
+      if (resolvedSelectedTarget) {
+        nextSelection = {
+          ...nextSelection,
+          target: resolvedSelectedTarget,
+        };
+      } else if (nextSelection.target && currentState.recording === null) {
+        const defaultDisplay = nextDisplays[0];
+        const defaultWindow = nextWindows[0];
+
+        nextSelection = {
+          ...nextSelection,
+          target: defaultDisplay
+            ? {
+                kind: "display",
+                id: defaultDisplay.id,
+                name: defaultDisplay.name,
+              }
+            : defaultWindow
+              ? {
+                  kind: "window",
+                  id: defaultWindow.id,
+                  name: defaultWindow.name,
+                  ownerName: defaultWindow.ownerName,
+                }
+              : null,
+        };
+        nextError = nextSelection.target
+          ? "The previous capture target disappeared. Loam selected the next available target so you can retry immediately."
+          : "The previous capture target disappeared and no replacement target is available yet.";
+      } else if (!nextSelection.target) {
         const defaultDisplay = nextDisplays[0];
         const defaultWindow = nextWindows[0];
 
@@ -214,6 +254,9 @@ function RecorderShell({
           ...nextSelection,
           microphoneId: preferredMicrophone?.id ?? null,
         };
+        nextError = preferredMicrophone
+          ? `The previous microphone disappeared. Loam switched to ${preferredMicrophone.name}.`
+          : "The previous microphone disappeared. Recording will continue with the microphone turned off.";
       } else if (currentState.selection.microphoneId === null && preferredMicrophone) {
         nextSelection = {
           ...nextSelection,
@@ -224,6 +267,7 @@ function RecorderShell({
       return {
         ...currentState,
         recording: currentState.recording ?? current,
+        error: nextError,
         selection: nextSelection,
       };
     });
@@ -250,83 +294,12 @@ function RecorderShell({
 
         setPermissions(snapshot);
 
-        const [nextDisplays, nextWindows, nextMicrophones, current, supportsSystemAudio] =
-          await Promise.all([
-            listCaptureDisplays(),
-            listCaptureWindows(),
-            listMicrophones(),
-            getCurrentRecording(),
-            isSystemAudioSupported(),
-          ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setDisplays(nextDisplays);
-        setWindows(nextWindows);
-        setMicrophones(nextMicrophones);
-        setSystemAudioSupported(supportsSystemAudio);
-        setRecorderState((currentState) => {
-          let nextSelection = currentState.selection;
-
-          if (!nextSelection.target) {
-            const defaultDisplay = nextDisplays[0];
-            const defaultWindow = nextWindows[0];
-
-            if (defaultDisplay) {
-              nextSelection = {
-                ...nextSelection,
-                target: {
-                  kind: "display",
-                  id: defaultDisplay.id,
-                  name: defaultDisplay.name,
-                },
-              };
-            } else if (defaultWindow) {
-              nextSelection = {
-                ...nextSelection,
-                target: {
-                  kind: "window",
-                  id: defaultWindow.id,
-                  name: defaultWindow.name,
-                  ownerName: defaultWindow.ownerName,
-                },
-              };
-            }
-          }
-
-          const preferredMicrophone = resolvePreferredMicrophone(
-            nextMicrophones,
-            currentState.selection.microphoneId,
-          );
-
-          if (
-            currentState.selection.microphoneId !== null &&
-            !nextMicrophones.some((device) => device.id === currentState.selection.microphoneId)
-          ) {
-            nextSelection = {
-              ...nextSelection,
-              microphoneId: preferredMicrophone?.id ?? null,
-            };
-          } else if (currentState.selection.microphoneId === null && preferredMicrophone) {
-            nextSelection = {
-              ...nextSelection,
-              microphoneId: preferredMicrophone.id,
-            };
-          }
-
-          return {
-            ...currentState,
-            recording: currentState.recording ?? current,
-            selection: nextSelection,
-          };
-        });
+        await refreshDevices();
       } catch (error: unknown) {
         if (!cancelled) {
           setRecorderState((current) => ({
             ...current,
-            error: getErrorMessage(error),
+            error: describeDesktopError(error).message,
           }));
         }
       }
@@ -334,6 +307,43 @@ function RecorderShell({
 
     return () => {
       cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      return;
+    }
+
+    let refreshInFlight = false;
+
+    const syncEnvironment = () => {
+      if (document.visibilityState === "hidden" || refreshInFlight) {
+        return;
+      }
+
+      refreshInFlight = true;
+      void (async () => {
+        try {
+          await refreshPermissions();
+          await refreshDevices();
+        } catch (error) {
+          setRecorderState((current) => ({
+            ...current,
+            error: describeDesktopError(error).message,
+          }));
+        } finally {
+          refreshInFlight = false;
+        }
+      })();
+    };
+
+    window.addEventListener("focus", syncEnvironment);
+    document.addEventListener("visibilitychange", syncEnvironment);
+
+    return () => {
+      window.removeEventListener("focus", syncEnvironment);
+      document.removeEventListener("visibilitychange", syncEnvironment);
     };
   }, [isAuthenticated]);
 
@@ -448,7 +458,7 @@ function RecorderShell({
     } catch (error) {
       setRecorderState((current) => ({
         ...current,
-        error: getErrorMessage(error),
+        error: describeDesktopError(error).message,
       }));
     }
   }
@@ -464,7 +474,7 @@ function RecorderShell({
     } catch (error) {
       setRecorderState((current) => ({
         ...current,
-        error: getErrorMessage(error),
+        error: describeDesktopError(error).message,
       }));
     } finally {
       setPermissionActionPending(null);
@@ -478,7 +488,7 @@ function RecorderShell({
     } catch (error) {
       setRecorderState((current) => ({
         ...current,
-        error: getErrorMessage(error),
+        error: describeDesktopError(error).message,
       }));
     }
   }
@@ -490,7 +500,32 @@ function RecorderShell({
     } catch (error) {
       setRecorderState((current) => ({
         ...current,
-        error: getErrorMessage(error),
+        error: describeDesktopError(error).message,
+      }));
+    }
+  }
+
+  async function handleRecoverableRecorderError(errorCode: string) {
+    try {
+      if (
+        errorCode === "MissingScreenPermission" ||
+        errorCode === "MissingMicrophonePermission"
+      ) {
+        await refreshPermissions();
+      }
+
+      if (
+        errorCode === "MissingScreenPermission" ||
+        errorCode === "MissingMicrophonePermission" ||
+        errorCode === "MicrophoneNotFound" ||
+        errorCode === "TargetNotFound"
+      ) {
+        await refreshDevices();
+      }
+    } catch (error) {
+      setRecorderState((current) => ({
+        ...current,
+        error: describeDesktopError(error).message,
       }));
     }
   }
@@ -501,7 +536,7 @@ function RecorderShell({
         snapshot={recorderState.upload}
         navigationLocked={navigationLocked}
         onCancel={() => {
-          void handleCancelUpload();
+          return handleCancelUpload();
         }}
       />
     );
@@ -566,6 +601,9 @@ function RecorderShell({
       onRequestPermission={(permission) => {
         void handleRequestPermission(permission);
       }}
+      onRecoverableError={(errorCode) => {
+        void handleRecoverableRecorderError(errorCode);
+      }}
       onSelectionChange={(updates) => {
         setRecorderState((current) => ({
           ...current,
@@ -622,14 +660,6 @@ function RecorderShell({
 
 function formatLifecycle(state: ReturnType<typeof deriveAppLifecycleState>) {
   return state.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase());
-}
-
-function getErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Unknown desktop error";
 }
 
 function GlobalStyles() {

@@ -30,6 +30,8 @@ pub enum RecorderError {
     UploadNotInProgress,
     #[error("UploadCancelled")]
     UploadCancelled,
+    #[error("UploadTooLarge")]
+    UploadTooLarge,
     #[error("UploadFailed/{0}")]
     UploadFailed(String),
     #[error("Io/{0}")]

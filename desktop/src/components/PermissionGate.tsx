@@ -77,7 +77,7 @@ export function PermissionGate({
 
       <p className="support-copy">
         {screenReady
-          ? "Screen access is ready. You can finish the recording request below."
+          ? "Screen access is ready. You can finish the recording request below, and Loam will re-check after you come back from system settings."
           : "Grant screen access first. Microphone access can stay off if you only need system or screen capture."}
       </p>
     </section>
@@ -103,6 +103,10 @@ function PermissionCard({
 }) {
   const ready = isPermitted(status);
   const actionVerb = status === "denied" ? "Open settings" : actionLabel;
+  const recoveryCopy =
+    status === "denied"
+      ? "macOS has already denied this request once. Open system settings, grant access, then return here."
+      : detail;
 
   return (
     <article className={`permission-card${ready ? " is-ready" : ""}`}>
@@ -113,7 +117,7 @@ function PermissionCard({
         </div>
         <span className={`permission-badge permission-${status}`}>{formatStatus(status)}</span>
       </div>
-      <p>{detail}</p>
+      <p>{recoveryCopy}</p>
       <div className="button-row">
         {!ready ? (
           <button

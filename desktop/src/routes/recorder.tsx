@@ -12,6 +12,7 @@ import type {
   RecordingSnapshot,
   RecordingStopped,
 } from "../lib/tauri";
+import { MAX_DIRECT_UPLOAD_BYTES } from "../lib/uploadFlow";
 import type { RecorderSelection, UploadProject } from "../state/recorder-state";
 
 type RecorderRouteProps = {
@@ -40,6 +41,7 @@ type RecorderRouteProps = {
   onRefreshDevices: () => void;
   onSelectionChange: (updates: Partial<RecorderSelection>) => void;
   onRecordingChange: (recording: RecordingSnapshot | null) => void;
+  onRecoverableError: (errorCode: string) => void;
   onStopped: (recording: RecordingStopped) => void;
   onErrorChange: (error: string | null) => void;
   onUpdatePostUploadDefaults: (updates: {
@@ -75,6 +77,7 @@ export function RecorderRoute({
   onRefreshDevices,
   onSelectionChange,
   onRecordingChange,
+  onRecoverableError,
   onStopped,
   onErrorChange,
   onUpdatePostUploadDefaults,
@@ -83,6 +86,10 @@ export function RecorderRoute({
   const screenReady =
     permissions?.screen === "granted" || permissions?.screen === "notNeeded";
   const setupReady = screenReady && selection.target && selectedProject;
+  const fileTooLarge =
+    lastStopped?.fileSizeBytes !== null &&
+    lastStopped?.fileSizeBytes !== undefined &&
+    lastStopped.fileSizeBytes > MAX_DIRECT_UPLOAD_BYTES;
 
   return (
     <main className="layout">
@@ -235,6 +242,7 @@ export function RecorderRoute({
           microphoneId={selection.microphoneId}
           microphones={microphones}
           onErrorChange={onErrorChange}
+          onRecoverableError={onRecoverableError}
           onRecordingChange={onRecordingChange}
           onStopped={onStopped}
           recording={recording}
@@ -279,6 +287,19 @@ export function RecorderRoute({
                 value={selectedProject?.projectName ?? "Unavailable"}
                 detail={selectedProject?.teamName ?? "No uploadable project"}
               />
+              <StatusCard
+                label="File size"
+                value={
+                  lastStopped.fileSizeBytes === null
+                    ? "Unknown"
+                    : formatBytes(lastStopped.fileSizeBytes)
+                }
+                detail={
+                  fileTooLarge
+                    ? "Direct upload is blocked above 5 GiB."
+                    : "Direct upload stays within Loam's 5 GiB limit."
+                }
+              />
             </div>
             <div className="controls-grid">
               <label className="toggle">
@@ -315,13 +336,19 @@ export function RecorderRoute({
             <div className="button-row">
               <button
                 className="button button-primary"
-                disabled={!selectedProject || uploadTargets === undefined}
+                disabled={!selectedProject || uploadTargets === undefined || fileTooLarge}
                 type="button"
                 onClick={onBeginUpload}
               >
                 Upload latest recording
               </button>
             </div>
+            {fileTooLarge ? (
+              <p className="error-copy">
+                This recording is too large for Loam&apos;s current 5 GiB direct-upload
+                limit. Keep the local file or record a shorter clip before retrying.
+              </p>
+            ) : null}
             {!selectedProject && uploadTargets !== undefined ? (
               <p className="error-copy">
                 No uploadable Loam project is available for this account.
@@ -334,6 +361,19 @@ export function RecorderRoute({
       </section>
     </main>
   );
+}
+
+function formatBytes(value: number) {
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let amount = value;
+  let unitIndex = 0;
+
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${amount.toFixed(amount >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function StatusCard({

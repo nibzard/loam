@@ -132,22 +132,13 @@ pub async fn start_recording(
         }
     }
 
-    if !permissions::screen_permission_status(false).permitted() {
-        return Err(RecorderError::MissingScreenPermission.into_string());
-    }
-
-    if input.microphone_name.is_some()
-        && !matches!(
-            permissions::microphone_permission_status(),
-            PermissionStatus::Granted | PermissionStatus::NotNeeded
-        )
-    {
-        return Err(RecorderError::MissingMicrophonePermission.into_string());
-    }
+    ensure_recording_preconditions(&input)?;
 
     if input.countdown_seconds > 0 {
         tokio::time::sleep(Duration::from_secs(input.countdown_seconds)).await;
     }
+
+    ensure_recording_preconditions(&input)?;
 
     let recording = start_platform_recording(input).await.map_err(RecorderError::into_string)?;
     let snapshot = recording.snapshot();
@@ -415,6 +406,23 @@ fn build_stopped_payload(recording: ActiveRecording) -> Result<RecordingStopped,
         duration_seconds: recording.duration_seconds(),
         file_size_bytes,
     })
+}
+
+fn ensure_recording_preconditions(input: &StartRecordingInput) -> Result<(), RecorderError> {
+    if !permissions::screen_permission_status(false).permitted() {
+        return Err(RecorderError::MissingScreenPermission);
+    }
+
+    if input.microphone_name.is_some()
+        && !matches!(
+            permissions::microphone_permission_status(),
+            PermissionStatus::Granted | PermissionStatus::NotNeeded
+        )
+    {
+        return Err(RecorderError::MissingMicrophonePermission);
+    }
+
+    Ok(())
 }
 
 fn make_recording_dir() -> Result<PathBuf, RecorderError> {

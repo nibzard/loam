@@ -26,9 +26,9 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/svg+xml", href: "/grass-logo.svg?v=4" },
-      { rel: "icon", type: "image/x-icon", href: "/favicon.ico?v=4" },
-      { rel: "shortcut icon", href: "/favicon.ico?v=4" },
+      { rel: "icon", type: "image/svg+xml", href: "/grass-logo.svg?v=6" },
+      { rel: "icon", type: "image/x-icon", href: "/favicon.ico?v=6" },
+      { rel: "shortcut icon", href: "/favicon.ico?v=6" },
     ],
   }),
   component: RootComponent,

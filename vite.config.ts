@@ -17,6 +17,12 @@ export default defineConfig({
         ),
       },
       {
+        find: "use-sync-external-store/shim/index.js",
+        replacement: fileURLToPath(
+          new URL("./src/lib/use-sync-external-store-shim.ts", import.meta.url),
+        ),
+      },
+      {
         find: "use-sync-external-store/shim/with-selector",
         replacement: fileURLToPath(
           new URL(

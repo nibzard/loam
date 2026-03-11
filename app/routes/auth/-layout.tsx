@@ -19,7 +19,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="relative z-10 w-full max-w-md px-4">
         <div className="text-center mb-8">
           <Link to="/" className="inline-block">
-            <span className="text-4xl font-black text-[var(--foreground)]">loam</span>
+            <span className="text-4xl font-black text-[var(--foreground)]">loam.</span>
           </Link>
           <p className="mt-3 text-sm text-[var(--foreground-muted)]">
             Async video sharing, simplified

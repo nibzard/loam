@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AppProviders } from "@/lib/appProviders";
+import { preloadVideoPlayer } from "@/components/video-player/lazy";
+import { PublicAppProviders } from "@/lib/appProviders";
+import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
+import { convex } from "@/lib/convex";
 import { muxPreconnectLinks, seoHead } from "@/lib/seo";
+import { loadWatchRouteBootstrap } from "./-publicPlaybackLoaders";
 import WatchPage from "./-watch";
 
 export const Route = createFileRoute("/watch/$publicId")({
@@ -17,13 +21,27 @@ export const Route = createFileRoute("/watch/$publicId")({
       links: [...head.links, ...muxPreconnectLinks],
     };
   },
+  loader: async ({ params }) => {
+    preloadVideoPlayer();
+
+    const bootstrap = await loadWatchRouteBootstrap(convex, {
+      publicId: params.publicId,
+    });
+
+    if (bootstrap.state === "ready") {
+      prefetchHlsRuntime();
+      prefetchPlaybackSource(bootstrap.playbackSession.url);
+    }
+
+    return bootstrap;
+  },
   component: WatchRoute,
 });
 
 function WatchRoute() {
   return (
-    <AppProviders>
+    <PublicAppProviders>
       <WatchPage />
-    </AppProviders>
+    </PublicAppProviders>
   );
 }

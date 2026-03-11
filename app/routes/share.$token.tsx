@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AppProviders } from "@/lib/appProviders";
+import { preloadVideoPlayer } from "@/components/video-player/lazy";
+import { PublicAppProviders } from "@/lib/appProviders";
+import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
+import { convex } from "@/lib/convex";
 import { muxPreconnectLinks, seoHead } from "@/lib/seo";
+import { loadShareRouteBootstrap } from "./-publicPlaybackLoaders";
 import SharePage from "./-share";
 
 export const Route = createFileRoute("/share/$token")({
@@ -17,13 +21,28 @@ export const Route = createFileRoute("/share/$token")({
       links: [...head.links, ...muxPreconnectLinks],
     };
   },
+  loader: async ({ params, preload }) => {
+    preloadVideoPlayer();
+
+    const bootstrap = await loadShareRouteBootstrap(convex, {
+      token: params.token,
+      preload,
+    });
+
+    if (bootstrap.state === "ready") {
+      prefetchHlsRuntime();
+      prefetchPlaybackSource(bootstrap.playbackSession.url);
+    }
+
+    return bootstrap;
+  },
   component: ShareRoute,
 });
 
 function ShareRoute() {
   return (
-    <AppProviders>
+    <PublicAppProviders>
       <SharePage />
-    </AppProviders>
+    </PublicAppProviders>
   );
 }

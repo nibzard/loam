@@ -1,64 +1,81 @@
-import { useAction, useMutation } from "convex/react";
+import { useAction, useConvex, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
-import { Link, useParams } from "@tanstack/react-router";
-import { useUser } from "@clerk/tanstack-react-start";
+import { Link, useLoaderData, useParams } from "@tanstack/react-router";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Lock, Video } from "lucide-react";
+
+import { DeferredPublicAuthBridge } from "@/components/public/DeferredPublicAuthBridge";
+import { PublicDiscussionControls } from "@/components/public/PublicDiscussionControls";
+import { VideoWatchers } from "@/components/presence/VideoWatchers";
+import { summarizeReactions } from "@/components/reactions/ReactionBar";
 import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
 import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
 import { PLAYBACK_SESSION_REFRESH_LEAD_MS, type PlaybackSession } from "@/lib/playbackSession";
+import { formatDuration, formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import { useVideoPresence } from "@/lib/useVideoPresence";
-import { VideoWatchers } from "@/components/presence/VideoWatchers";
-import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
-import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
 import { useWatchProgress } from "@/lib/useWatchProgress";
-import { useShareData } from "./-share.data";
+
+import { isReadyShareBootstrap } from "./-publicPlaybackLoaders";
+import { prewarmShare, useShareData } from "./-share.data";
 
 export default function SharePage() {
   const params = useParams({ strict: false });
   const token = params.token as string;
-  const { user, isLoaded: isUserLoaded } = useUser();
+  const convex = useConvex();
+  const loaderBootstrap = useLoaderData({ from: "/share/$token" });
 
-  const issueAccessGrant = useMutation(api.shareLinks.issueAccessGrant);
   const createComment = useMutation(api.comments.createForShareGrant);
   const createReaction = useMutation(api.reactions.createForShareGrant);
+  const requestPlaybackBootstrap = useAction(api.videoActions.getSharePlaybackBootstrap);
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
   const recordWatch = useAction(api.watchEventActions.recordWatch);
 
-  const [grantToken, setGrantToken] = useState<string | null>(null);
-  const [hasAttemptedAutoGrant, setHasAttemptedAutoGrant] = useState(false);
+  const [bootstrap, setBootstrap] = useState(loaderBootstrap);
   const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState(false);
   const [isRequestingGrant, setIsRequestingGrant] = useState(false);
-  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(
+    isReadyShareBootstrap(loaderBootstrap) ? loaderBootstrap.playbackSession : null,
+  );
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
-  const [commentText, setCommentText] = useState("");
-  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-  const [commentError, setCommentError] = useState<string | null>(null);
   const [viewerClientId, setViewerClientId] = useState<string | null>(null);
   const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
-  const { shareInfo, videoData, comments, reactions } = useShareData({ token, grantToken });
+  useEffect(() => {
+    setBootstrap(loaderBootstrap);
+  }, [loaderBootstrap]);
+
+  const readyBootstrap = isReadyShareBootstrap(bootstrap) ? bootstrap : null;
+  const grantToken = readyBootstrap?.grantToken ?? null;
+
+  const { videoData: liveVideoData, comments, reactions } = useShareData({
+    token,
+    grantToken,
+  });
+  const videoData =
+    liveVideoData === undefined && readyBootstrap
+      ? readyBootstrap.videoData
+      : liveVideoData;
   const canTrackPresence = Boolean(playbackSession?.url && videoData?.video?._id);
   const { watchers } = useVideoPresence({
     videoId: videoData?.video?._id,
     enabled: canTrackPresence,
     shareGrantToken: grantToken ?? undefined,
   });
+  const signInHref = `/sign-in?redirect_url=${encodeURIComponent(`/share/${token}`)}`;
 
   useEffect(() => {
-    setGrantToken(null);
-    setHasAttemptedAutoGrant(false);
-  }, [token]);
+    setPlaybackSession(readyBootstrap?.playbackSession ?? null);
+    setPlaybackError(null);
+    setIsLoadingPlayback(false);
+  }, [readyBootstrap?.grantToken, readyBootstrap?.playbackSession]);
 
   useEffect(() => {
     setViewerClientId(getOrCreateViewerClientId());
@@ -67,69 +84,6 @@ export default function SharePage() {
   useEffect(() => {
     setWatchCapKind(null);
   }, [token]);
-
-  const acquireGrant = useCallback(
-    async (password?: string) => {
-      if (isRequestingGrant) return;
-      setIsRequestingGrant(true);
-      setPasswordError(false);
-
-      try {
-        const result = await issueAccessGrant({ token, password });
-        if (result.ok && result.grantToken) {
-          setGrantToken(result.grantToken);
-          return true;
-        }
-
-        setPasswordError(Boolean(password));
-        return false;
-      } catch {
-        setPasswordError(Boolean(password));
-        return false;
-      } finally {
-        setIsRequestingGrant(false);
-      }
-    },
-    [isRequestingGrant, issueAccessGrant, token],
-  );
-
-  useEffect(() => {
-    if (!shareInfo || grantToken) return;
-    if (shareInfo.status !== "ok" || hasAttemptedAutoGrant) return;
-
-    setHasAttemptedAutoGrant(true);
-    void acquireGrant();
-  }, [acquireGrant, grantToken, hasAttemptedAutoGrant, shareInfo]);
-
-  useEffect(() => {
-    if (!grantToken) {
-      setPlaybackSession(null);
-      setPlaybackError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoadingPlayback(true);
-    setPlaybackError(null);
-
-    void getPlaybackSession({ grantToken })
-      .then((session) => {
-        if (cancelled) return;
-        setPlaybackSession(session);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setPlaybackError("Unable to load playback session.");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsLoadingPlayback(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [getPlaybackSession, grantToken]);
 
   useEffect(() => {
     if (!videoData?.video?._id) return;
@@ -203,26 +157,6 @@ export default function SharePage() {
     return markers;
   }, [comments]);
 
-  const handleSubmitComment = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!grantToken || !commentText.trim() || isSubmittingComment) return;
-
-    setIsSubmittingComment(true);
-    setCommentError(null);
-    try {
-      await createComment({
-        grantToken,
-        text: commentText.trim(),
-        timestampSeconds: currentTime,
-      });
-      setCommentText("");
-    } catch {
-      setCommentError("Failed to post comment.");
-    } finally {
-      setIsSubmittingComment(false);
-    }
-  };
-
   const { trackTime } = useWatchProgress({
     enabled: Boolean(playbackSession?.url && videoData?.video?._id && grantToken && !watchCapKind),
     trackerKey: `${token}:${videoData?.video?._id ?? "pending"}:${grantToken ?? "pending"}`,
@@ -255,31 +189,62 @@ export default function SharePage() {
     [reactions],
   );
 
-  const canReact = Boolean(isUserLoaded && user && grantToken);
+  const handleSubmitComment = useCallback(
+    async ({ text, timestampSeconds }: { text: string; timestampSeconds: number }) => {
+      if (!grantToken) {
+        throw new Error("Missing share grant token");
+      }
+
+      await createComment({
+        grantToken,
+        text,
+        timestampSeconds,
+      });
+    },
+    [createComment, grantToken],
+  );
 
   const handleAddReaction = useCallback(
     async (emoji: "👍" | "❤️" | "😂" | "🎉" | "😮" | "🔥") => {
-      if (!canReact || !grantToken) return;
-      try {
-        await createReaction({
-          grantToken,
-          emoji,
-          timestampSeconds: currentTime,
-        });
-      } catch (error) {
-        console.error("Failed to post reaction:", error);
+      if (!grantToken) {
+        throw new Error("Missing share grant token");
       }
+
+      await createReaction({
+        grantToken,
+        emoji,
+        timestampSeconds: currentTime,
+      });
     },
-    [canReact, createReaction, currentTime, grantToken],
+    [createReaction, currentTime, grantToken],
   );
 
-  const isBootstrappingShare =
-    shareInfo === undefined ||
-    (shareInfo?.status === "ok" &&
-      ((!grantToken && (!hasAttemptedAutoGrant || isRequestingGrant)) ||
-        (Boolean(grantToken) && videoData === undefined)));
+  const handleAcquireGrant = useCallback(
+    async (password?: string) => {
+      if (isRequestingGrant) return;
 
-  if (isBootstrappingShare) {
+      setIsRequestingGrant(true);
+      try {
+        const nextBootstrap = await requestPlaybackBootstrap({ token, password });
+        setBootstrap(nextBootstrap);
+
+        if (isReadyShareBootstrap(nextBootstrap)) {
+          setPasswordInput("");
+          prewarmShare(convex, {
+            token,
+            grantToken: nextBootstrap.grantToken,
+          });
+          prefetchHlsRuntime();
+          prefetchPlaybackSource(nextBootstrap.playbackSession.url);
+        }
+      } finally {
+        setIsRequestingGrant(false);
+      }
+    },
+    [convex, isRequestingGrant, requestPlaybackBootstrap, token],
+  );
+
+  if (bootstrap.state === "bootstrapping") {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="text-[var(--foreground-muted)]">Opening shared video...</div>
@@ -287,7 +252,7 @@ export default function SharePage() {
     );
   }
 
-  if (shareInfo.status === "missing" || shareInfo.status === "expired") {
+  if (bootstrap.state === "missing" || bootstrap.state === "expired") {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -312,7 +277,7 @@ export default function SharePage() {
     );
   }
 
-  if (shareInfo.status === "processing") {
+  if (bootstrap.state === "processing") {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -331,7 +296,7 @@ export default function SharePage() {
     );
   }
 
-  if (shareInfo.status === "failed") {
+  if (bootstrap.state === "failed") {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -349,7 +314,7 @@ export default function SharePage() {
     );
   }
 
-  if (shareInfo.status === "requiresPassword" && !grantToken) {
+  if (bootstrap.state === "passwordRequired" || bootstrap.state === "passwordRejected") {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <Card className="max-w-md w-full">
@@ -364,9 +329,9 @@ export default function SharePage() {
           </CardHeader>
           <CardContent>
             <form
-              onSubmit={async (event) => {
+              onSubmit={(event) => {
                 event.preventDefault();
-                await acquireGrant(passwordInput);
+                void handleAcquireGrant(passwordInput);
               }}
               className="space-y-4"
             >
@@ -377,9 +342,9 @@ export default function SharePage() {
                 onChange={(event) => setPasswordInput(event.target.value)}
                 autoFocus
               />
-              {passwordError && (
+              {bootstrap.state === "passwordRejected" ? (
                 <p className="text-sm text-[var(--destructive)]">Incorrect password</p>
-              )}
+              ) : null}
               <Button type="submit" className="w-full" disabled={!passwordInput || isRequestingGrant}>
                 {isRequestingGrant ? "Verifying..." : "View video"}
               </Button>
@@ -431,148 +396,124 @@ export default function SharePage() {
   );
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
-      <header className="bg-[var(--background)] border-b-2 border-[var(--border)] px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <Link
-            preload="intent"
-            to="/"
-            className="text-[var(--foreground-muted)] hover:text-[var(--foreground)] text-sm flex items-center gap-2 font-bold"
-          >
-            loam
-          </Link>
-        </div>
-      </header>
+    <>
+      <DeferredPublicAuthBridge enabled={Boolean(playbackSession?.url)} />
 
-      <main className="max-w-6xl mx-auto p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-black text-[var(--foreground)]">{video.title}</h1>
-          {video.description && (
-            <p className="text-[var(--foreground-muted)] mt-1">{video.description}</p>
-          )}
-          <div className="flex items-center gap-4 mt-2 text-sm text-[var(--foreground-muted)]">
-            {video.duration && <span className="font-mono">{formatDuration(video.duration)}</span>}
-            {comments && <span>{comments.length} threads</span>}
-            <VideoWatchers watchers={watchers} className="ml-auto" />
-          </div>
-        </div>
-
-        <div className="border-2 border-[var(--border)] overflow-hidden">
-          {watchCapKind ? (
-            <WatchCapNotice usageKind={watchCapKind} />
-          ) : playbackSession?.url ? (
-            <Suspense fallback={playerFallback}>
-              <LazyVideoPlayer
-                ref={playerRef}
-                src={playbackSession.url}
-                poster={playbackSession.posterUrl}
-                comments={flattenedComments}
-                onTimeUpdate={handleTimeUpdate}
-                allowDownload={false}
-              />
-            </Suspense>
-          ) : (
-            playerFallback
-          )}
-        </div>
-
-        <section className="border-2 border-[var(--border)] bg-[var(--surface-alt)] p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-black text-[var(--foreground)]">Comments</h2>
-            <span className="text-xs text-[var(--foreground-muted)] font-mono">{formatTimestamp(currentTime)}</span>
-          </div>
-
-          <ReactionBar
-            counts={reactionSummary}
-            onReact={handleAddReaction}
-            disabled={!canReact}
-          />
-
-          {isUserLoaded && user ? (
-            <form onSubmit={handleSubmitComment} className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-[var(--foreground-subtle)]">
-                <Clock className="h-3.5 w-3.5" />
-                Comment at {formatTimestamp(currentTime)}
-              </div>
-              <Textarea
-                value={commentText}
-                onChange={(event) => setCommentText(event.target.value)}
-                placeholder="Leave a comment..."
-                className="min-h-[90px]"
-              />
-              {commentError ? <p className="text-xs text-[var(--destructive)]">{commentError}</p> : null}
-              <Button type="submit" disabled={!commentText.trim() || isSubmittingComment}>
-                <MessageSquare className="mr-1.5 h-4 w-4" />
-                {isSubmittingComment ? "Posting..." : "Post comment"}
-              </Button>
-            </form>
-          ) : (
-            <a
-              href={`/sign-in?redirect_url=${encodeURIComponent(`/share/${token}`)}`}
-              className="inline-flex"
+      <div className="min-h-screen bg-[var(--background)]">
+        <header className="bg-[var(--background)] border-b-2 border-[var(--border)] px-6 py-4">
+          <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <Link
+              preload="intent"
+              to="/"
+              className="text-[var(--foreground-muted)] hover:text-[var(--foreground)] text-sm flex items-center gap-2 font-bold"
             >
-              <Button>
-                <MessageSquare className="mr-1.5 h-4 w-4" />
-                Sign in to comment
-              </Button>
-            </a>
-          )}
+              loam
+            </Link>
+          </div>
+        </header>
 
-          {comments === undefined ? (
-            <p className="text-sm text-[var(--foreground-muted)]">Loading comments...</p>
-          ) : comments.length === 0 ? (
-            <p className="text-sm text-[var(--foreground-muted)]">No comments yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {comments.map((comment) => (
-                <article key={comment._id} className="border-2 border-[var(--border)] bg-[var(--background)] p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-bold text-[var(--foreground)]">{comment.userName}</div>
-                    <button
-                      type="button"
-                      className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
-                      onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
-                    >
-                      {formatTimestamp(comment.timestampSeconds)}
-                    </button>
-                  </div>
-                  <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap">{comment.text}</p>
-                  <p className="text-[11px] text-[var(--foreground-muted)] mt-1">{formatRelativeTime(comment._creationTime)}</p>
-
-                  {comment.replies.length > 0 ? (
-                    <div className="mt-3 ml-4 border-l-2 border-[var(--border)] pl-3 space-y-2">
-                      {comment.replies.map((reply) => (
-                        <div key={reply._id} className="text-sm">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-bold text-[var(--foreground)]">{reply.userName}</span>
-                            <button
-                              type="button"
-                              className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
-                              onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
-                            >
-                              {formatTimestamp(reply.timestampSeconds)}
-                            </button>
-                          </div>
-                          <p className="text-[var(--foreground)] whitespace-pre-wrap">{reply.text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-              ))}
+        <main className="max-w-6xl mx-auto p-6 space-y-6">
+          <div>
+            <h1 className="text-2xl font-black text-[var(--foreground)]">{video.title}</h1>
+            {video.description ? (
+              <p className="text-[var(--foreground-muted)] mt-1">{video.description}</p>
+            ) : null}
+            <div className="flex items-center gap-4 mt-2 text-sm text-[var(--foreground-muted)]">
+              {video.duration ? <span className="font-mono">{formatDuration(video.duration)}</span> : null}
+              {comments ? <span>{comments.length} threads</span> : null}
+              <VideoWatchers watchers={watchers} className="ml-auto" />
             </div>
-          )}
-        </section>
-      </main>
+          </div>
 
-      <footer className="border-t-2 border-[var(--border)] px-6 py-4 mt-8">
-        <div className="max-w-6xl mx-auto text-center text-sm text-[var(--foreground-muted)]">
-          Shared via{" "}
-          <Link to="/" preload="intent" className="text-[var(--foreground)] hover:text-[var(--accent)] font-bold">
-            loam
-          </Link>
-        </div>
-      </footer>
-    </div>
+          <div className="border-2 border-[var(--border)] overflow-hidden">
+            {watchCapKind ? (
+              <WatchCapNotice usageKind={watchCapKind} />
+            ) : playbackSession?.url ? (
+              <Suspense fallback={playerFallback}>
+                <LazyVideoPlayer
+                  ref={playerRef}
+                  src={playbackSession.url}
+                  poster={playbackSession.posterUrl}
+                  comments={flattenedComments}
+                  onTimeUpdate={handleTimeUpdate}
+                  allowDownload={false}
+                />
+              </Suspense>
+            ) : (
+              playerFallback
+            )}
+          </div>
+
+          <section className="border-2 border-[var(--border)] bg-[var(--surface-alt)] p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-black text-[var(--foreground)]">Comments</h2>
+              <span className="text-xs text-[var(--foreground-muted)] font-mono">{formatTimestamp(currentTime)}</span>
+            </div>
+
+            <PublicDiscussionControls
+              counts={reactionSummary}
+              currentTime={currentTime}
+              onReact={handleAddReaction}
+              onSubmitComment={handleSubmitComment}
+              signInHref={signInHref}
+            />
+
+            {comments === undefined ? (
+              <p className="text-sm text-[var(--foreground-muted)]">Loading comments...</p>
+            ) : comments.length === 0 ? (
+              <p className="text-sm text-[var(--foreground-muted)]">No comments yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((comment) => (
+                  <article key={comment._id} className="border-2 border-[var(--border)] bg-[var(--background)] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-sm font-bold text-[var(--foreground)]">{comment.userName}</div>
+                      <button
+                        type="button"
+                        className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
+                        onClick={() => playerRef.current?.seekTo(comment.timestampSeconds, { play: true })}
+                      >
+                        {formatTimestamp(comment.timestampSeconds)}
+                      </button>
+                    </div>
+                    <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap">{comment.text}</p>
+                    <p className="text-[11px] text-[var(--foreground-muted)] mt-1">{formatRelativeTime(comment._creationTime)}</p>
+
+                    {comment.replies.length > 0 ? (
+                      <div className="mt-3 ml-4 border-l-2 border-[var(--border)] pl-3 space-y-2">
+                        {comment.replies.map((reply) => (
+                          <div key={reply._id} className="text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-bold text-[var(--foreground)]">{reply.userName}</span>
+                              <button
+                                type="button"
+                                className="font-mono text-xs text-[var(--accent)] hover:text-[var(--foreground)]"
+                                onClick={() => playerRef.current?.seekTo(reply.timestampSeconds, { play: true })}
+                              >
+                                {formatTimestamp(reply.timestampSeconds)}
+                              </button>
+                            </div>
+                            <p className="text-[var(--foreground)] whitespace-pre-wrap">{reply.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </main>
+
+        <footer className="border-t-2 border-[var(--border)] px-6 py-4 mt-8">
+          <div className="max-w-6xl mx-auto text-center text-sm text-[var(--foreground-muted)]">
+            Shared via{" "}
+            <Link to="/" preload="intent" className="text-[var(--foreground)] hover:text-[var(--accent)] font-bold">
+              loam
+            </Link>
+          </div>
+        </footer>
+      </div>
+    </>
   );
 }

@@ -1,141 +1,61 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type {
-  CaptureDisplay,
-  CaptureWindow,
+  CaptureTarget,
   MicrophoneDevice,
   RecordingSnapshot,
   RecordingStopped,
 } from "../lib/tauri";
 import {
   cancelRecording,
-  getCurrentRecording,
-  isSystemAudioSupported,
-  listCaptureDisplays,
-  listCaptureWindows,
-  listMicrophones,
   pauseRecording,
   resumeRecording,
   startRecording,
   stopRecording,
 } from "../lib/tauri";
-import { resolvePreferredMicrophone, resolveTarget, type RecorderSelection } from "../state/recorder-state";
 
 type ControlsProps = {
-  shellReady: boolean;
-  selection: RecorderSelection;
+  target: CaptureTarget | null;
+  microphoneId: string | null;
+  microphones: MicrophoneDevice[];
+  countdownSeconds: number;
+  captureSystemAudio: boolean;
+  systemAudioSupported: boolean;
   recording: RecordingSnapshot | null;
   lastStopped: RecordingStopped | null;
   error: string | null;
-  onSelectionChange: (updates: Partial<RecorderSelection>) => void;
+  selectedProjectName: string | null;
   onRecordingChange: (recording: RecordingSnapshot | null) => void;
   onStopped?: (recording: RecordingStopped) => void;
   onErrorChange?: (error: string | null) => void;
 };
 
 export function RecorderControls({
-  shellReady,
-  selection,
+  target,
+  microphoneId,
+  microphones,
+  countdownSeconds,
+  captureSystemAudio,
+  systemAudioSupported,
   recording,
   lastStopped,
   error,
-  onSelectionChange,
+  selectedProjectName,
   onRecordingChange,
   onStopped,
   onErrorChange,
 }: ControlsProps) {
-  const [displays, setDisplays] = useState<CaptureDisplay[]>([]);
-  const [windows, setWindows] = useState<CaptureWindow[]>([]);
-  const [microphones, setMicrophones] = useState<MicrophoneDevice[]>([]);
-  const [systemAudioSupported, setSystemAudioSupported] = useState(false);
-  const [pending, setPending] = useState<"start" | "pause" | "resume" | "stop" | "cancel" | null>(null);
-
-  useEffect(() => {
-    if (!shellReady) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function hydrate() {
-      try {
-        const [nextDisplays, nextWindows, nextMicrophones, current, supportsSystemAudio] =
-          await Promise.all([
-            listCaptureDisplays(),
-            listCaptureWindows(),
-            listMicrophones(),
-            getCurrentRecording(),
-            isSystemAudioSupported(),
-          ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setDisplays(nextDisplays);
-        setWindows(nextWindows);
-        setMicrophones(nextMicrophones);
-        onRecordingChange(current);
-        setSystemAudioSupported(supportsSystemAudio);
-
-        if (!selection.target) {
-          const defaultDisplay = nextDisplays[0];
-          const defaultWindow = nextWindows[0];
-          if (defaultDisplay) {
-            onSelectionChange({
-              target: {
-                kind: "display",
-                id: defaultDisplay.id,
-                name: defaultDisplay.name,
-              },
-            });
-          } else if (defaultWindow) {
-            onSelectionChange({
-              target: {
-                kind: "window",
-                id: defaultWindow.id,
-                name: defaultWindow.name,
-                ownerName: defaultWindow.ownerName,
-              },
-            });
-          }
-        }
-
-        if (selection.microphoneId === null) {
-          const defaultMicrophone = resolvePreferredMicrophone(
-            nextMicrophones,
-            selection.microphoneId,
-          );
-          if (defaultMicrophone) {
-            onSelectionChange({ microphoneId: defaultMicrophone.id });
-          }
-        }
-      } catch (nextError) {
-        if (!cancelled) {
-          onErrorChange?.(getErrorMessage(nextError));
-        }
-      }
-    }
-
-    void hydrate();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    onErrorChange,
-    onRecordingChange,
-    onSelectionChange,
-    selection.microphoneId,
-    selection.target,
-    shellReady,
-  ]);
-
-  const selectedTarget = resolveTarget(
-    selection.target ? `${selection.target.kind}:${selection.target.id}` : "",
-    displays,
-    windows,
+  const [pending, setPending] = useState<"start" | "pause" | "resume" | "stop" | "cancel" | null>(
+    null,
   );
-  const canStart = shellReady && selectedTarget !== null && pending === null && recording === null;
+  const selectedMicrophone =
+    microphoneId === null
+      ? null
+      : microphones.find((device) => device.id === microphoneId) ?? null;
+  const canStart =
+    target !== null &&
+    selectedProjectName !== null &&
+    pending === null &&
+    recording === null;
 
   async function run(action: typeof pending, fn: () => Promise<void>) {
     setPending(action);
@@ -163,97 +83,31 @@ export function RecorderControls({
         </div>
       </div>
 
-      <div className="controls-grid">
-        <label className="field">
-          <span>Target</span>
-          <select
-            disabled={!shellReady || recording !== null}
-            value={selection.target ? `${selection.target.kind}:${selection.target.id}` : ""}
-            onChange={(event) =>
-              onSelectionChange({
-                target: resolveTarget(event.target.value, displays, windows),
-              })
-            }
-          >
-            <option value="">Select a target</option>
-            {displays.map((display) => (
-              <option key={`display:${display.id}`} value={`display:${display.id}`}>
-                {display.name}
-              </option>
-            ))}
-            {windows.map((window) => (
-              <option key={`window:${window.id}`} value={`window:${window.id}`}>
-                {window.ownerName} - {window.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Microphone</span>
-          <select
-            disabled={!shellReady || recording !== null}
-            value={selection.microphoneId ?? "none"}
-            onChange={(event) =>
-              onSelectionChange({
-                microphoneId: event.target.value === "none" ? null : event.target.value,
-              })
-            }
-          >
-            <option value="none">No microphone</option>
-            {microphones.map((device) => (
-              <option key={device.id} value={device.id}>
-                {device.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field">
-          <span>Countdown</span>
-          <input
-            disabled={!shellReady || recording !== null}
-            type="number"
-            min={0}
-            max={10}
-            value={selection.countdownSeconds}
-            onChange={(event) =>
-              onSelectionChange({
-                countdownSeconds: Number(event.target.value) || 0,
-              })
-            }
-          />
-        </label>
-
-        <label className="toggle">
-          <input
-            checked={selection.captureSystemAudio}
-            disabled={!systemAudioSupported || recording !== null}
-            type="checkbox"
-            onChange={(event) =>
-              onSelectionChange({
-                captureSystemAudio: event.target.checked,
-              })
-            }
-          />
-          <span>
-            System audio
-            <small>{systemAudioSupported ? "Supported on this platform" : "Unavailable here"}</small>
-          </span>
-        </label>
+      <div className="recording-summary">
+        <strong>Ready check</strong>
+        <p>
+          Target: {target ? target.name : "Choose a display or window"} · Project:{" "}
+          {selectedProjectName ?? "Choose a Loam project"}
+        </p>
+        <p>
+          Microphone: {selectedMicrophone?.name ?? "Off"} · System audio:{" "}
+          {captureSystemAudio && systemAudioSupported ? "On" : "Off"} · Countdown:{" "}
+          {countdownSeconds}s
+        </p>
       </div>
 
       <div className="button-row">
         <button
           className="button button-primary"
           disabled={!canStart}
+          type="button"
           onClick={() =>
             run("start", async () => {
               const started = await startRecording({
-                target: selectedTarget!,
-                microphoneName: selection.microphoneId,
-                captureSystemAudio: selection.captureSystemAudio,
-                countdownSeconds: selection.countdownSeconds,
+                target: target!,
+                microphoneName: selectedMicrophone?.name ?? null,
+                captureSystemAudio,
+                countdownSeconds,
               });
               onRecordingChange(started);
             })
@@ -265,6 +119,7 @@ export function RecorderControls({
         <button
           className="button"
           disabled={recording?.phase !== "recording" || pending !== null}
+          type="button"
           onClick={() =>
             run("pause", async () => {
               onRecordingChange(await pauseRecording());
@@ -277,6 +132,7 @@ export function RecorderControls({
         <button
           className="button"
           disabled={recording?.phase !== "paused" || pending !== null}
+          type="button"
           onClick={() =>
             run("resume", async () => {
               onRecordingChange(await resumeRecording());
@@ -289,6 +145,7 @@ export function RecorderControls({
         <button
           className="button button-primary"
           disabled={recording === null || pending !== null}
+          type="button"
           onClick={() =>
             run("stop", async () => {
               const stopped = await stopRecording();
@@ -303,6 +160,7 @@ export function RecorderControls({
         <button
           className="button button-danger"
           disabled={recording === null || pending !== null}
+          type="button"
           onClick={() =>
             run("cancel", async () => {
               await cancelRecording();

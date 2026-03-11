@@ -2,10 +2,36 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { RecorderControls } from "./components/RecorderControls";
+import {
+  completeUploadAction,
+  failUploadAction,
+  prepareUploadAction,
+  startUploadFlow,
+  type UploadFlowController,
+} from "./lib/uploadFlow";
+import {
+  checkPermissions,
+  getCurrentRecording,
+  isSystemAudioSupported,
+  listCaptureDisplays,
+  listCaptureWindows,
+  listMicrophones,
+  openPermissionSettings,
+  requestPermission,
+  type CaptureDisplay,
+  type CaptureWindow,
+  type MicrophoneDevice,
+  type PermissionKind,
+  type PermissionSnapshot,
+} from "./lib/tauri";
+import { navigateTo, readRoute, type DesktopRoute } from "./lib/routes";
+import { LoginRoute } from "./routes/login";
+import { RecorderRoute } from "./routes/recorder";
+import { UploadingRoute } from "./routes/uploading";
 import { deriveAppLifecycleState } from "./state/app-state";
 import {
   createRecorderState,
+  resolvePreferredMicrophone,
   resolvePreferredProject,
   type RecorderSelection,
   type UploadProject,
@@ -14,21 +40,7 @@ import {
   updateUserDefaults,
   usePersistentUserDefaults,
 } from "./state/settings-state";
-import {
-  completeUploadAction,
-  failUploadAction,
-  prepareUploadAction,
-  startUploadFlow,
-  type UploadFlowController,
-} from "./lib/uploadFlow";
-import { checkPermissions, type PermissionSnapshot } from "./lib/tauri";
-import { LoginRoute } from "./routes/login";
-import { UploadingRoute } from "./routes/uploading";
 
-type DesktopRoute = "recorder" | "uploading";
-
-const RECORDER_PATH = "/";
-const UPLOADING_PATH = "/uploading";
 const RUNNING_UPLOAD_STEPS = new Set([
   "preparing",
   "uploading",
@@ -98,6 +110,12 @@ function RecorderShell({
   const completeUpload = useAction(completeUploadAction);
   const failUpload = useAction(failUploadAction);
   const [permissions, setPermissions] = useState<PermissionSnapshot | null>(null);
+  const [displays, setDisplays] = useState<CaptureDisplay[]>([]);
+  const [windows, setWindows] = useState<CaptureWindow[]>([]);
+  const [microphones, setMicrophones] = useState<MicrophoneDevice[]>([]);
+  const [systemAudioSupported, setSystemAudioSupported] = useState(false);
+  const [permissionActionPending, setPermissionActionPending] =
+    useState<PermissionKind | null>(null);
   const [recorderState, setRecorderState] = useState(() =>
     createRecorderState({
       projectId: null,
@@ -132,28 +150,186 @@ function RecorderShell({
       ? "Authenticated"
       : "Waiting for auth";
 
+  async function refreshPermissions(initialCheck = false) {
+    const snapshot = await checkPermissions(initialCheck);
+    setPermissions(snapshot);
+    return snapshot;
+  }
+
+  async function refreshDevices() {
+    const [nextDisplays, nextWindows, nextMicrophones, current, supportsSystemAudio] =
+      await Promise.all([
+        listCaptureDisplays(),
+        listCaptureWindows(),
+        listMicrophones(),
+        getCurrentRecording(),
+        isSystemAudioSupported(),
+      ]);
+
+    setDisplays(nextDisplays);
+    setWindows(nextWindows);
+    setMicrophones(nextMicrophones);
+    setSystemAudioSupported(supportsSystemAudio);
+
+    setRecorderState((currentState) => {
+      let nextSelection = currentState.selection;
+
+      if (!nextSelection.target) {
+        const defaultDisplay = nextDisplays[0];
+        const defaultWindow = nextWindows[0];
+
+        if (defaultDisplay) {
+          nextSelection = {
+            ...nextSelection,
+            target: {
+              kind: "display",
+              id: defaultDisplay.id,
+              name: defaultDisplay.name,
+            },
+          };
+        } else if (defaultWindow) {
+          nextSelection = {
+            ...nextSelection,
+            target: {
+              kind: "window",
+              id: defaultWindow.id,
+              name: defaultWindow.name,
+              ownerName: defaultWindow.ownerName,
+            },
+          };
+        }
+      }
+
+      const preferredMicrophone = resolvePreferredMicrophone(
+        nextMicrophones,
+        currentState.selection.microphoneId,
+      );
+
+      if (
+        currentState.selection.microphoneId !== null &&
+        !nextMicrophones.some((device) => device.id === currentState.selection.microphoneId)
+      ) {
+        nextSelection = {
+          ...nextSelection,
+          microphoneId: preferredMicrophone?.id ?? null,
+        };
+      } else if (currentState.selection.microphoneId === null && preferredMicrophone) {
+        nextSelection = {
+          ...nextSelection,
+          microphoneId: preferredMicrophone.id,
+        };
+      }
+
+      return {
+        ...currentState,
+        recording: currentState.recording ?? current,
+        selection: nextSelection,
+      };
+    });
+  }
+
   useEffect(() => {
     if (!isAuthenticated) {
       setPermissions(null);
+      setDisplays([]);
+      setWindows([]);
+      setMicrophones([]);
+      setSystemAudioSupported(false);
       return;
     }
 
     let cancelled = false;
 
-    void checkPermissions(true)
-      .then((snapshot) => {
-        if (!cancelled) {
-          setPermissions(snapshot);
+    void (async () => {
+      try {
+        const snapshot = await checkPermissions(true);
+        if (cancelled) {
+          return;
         }
-      })
-      .catch((error: unknown) => {
+
+        setPermissions(snapshot);
+
+        const [nextDisplays, nextWindows, nextMicrophones, current, supportsSystemAudio] =
+          await Promise.all([
+            listCaptureDisplays(),
+            listCaptureWindows(),
+            listMicrophones(),
+            getCurrentRecording(),
+            isSystemAudioSupported(),
+          ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setDisplays(nextDisplays);
+        setWindows(nextWindows);
+        setMicrophones(nextMicrophones);
+        setSystemAudioSupported(supportsSystemAudio);
+        setRecorderState((currentState) => {
+          let nextSelection = currentState.selection;
+
+          if (!nextSelection.target) {
+            const defaultDisplay = nextDisplays[0];
+            const defaultWindow = nextWindows[0];
+
+            if (defaultDisplay) {
+              nextSelection = {
+                ...nextSelection,
+                target: {
+                  kind: "display",
+                  id: defaultDisplay.id,
+                  name: defaultDisplay.name,
+                },
+              };
+            } else if (defaultWindow) {
+              nextSelection = {
+                ...nextSelection,
+                target: {
+                  kind: "window",
+                  id: defaultWindow.id,
+                  name: defaultWindow.name,
+                  ownerName: defaultWindow.ownerName,
+                },
+              };
+            }
+          }
+
+          const preferredMicrophone = resolvePreferredMicrophone(
+            nextMicrophones,
+            currentState.selection.microphoneId,
+          );
+
+          if (
+            currentState.selection.microphoneId !== null &&
+            !nextMicrophones.some((device) => device.id === currentState.selection.microphoneId)
+          ) {
+            nextSelection = {
+              ...nextSelection,
+              microphoneId: preferredMicrophone?.id ?? null,
+            };
+          } else if (currentState.selection.microphoneId === null && preferredMicrophone) {
+            nextSelection = {
+              ...nextSelection,
+              microphoneId: preferredMicrophone.id,
+            };
+          }
+
+          return {
+            ...currentState,
+            recording: currentState.recording ?? current,
+            selection: nextSelection,
+          };
+        });
+      } catch (error: unknown) {
         if (!cancelled) {
           setRecorderState((current) => ({
             ...current,
             error: getErrorMessage(error),
           }));
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -264,6 +440,60 @@ function RecorderShell({
     await uploadControllerRef.current?.cancel();
   }
 
+  async function handleRefreshPermissions() {
+    try {
+      await refreshPermissions();
+      setRecorderState((current) => ({ ...current, error: null }));
+    } catch (error) {
+      setRecorderState((current) => ({
+        ...current,
+        error: getErrorMessage(error),
+      }));
+    }
+  }
+
+  async function handleRequestPermission(permission: PermissionKind) {
+    setPermissionActionPending(permission);
+
+    try {
+      await requestPermission(permission);
+      await refreshPermissions();
+      await refreshDevices();
+      setRecorderState((current) => ({ ...current, error: null }));
+    } catch (error) {
+      setRecorderState((current) => ({
+        ...current,
+        error: getErrorMessage(error),
+      }));
+    } finally {
+      setPermissionActionPending(null);
+    }
+  }
+
+  async function handleOpenPermissionSettings(permission: PermissionKind) {
+    try {
+      await openPermissionSettings(permission);
+      setRecorderState((current) => ({ ...current, error: null }));
+    } catch (error) {
+      setRecorderState((current) => ({
+        ...current,
+        error: getErrorMessage(error),
+      }));
+    }
+  }
+
+  async function handleRefreshDevices() {
+    try {
+      await refreshDevices();
+      setRecorderState((current) => ({ ...current, error: null }));
+    } catch (error) {
+      setRecorderState((current) => ({
+        ...current,
+        error: getErrorMessage(error),
+      }));
+    }
+  }
+
   if (route === "uploading" && recorderState.upload) {
     return (
       <UploadingRoute
@@ -277,265 +507,95 @@ function RecorderShell({
   }
 
   return (
-    <main className="layout">
-      <section className="panel panel-primary">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">renderer auth</p>
-            <h1>Loam Desktop Recorder</h1>
-          </div>
-          <div className="metric">
-            <span>Lifecycle</span>
-            <strong>{formatLifecycle(appState)}</strong>
-          </div>
-        </div>
+    <RecorderRoute
+      appStateLabel={formatLifecycle(appState)}
+      authStatus={authStatus}
+      copyShareLinkAfterUpload={userDefaults.copyShareLinkAfterUpload}
+      displays={displays}
+      error={recorderState.error}
+      lastStopped={recorderState.lastStopped}
+      microphones={microphones}
+      onBeginUpload={() => {
+        void handleBeginUpload();
+      }}
+      onErrorChange={(error) => {
+        setRecorderState((current) => ({
+          ...current,
+          error,
+        }));
+      }}
+      onOpenPermissionSettings={(permission) => {
+        void handleOpenPermissionSettings(permission);
+      }}
+      onRecordingChange={(recording) => {
+        setRecorderState((current) => ({
+          ...current,
+          recording,
+          lastStopped: recording ? null : current.lastStopped,
+          error: null,
+        }));
+      }}
+      onRefreshDevices={() => {
+        void handleRefreshDevices();
+      }}
+      onRefreshPermissions={() => {
+        void handleRefreshPermissions();
+      }}
+      onRequestPermission={(permission) => {
+        void handleRequestPermission(permission);
+      }}
+      onSelectionChange={(updates) => {
+        setRecorderState((current) => ({
+          ...current,
+          selection: {
+            ...current.selection,
+            ...updates,
+          } satisfies RecorderSelection,
+        }));
 
-        <p className="lede">
-          Clerk stays in the desktop webview and Convex consumes the same
-          identity. No Rust-side auth fork is required for the renderer boot
-          path.
-        </p>
+        if (updates.projectId !== undefined) {
+          updateUserDefaults({ lastProjectId: updates.projectId });
+        }
 
-        <div className="status-grid">
-          <StatusCard
-            label="Signed in as"
-            value={user?.primaryEmailAddress?.emailAddress ?? user?.fullName ?? "Unknown user"}
-            detail={user?.id ?? "Missing Clerk user id"}
-          />
-          <StatusCard
-            label="Upload target probe"
-            value={
-              uploadTargets === undefined
-                ? "Loading"
-                : `${uploadTargets.length} target${uploadTargets.length === 1 ? "" : "s"}`
-            }
-            detail="Queried with the authenticated Convex client"
-          />
-          <StatusCard
-            label="Permission snapshot"
-            value={
-              permissions
-                ? `screen ${permissions.screen} / mic ${permissions.microphone}`
-                : "Pending"
-            }
-            detail={authStatus}
-          />
-          <StatusCard
-            label="Desktop auth fallback"
-            value="Not required"
-            detail="Defaulting to Clerk in-webview until a concrete incompatibility appears"
-          />
-        </div>
+        if (updates.microphoneId !== undefined) {
+          updateUserDefaults({ lastMicrophoneId: updates.microphoneId });
+        }
 
-        <div className="preview">
-          <div className="preview-toolbar">
-            <span className="dot" />
-            <span className="dot" />
-            <span className="dot" />
-            <span className="toolbar-label">desktop://recorder</span>
-          </div>
-          <div className="preview-body">
-            <div className="preview-stage">
-              <p className="preview-kicker">auth-ready shell</p>
-              <h2>Next tasks can assume an authenticated renderer</h2>
-              <p>
-                Clerk boots first, Convex picks up the token through{" "}
-                <code>ConvexProviderWithClerk</code>, and authenticated queries
-                are available to the recorder flow.
-              </p>
-            </div>
-            <aside className="preview-side">
-              <div className="status-block">
-                <span>Current proof</span>
-                <strong>
-                  <code>projects.listUploadTargets</code> resolves from the
-                  renderer.
-                </strong>
-              </div>
-              <div className="status-block muted">
-                <span>Fallback boundary</span>
-                <strong>
-                  <code>desktopAuth.ts</code> keeps any future desktop-specific
-                  override isolated.
-                </strong>
-              </div>
-            </aside>
-          </div>
-        </div>
+        if (updates.captureSystemAudio !== undefined) {
+          updateUserDefaults({ captureSystemAudio: updates.captureSystemAudio });
+        }
 
-        <RecorderControls
-          shellReady={isAuthenticated}
-          selection={recorderState.selection}
-          recording={recorderState.recording}
-          lastStopped={recorderState.lastStopped}
-          error={recorderState.error}
-          onSelectionChange={(updates) => {
-            setRecorderState((current) => ({
-              ...current,
-              selection: {
-                ...current.selection,
-                ...updates,
-              } satisfies RecorderSelection,
-            }));
-
-            if (updates.microphoneId !== undefined) {
-              updateUserDefaults({ lastMicrophoneId: updates.microphoneId });
-            }
-
-            if (updates.captureSystemAudio !== undefined) {
-              updateUserDefaults({ captureSystemAudio: updates.captureSystemAudio });
-            }
-
-            if (updates.countdownSeconds !== undefined) {
-              updateUserDefaults({ countdownSeconds: updates.countdownSeconds });
-            }
-          }}
-          onRecordingChange={(recording) => {
-            setRecorderState((current) => ({
-              ...current,
-              recording,
-              lastStopped: recording ? null : current.lastStopped,
-              error: null,
-            }));
-          }}
-          onStopped={(recording) => {
-            setRecorderState((current) => ({
-              ...current,
-              lastStopped: recording,
-              recording: null,
-              completion: null,
-              error: null,
-            }));
-            setUploadMessage(null);
-          }}
-          onErrorChange={(error) => {
-            setRecorderState((current) => ({
-              ...current,
-              error,
-            }));
-          }}
-        />
-
-        {recorderState.lastStopped ? (
-          <section className="upload-launcher">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">renderer upload</p>
-                <h2>Send the latest recording to Loam</h2>
-              </div>
-              <div className="metric">
-                <span>Default project</span>
-                <strong>
-                  {selectedProject
-                    ? `${selectedProject.teamName} / ${selectedProject.projectName}`
-                    : "Unavailable"}
-                </strong>
-              </div>
-            </div>
-            <p className="lede">
-              The desktop renderer prepares the upload in Convex first, streams
-              the local file through Rust, then finalizes the share link in one
-              guarded flow.
-            </p>
-            <div className="status-grid">
-              <StatusCard
-                label="Copy link"
-                value={userDefaults.copyShareLinkAfterUpload ? "Enabled" : "Disabled"}
-                detail="Persistent default for the completion flow"
-              />
-              <StatusCard
-                label="Open browser"
-                value={userDefaults.openBrowserAfterUpload ? "Enabled" : "Disabled"}
-                detail="Persistent default for post-upload behavior"
-              />
-              <StatusCard
-                label="Recorder project"
-                value={selectedProject?.projectName ?? "Unavailable"}
-                detail={selectedProject?.teamName ?? "No uploadable project"}
-              />
-            </div>
-            <div className="controls-grid">
-              <label className="toggle">
-                <input
-                  checked={userDefaults.copyShareLinkAfterUpload}
-                  type="checkbox"
-                  onChange={(event) => {
-                    updateUserDefaults({
-                      copyShareLinkAfterUpload: event.target.checked,
-                    });
-                  }}
-                />
-                <span>
-                  Copy share link after upload
-                  <small>Stored as the default completion action</small>
-                </span>
-              </label>
-              <label className="toggle">
-                <input
-                  checked={userDefaults.openBrowserAfterUpload}
-                  type="checkbox"
-                  onChange={(event) => {
-                    updateUserDefaults({
-                      openBrowserAfterUpload: event.target.checked,
-                    });
-                  }}
-                />
-                <span>
-                  Open browser after upload
-                  <small>Stored for the completion route</small>
-                </span>
-              </label>
-            </div>
-            <div className="button-row">
-              <button
-                className="button button-primary"
-                disabled={!selectedProject || uploadTargets === undefined}
-                onClick={() => {
-                  void handleBeginUpload();
-                }}
-              >
-                Upload latest recording
-              </button>
-            </div>
-            {!selectedProject && uploadTargets !== undefined ? (
-              <p className="error-copy">
-                No uploadable Loam project is available for this account.
-              </p>
-            ) : null}
-          </section>
-        ) : null}
-
-        {uploadMessage ? <p className="upload-message">{uploadMessage}</p> : null}
-      </section>
-    </main>
+        if (updates.countdownSeconds !== undefined) {
+          updateUserDefaults({ countdownSeconds: updates.countdownSeconds });
+        }
+      }}
+      onStopped={(recording) => {
+        setRecorderState((current) => ({
+          ...current,
+          lastStopped: recording,
+          recording: null,
+          completion: null,
+          error: null,
+        }));
+        setUploadMessage(null);
+      }}
+      onUpdatePostUploadDefaults={(updates) => {
+        updateUserDefaults(updates);
+      }}
+      openBrowserAfterUpload={userDefaults.openBrowserAfterUpload}
+      permissionActionPending={permissionActionPending}
+      permissions={permissions}
+      recording={recorderState.recording}
+      selectedProject={selectedProject}
+      selection={recorderState.selection}
+      signedInDetail={user?.id ?? "Missing Clerk user id"}
+      signedInValue={user?.primaryEmailAddress?.emailAddress ?? user?.fullName ?? "Unknown user"}
+      systemAudioSupported={systemAudioSupported}
+      uploadMessage={uploadMessage}
+      uploadTargets={uploadTargets as UploadProject[] | undefined}
+      windows={windows}
+    />
   );
-}
-
-function readRoute(): DesktopRoute {
-  if (typeof window === "undefined") {
-    return "recorder";
-  }
-
-  return window.location.pathname === UPLOADING_PATH ? "uploading" : "recorder";
-}
-
-function navigateTo(
-  route: DesktopRoute,
-  setRoute: (route: DesktopRoute) => void,
-  replace = false,
-) {
-  const path = route === "uploading" ? UPLOADING_PATH : RECORDER_PATH;
-  const currentPath = window.location.pathname;
-
-  if (currentPath !== path) {
-    if (replace) {
-      window.history.replaceState({ route }, "", path);
-    } else {
-      window.history.pushState({ route }, "", path);
-    }
-  }
-
-  setRoute(route);
 }
 
 function formatLifecycle(state: ReturnType<typeof deriveAppLifecycleState>) {
@@ -548,24 +608,6 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Unknown desktop error";
-}
-
-function StatusCard({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <article className="status-card">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-    </article>
-  );
 }
 
 function GlobalStyles() {
@@ -676,7 +718,8 @@ function GlobalStyles() {
         gap: 24px;
       }
 
-      .panel-header {
+      .panel-header,
+      .setup-section-header {
         display: flex;
         justify-content: space-between;
         gap: 20px;
@@ -684,7 +727,8 @@ function GlobalStyles() {
       }
 
       .eyebrow,
-      .preview-kicker {
+      .picker-label,
+      .permission-label {
         margin: 0 0 8px;
         font-family: "IBM Plex Mono", monospace;
         font-size: 12px;
@@ -711,16 +755,14 @@ function GlobalStyles() {
       }
 
       .metric,
-      .status-card,
-      .status-block {
+      .status-card {
         border: 2px solid var(--border);
         background: rgba(255, 255, 255, 0.64);
         padding: 16px;
       }
 
       .metric span,
-      .status-card span,
-      .status-block span {
+      .status-card span {
         display: block;
         margin-bottom: 8px;
         font-family: "IBM Plex Mono", monospace;
@@ -732,8 +774,7 @@ function GlobalStyles() {
       }
 
       .metric strong,
-      .status-card strong,
-      .status-block strong {
+      .status-card strong {
         display: block;
         font-size: 1rem;
       }
@@ -744,82 +785,123 @@ function GlobalStyles() {
         gap: 16px;
       }
 
-      .status-card p,
-      .status-block p {
+      .status-card p {
         margin: 10px 0 0;
         color: var(--foreground-muted);
         line-height: 1.5;
       }
 
-      .preview {
-        border: 2px solid var(--border);
-        background: rgba(26, 26, 26, 0.93);
-        color: var(--foreground-inverse);
-        overflow: hidden;
-      }
-
-      .preview-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 16px;
-        border-bottom: 1px solid rgba(240, 240, 232, 0.18);
-      }
-
-      .dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        background: rgba(240, 240, 232, 0.45);
-      }
-
-      .toolbar-label {
-        margin-left: 6px;
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 12px;
-        color: rgba(240, 240, 232, 0.68);
-      }
-
-      .preview-body {
+      .setup-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+        gap: 16px;
       }
 
-      .preview-stage,
-      .preview-side {
-        padding: 24px;
-      }
-
-      .preview-stage p {
-        margin: 0;
-        max-width: 54ch;
-        color: rgba(240, 240, 232, 0.74);
-        line-height: 1.6;
-      }
-
-      .preview-side {
-        border-left: 1px solid rgba(240, 240, 232, 0.18);
-        display: grid;
-        gap: 12px;
-        background: rgba(255, 255, 255, 0.04);
-      }
-
-      .status-block {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(240, 240, 232, 0.18);
-      }
-
-      .status-block.muted strong {
-        color: rgba(240, 240, 232, 0.74);
-      }
-
-      .recorder-controls {
+      .setup-section,
+      .recorder-controls,
+      .upload-launcher,
+      .upload-progress {
         display: grid;
         gap: 18px;
         border: 2px solid var(--border);
         background: rgba(255, 255, 255, 0.74);
         padding: 24px;
-        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.24);
+        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.18);
+      }
+
+      .permission-grid,
+      .choice-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .choice-grid-compact {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .picker-group {
+        display: grid;
+        gap: 12px;
+      }
+
+      .picker-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .choice-card,
+      .permission-card {
+        display: grid;
+        gap: 8px;
+        width: 100%;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.92);
+        padding: 16px;
+        text-align: left;
+      }
+
+      .choice-card {
+        cursor: pointer;
+      }
+
+      .choice-card strong,
+      .permission-card strong {
+        font-size: 1rem;
+      }
+
+      .choice-card span,
+      .permission-card p,
+      .support-copy {
+        margin: 0;
+        color: var(--foreground-muted);
+        line-height: 1.5;
+      }
+
+      .choice-card.is-selected,
+      .permission-card.is-ready {
+        border-color: var(--accent);
+        background: rgba(124, 184, 124, 0.18);
+      }
+
+      .permission-card-header {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .permission-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        padding: 0 10px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.9);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .permission-granted,
+      .permission-notNeeded {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+
+      .permission-denied {
+        color: #8c1e16;
+      }
+
+      .permission-empty {
+        color: #8b5b00;
+      }
+
+      .support-copy {
+        font-size: 0.95rem;
       }
 
       .controls-grid {
@@ -932,16 +1014,6 @@ function GlobalStyles() {
         font-weight: 700;
       }
 
-      .upload-launcher,
-      .upload-progress {
-        display: grid;
-        gap: 18px;
-        border: 2px solid var(--border);
-        background: rgba(255, 255, 255, 0.74);
-        padding: 24px;
-        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.18);
-      }
-
       .progress-bar {
         height: 16px;
         border: 2px solid var(--border);
@@ -1031,19 +1103,17 @@ function GlobalStyles() {
         }
 
         .panel-header,
+        .setup-section-header,
         .login-layout,
-        .preview-body,
+        .setup-grid,
+        .permission-grid,
         .status-grid {
           grid-template-columns: 1fr;
         }
 
-        .controls-grid {
+        .controls-grid,
+        .choice-grid {
           grid-template-columns: 1fr;
-        }
-
-        .preview-side {
-          border-left: 0;
-          border-top: 1px solid rgba(240, 240, 232, 0.18);
         }
       }
     `}</style>

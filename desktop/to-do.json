@@ -220,14 +220,14 @@
         "src/state/settings-state.ts",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:12:43Z"
+      "updated_at": "2026-03-11T21:12:59Z"
     },
     {
       "id": "T007",
       "title": "Implement the pre-recording setup flow for permissions, target selection, and project selection",
       "priority": 2,
-      "status": "todo",
-      "details": "Create a single fast setup screen that gets the user from launch to a valid recording request with minimal friction.",
+      "status": "done",
+      "details": "Built a dedicated pre-recording setup route with permission gating, capture target and microphone pickers, project selection, route helpers, and persisted defaults. The renderer currently uses projects.listUploadTargets as the upload-target source while the desktopRecorder backend surface remains blocked.",
       "steps": [
         "Build the permission gate UI with direct actions to request access or open settings",
         "Build capture target selection for displays and windows",
@@ -247,17 +247,17 @@
         "T006"
       ],
       "files": [
+        "src/App.tsx",
         "src/routes/recorder.tsx",
+        "src/components/RecorderControls.tsx",
         "src/components/PermissionGate.tsx",
         "src/components/CaptureTargetPicker.tsx",
         "src/components/MicrophonePicker.tsx",
         "src/components/ProjectPicker.tsx",
         "src/lib/routes.ts",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:23:40Z"
     },
     {
       "id": "T008",

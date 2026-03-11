@@ -12,13 +12,21 @@ import { action, internalAction, ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
-  buildMuxPlaybackUrl,
-  buildMuxThumbnailUrl,
   createMuxAssetFromInputUrl,
   createPublicPlaybackId,
+  deletePlaybackId,
   deleteMuxAsset,
   getMuxAsset,
+  signPlaybackToken,
+  signThumbnailToken,
 } from "./mux";
+import {
+  buildPublicPlaybackSession,
+  buildSignedPlaybackSession,
+  resolveMuxPlaybackIds,
+  SIGNED_PLAYBACK_SESSION_TTL,
+  type PlaybackSession,
+} from "./playbackSessions";
 import { BUCKET_NAME, getS3Client } from "./s3";
 import { generateOpaqueToken } from "./security";
 
@@ -30,6 +38,21 @@ const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
   "video/webm",
   "video/x-matroska",
 ]);
+const playbackSessionValidator = v.object({
+  accessMode: v.union(v.literal("public"), v.literal("signed")),
+  expiresAt: v.union(v.number(), v.null()),
+  posterUrl: v.string(),
+  url: v.string(),
+});
+
+type PlaybackTarget = {
+  _id: Id<"videos">;
+  muxAssetId?: string | null;
+  muxPlaybackId?: string | null;
+  status: "uploading" | "processing" | "ready" | "failed";
+  thumbnailUrl?: string | null;
+  visibility: "public" | "private";
+};
 
 function getExtensionFromKey(key: string, fallback = "mp4") {
   let source = key;
@@ -159,48 +182,114 @@ async function requireVideoMemberAccess(
   }
 }
 
-function buildPublicPlaybackSession(
-  playbackId: string,
-): { url: string; posterUrl: string } {
-  return {
-    url: buildMuxPlaybackUrl(playbackId),
-    posterUrl: buildMuxThumbnailUrl(playbackId),
-  };
+function requireReadyPlaybackTarget(target: PlaybackTarget | null): PlaybackTarget {
+  if (!target || target.status !== "ready") {
+    throw new Error("Video not found or not ready");
+  }
+
+  return target;
 }
 
-async function ensurePublicPlaybackId(
+function requireMuxAssetId(target: PlaybackTarget): string {
+  if (!target.muxAssetId) {
+    throw new Error("Video playback asset is not configured");
+  }
+
+  return target.muxAssetId;
+}
+
+async function setThumbnailUrl(
   ctx: ActionCtx,
-  params: {
-    videoId?: Id<"videos">;
-    muxAssetId?: string | null;
-    muxPlaybackId: string;
-  },
+  videoId: Id<"videos">,
+  thumbnailUrl: string | null,
+) {
+  await ctx.runMutation(internal.videos.setThumbnailUrl, {
+    videoId,
+    thumbnailUrl,
+  });
+}
+
+async function ensurePublicPlaybackIdForTarget(
+  ctx: ActionCtx,
+  target: PlaybackTarget,
 ): Promise<string> {
-  const { videoId, muxAssetId, muxPlaybackId } = params;
-  if (!muxAssetId) return muxPlaybackId;
-
+  const muxAssetId = requireMuxAssetId(target);
   const asset = await getMuxAsset(muxAssetId);
-  const playbackIds = (asset.playback_ids ?? []) as Array<{
-    id?: string;
-    policy?: string;
-  }>;
+  const playbackIds = resolveMuxPlaybackIds(
+    (asset.playback_ids ?? []) as Array<{ id?: string; policy?: string }>,
+  );
 
-  let publicPlaybackId = playbackIds.find((entry) => entry.policy === "public" && entry.id)?.id;
+  let publicPlaybackId = playbackIds.publicPlaybackId;
   if (!publicPlaybackId) {
     const created = await createPublicPlaybackId(muxAssetId);
     publicPlaybackId = created.id;
   }
 
-  const resolvedPlaybackId = publicPlaybackId ?? muxPlaybackId;
-  if (videoId && resolvedPlaybackId !== muxPlaybackId) {
+  const session = buildPublicPlaybackSession(publicPlaybackId);
+  if (target.visibility === "public" && target.thumbnailUrl !== session.posterUrl) {
+    await setThumbnailUrl(ctx, target._id, session.posterUrl);
+  }
+
+  return publicPlaybackId;
+}
+
+async function ensureSignedPlaybackIdForTarget(
+  ctx: ActionCtx,
+  target: PlaybackTarget,
+): Promise<string> {
+  const muxAssetId = requireMuxAssetId(target);
+  const asset = await getMuxAsset(muxAssetId);
+  const playbackIds = resolveMuxPlaybackIds(
+    (asset.playback_ids ?? []) as Array<{ id?: string; policy?: string }>,
+  );
+
+  const signedPlaybackId = playbackIds.signedPlaybackId;
+  if (!signedPlaybackId) {
+    throw new Error("Signed playback is not configured for this video");
+  }
+
+  if (signedPlaybackId !== target.muxPlaybackId) {
     await ctx.runMutation(internal.videos.setMuxPlaybackId, {
-      videoId,
-      muxPlaybackId: resolvedPlaybackId,
-      thumbnailUrl: buildMuxThumbnailUrl(resolvedPlaybackId),
+      videoId: target._id,
+      muxPlaybackId: signedPlaybackId,
     });
   }
 
-  return resolvedPlaybackId;
+  if (target.visibility === "private") {
+    for (const publicPlaybackId of playbackIds.publicPlaybackIds) {
+      try {
+        await deletePlaybackId(muxAssetId, publicPlaybackId);
+      } catch (error) {
+        console.error("Failed to remove stale public playback id", {
+          videoId: target._id,
+          muxAssetId,
+          publicPlaybackId,
+          error,
+        });
+      }
+    }
+
+    if (target.thumbnailUrl) {
+      await setThumbnailUrl(ctx, target._id, null);
+    }
+  }
+
+  return signedPlaybackId;
+}
+
+async function buildSignedMuxPlaybackSession(
+  playbackId: string,
+): Promise<PlaybackSession> {
+  const [playbackToken, thumbnailToken] = await Promise.all([
+    signPlaybackToken(playbackId, SIGNED_PLAYBACK_SESSION_TTL),
+    signThumbnailToken(playbackId, SIGNED_PLAYBACK_SESSION_TTL),
+  ]);
+
+  return buildSignedPlaybackSession({
+    playbackId,
+    playbackToken,
+    thumbnailToken,
+  });
 }
 
 export const cleanupDeletedVideoAssets = internalAction({
@@ -239,6 +328,30 @@ export const cleanupDeletedVideoAssets = internalAction({
           error,
         });
       }
+    }
+
+    return null;
+  },
+});
+
+export const syncPlaybackAccessForVideo = internalAction({
+  args: {
+    videoId: v.id("videos"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const target = await ctx.runQuery(internal.videos.getPlaybackTargetById, {
+      videoId: args.videoId,
+    });
+
+    if (!target || target.status !== "ready") {
+      return null;
+    }
+
+    await ensureSignedPlaybackIdForTarget(ctx, target);
+
+    if (target.visibility === "public") {
+      await ensurePublicPlaybackIdForTarget(ctx, target);
     }
 
     return null;
@@ -402,28 +515,17 @@ export const markUploadFailed = action({
 
 export const getPlaybackSession = action({
   args: { videoId: v.id("videos") },
-  returns: v.object({
-    url: v.string(),
-    posterUrl: v.string(),
-  }),
+  returns: playbackSessionValidator,
   handler: async (
     ctx,
     args,
-  ): Promise<{ url: string; posterUrl: string }> => {
-    const video = await ctx.runQuery(api.videos.getVideoForPlayback, {
+  ): Promise<PlaybackSession> => {
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(api.videos.getVideoForPlayback, {
       videoId: args.videoId,
-    });
+    }) as PlaybackTarget | null);
 
-    if (!video || !video.muxPlaybackId || video.status !== "ready") {
-      throw new Error("Video not found or not ready");
-    }
-
-    const playbackId = await ensurePublicPlaybackId(ctx, {
-      videoId: args.videoId,
-      muxAssetId: video.muxAssetId,
-      muxPlaybackId: video.muxPlaybackId,
-    });
-    return buildPublicPlaybackSession(playbackId);
+    const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
+    return await buildSignedMuxPlaybackSession(playbackId);
   },
 });
 
@@ -433,20 +535,12 @@ export const getPlaybackUrl = action({
     url: v.string(),
   }),
   handler: async (ctx, args): Promise<{ url: string }> => {
-    const video = await ctx.runQuery(api.videos.getVideoForPlayback, {
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(api.videos.getVideoForPlayback, {
       videoId: args.videoId,
-    });
+    }) as PlaybackTarget | null);
 
-    if (!video || !video.muxPlaybackId || video.status !== "ready") {
-      throw new Error("Video not found or not ready");
-    }
-
-    const playbackId = await ensurePublicPlaybackId(ctx, {
-      videoId: args.videoId,
-      muxAssetId: video.muxAssetId,
-      muxPlaybackId: video.muxPlaybackId,
-    });
-    const session = buildPublicPlaybackSession(playbackId);
+    const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
+    const session = await buildSignedMuxPlaybackSession(playbackId);
     return { url: session.url };
   },
 });
@@ -479,55 +573,33 @@ export const getOriginalPlaybackUrl = action({
 
 export const getPublicPlaybackSession = action({
   args: { publicId: v.string() },
-  returns: v.object({
-    url: v.string(),
-    posterUrl: v.string(),
-  }),
+  returns: playbackSessionValidator,
   handler: async (
     ctx,
     args,
-  ): Promise<{ url: string; posterUrl: string }> => {
-    const result = await ctx.runQuery(api.videos.getByPublicId, {
+  ): Promise<PlaybackSession> => {
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(internal.videos.getPublicPlaybackTarget, {
       publicId: args.publicId,
-    });
+    }) as PlaybackTarget | null);
 
-    if (!result?.video?.muxPlaybackId) {
-      throw new Error("Video not found or not ready");
-    }
-
-    const playbackId = await ensurePublicPlaybackId(ctx, {
-      videoId: result.video._id,
-      muxAssetId: result.video.muxAssetId,
-      muxPlaybackId: result.video.muxPlaybackId,
-    });
+    const playbackId = await ensurePublicPlaybackIdForTarget(ctx, target);
     return buildPublicPlaybackSession(playbackId);
   },
 });
 
 export const getSharedPlaybackSession = action({
   args: { grantToken: v.string() },
-  returns: v.object({
-    url: v.string(),
-    posterUrl: v.string(),
-  }),
+  returns: playbackSessionValidator,
   handler: async (
     ctx,
     args,
-  ): Promise<{ url: string; posterUrl: string }> => {
-    const result = await ctx.runQuery(api.videos.getByShareGrant, {
+  ): Promise<PlaybackSession> => {
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(internal.videos.getShareGrantPlaybackTarget, {
       grantToken: args.grantToken,
-    });
+    }) as PlaybackTarget | null);
 
-    if (!result?.video?.muxPlaybackId) {
-      throw new Error("Video not found or not ready");
-    }
-
-    const playbackId = await ensurePublicPlaybackId(ctx, {
-      videoId: result.video._id,
-      muxAssetId: result.video.muxAssetId,
-      muxPlaybackId: result.video.muxPlaybackId,
-    });
-    return buildPublicPlaybackSession(playbackId);
+    const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
+    return await buildSignedMuxPlaybackSession(playbackId);
   },
 });
 

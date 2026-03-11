@@ -65,7 +65,7 @@ export async function createMuxAssetFromInputUrl(videoId: string, inputUrl: stri
   const mux = getMuxClient();
   return await mux.video.assets.create({
     inputs: [{ url: inputUrl }],
-    playback_policies: ["public"],
+    playback_policies: ["signed"],
     video_quality: "basic",
     // Mux currently supports 1080p as the lowest adaptive streaming max tier.
     max_resolution_tier: "1080p",

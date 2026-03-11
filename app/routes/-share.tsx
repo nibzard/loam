@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
-import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
+import { PLAYBACK_SESSION_REFRESH_LEAD_MS, type PlaybackSession } from "@/lib/playbackSession";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { Lock, Video, AlertCircle, MessageSquare, Clock } from "lucide-react";
@@ -34,10 +35,7 @@ export default function SharePage() {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
   const [isRequestingGrant, setIsRequestingGrant] = useState(false);
-  const [playbackSession, setPlaybackSession] = useState<{
-    url: string;
-    posterUrl: string;
-  } | null>(null);
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -128,13 +126,55 @@ export default function SharePage() {
   }, [getPlaybackSession, grantToken]);
 
   useEffect(() => {
-    const muxPlaybackId = videoData?.video?.muxPlaybackId;
-    if (!muxPlaybackId) return;
-
+    if (!videoData?.video?._id) return;
     preloadVideoPlayer();
     prefetchHlsRuntime();
-    prefetchMuxPlaybackManifest(muxPlaybackId);
-  }, [videoData?.video?.muxPlaybackId]);
+  }, [videoData?.video?._id]);
+
+  useEffect(() => {
+    if (!playbackSession?.url) return;
+    prefetchPlaybackSource(playbackSession.url);
+  }, [playbackSession?.url]);
+
+  useEffect(() => {
+    if (
+      !grantToken ||
+      playbackSession?.accessMode !== "signed" ||
+      playbackSession.expiresAt === null
+    ) {
+      return;
+    }
+
+    const refreshDelay = Math.max(
+      0,
+      playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
+    );
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      setIsLoadingPlayback(true);
+      setPlaybackError(null);
+
+      void getPlaybackSession({ grantToken })
+        .then((session) => {
+          if (cancelled) return;
+          setPlaybackSession(session);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPlaybackError("Unable to refresh playback session.");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setIsLoadingPlayback(false);
+        });
+    }, refreshDelay);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [getPlaybackSession, grantToken, playbackSession]);
 
   const flattenedComments = useMemo(() => {
     if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; resolved: boolean }>;

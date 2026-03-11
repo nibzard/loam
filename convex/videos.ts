@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { identityEmail, identityName, requireProjectAccess, requireVideoAccess } from "./auth";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
 import { assertTeamCanStoreBytes } from "./billingHelpers";
@@ -33,6 +33,37 @@ async function deleteShareAccessGrantsForLink(
   for (const grant of grants) {
     await ctx.db.delete(grant._id);
   }
+}
+
+function buildClientVideoSummary(
+  video: Pick<
+    Doc<"videos">,
+    "_id" | "title" | "description" | "duration" | "thumbnailUrl"
+  >,
+) {
+  return {
+    _id: video._id,
+    title: video.title,
+    description: video.description,
+    duration: video.duration,
+    thumbnailUrl: video.thumbnailUrl,
+  };
+}
+
+function buildPlaybackTarget(
+  video: Pick<
+    Doc<"videos">,
+    "_id" | "muxAssetId" | "muxPlaybackId" | "status" | "thumbnailUrl" | "visibility"
+  >,
+) {
+  return {
+    _id: video._id,
+    muxAssetId: video.muxAssetId,
+    muxPlaybackId: video.muxPlaybackId,
+    status: video.status,
+    thumbnailUrl: video.thumbnailUrl,
+    visibility: video.visibility,
+  };
 }
 
 export const create = mutation({
@@ -126,17 +157,7 @@ export const getByPublicId = query({
     }
 
     return {
-      video: {
-        _id: video._id,
-        title: video.title,
-        description: video.description,
-        duration: video.duration,
-        thumbnailUrl: video.thumbnailUrl,
-        muxAssetId: video.muxAssetId,
-        muxPlaybackId: video.muxPlaybackId,
-        contentType: video.contentType,
-        s3Key: video.s3Key,
-      },
+      video: buildClientVideoSummary(video),
     };
   },
 });
@@ -173,17 +194,7 @@ export const getByShareGrant = query({
     }
 
     return {
-      video: {
-        _id: video._id,
-        title: video.title,
-        description: video.description,
-        duration: video.duration,
-        thumbnailUrl: video.thumbnailUrl,
-        muxAssetId: video.muxAssetId,
-        muxPlaybackId: video.muxPlaybackId,
-        contentType: video.contentType,
-        s3Key: video.s3Key,
-      },
+      video: buildClientVideoSummary(video),
       grantExpiresAt: resolved.grant.expiresAt,
     };
   },
@@ -216,6 +227,10 @@ export const setVisibility = mutation({
 
     await ctx.db.patch(args.videoId, {
       visibility: args.visibility,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.videoActions.syncPlaybackAccessForVideo, {
+      videoId: args.videoId,
     });
   },
 });
@@ -398,9 +413,29 @@ export const setMuxPlaybackId = internalMutation({
     thumbnailUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.videoId, {
+    const updates: {
+      muxPlaybackId: string;
+      thumbnailUrl?: string;
+    } = {
       muxPlaybackId: args.muxPlaybackId,
-      thumbnailUrl: args.thumbnailUrl,
+    };
+
+    if (args.thumbnailUrl !== undefined) {
+      updates.thumbnailUrl = args.thumbnailUrl;
+    }
+
+    await ctx.db.patch(args.videoId, updates);
+  },
+});
+
+export const setThumbnailUrl = internalMutation({
+  args: {
+    videoId: v.id("videos"),
+    thumbnailUrl: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.videoId, {
+      thumbnailUrl: args.thumbnailUrl ?? undefined,
     });
   },
 });
@@ -452,6 +487,48 @@ export const getVideoForPlayback = query({
   handler: async (ctx, args) => {
     const { video } = await requireVideoAccess(ctx, args.videoId, "viewer");
     return video;
+  },
+});
+
+export const getPlaybackTargetById = internalQuery({
+  args: { videoId: v.id("videos") },
+  handler: async (ctx, args) => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) return null;
+    return buildPlaybackTarget(video);
+  },
+});
+
+export const getPublicPlaybackTarget = internalQuery({
+  args: { publicId: v.string() },
+  handler: async (ctx, args) => {
+    const video = await ctx.db
+      .query("videos")
+      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
+      .unique();
+
+    if (!video || video.visibility !== "public" || video.status !== "ready") {
+      return null;
+    }
+
+    return buildPlaybackTarget(video);
+  },
+});
+
+export const getShareGrantPlaybackTarget = internalQuery({
+  args: { grantToken: v.string() },
+  handler: async (ctx, args) => {
+    const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
+    if (!resolved) {
+      return null;
+    }
+
+    const video = await ctx.db.get(resolved.shareLink.videoId);
+    if (!video || video.status !== "ready") {
+      return null;
+    }
+
+    return buildPlaybackTarget(video);
   },
 });
 

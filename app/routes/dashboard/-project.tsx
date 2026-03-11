@@ -35,41 +35,13 @@ import { prewarmTeam } from "./-team.data";
 import { prewarmVideo } from "./-video.data";
 import { useDashboardUploadContext } from "@/lib/dashboardUploadContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { prepareDefaultShareLink } from "@/lib/shareLinks";
 
 type ViewMode = "grid" | "list";
 type ShareToastState = {
   tone: "success" | "error";
   message: string;
 };
-
-async function copyTextToClipboard(text: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return true;
-  }
-
-  if (typeof document === "undefined") {
-    return false;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  textarea.style.pointerEvents = "none";
-  document.body.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  let copied = false;
-  try {
-    copied = document.execCommand("copy");
-  } finally {
-    document.body.removeChild(textarea);
-  }
-
-  return copied;
-}
 
 type VideoIntentTargetProps = {
   className: string;
@@ -130,6 +102,7 @@ export default function ProjectPage({
   const { requestUpload } = useDashboardUploadContext();
   const deleteVideo = useMutation(api.videos.remove);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
+  const ensureDefaultShareLink = useMutation(api.shareLinks.ensureDefault);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
@@ -207,37 +180,28 @@ export default function ProjectPage({
   const handleShareVideo = useCallback(
     async (video: {
       _id: Id<"videos">;
-      publicId?: string;
       status: string;
-      visibility: "public" | "private";
     }) => {
-      const canSharePublicly =
-        Boolean(video.publicId) &&
-        video.status === "ready" &&
-        video.visibility === "public";
-      const path = canSharePublicly
-        ? `/watch/${video.publicId}`
-        : videoPath(resolvedTeamSlug, projectId, video._id);
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const url = `${origin}${path}`;
-
       try {
-        const copied = await copyTextToClipboard(url);
+        const { copied } = await prepareDefaultShareLink({
+          videoId: video._id,
+          ensureDefaultShareLink,
+        });
         if (!copied) {
           showShareToast("error", "Could not copy link");
           return;
         }
         showShareToast(
           "success",
-          canSharePublicly
+          video.status === "ready"
             ? "Share link copied"
-            : "Video link copied (public watch link not available yet)",
+            : "Share link copied. It will work after processing finishes.",
         );
       } catch {
-        showShareToast("error", "Could not copy link");
+        showShareToast("error", "Could not prepare share link");
       }
     },
-    [projectId, resolvedTeamSlug, showShareToast],
+    [ensureDefaultShareLink, showShareToast],
   );
 
   // Not found state
@@ -249,7 +213,7 @@ export default function ProjectPage({
     );
   }
 
-  const canUpload = project?.role !== "viewer";
+  const canEditProject = project?.role !== "viewer";
 
   return (
     <div className="h-full flex flex-col">
@@ -291,7 +255,7 @@ export default function ProjectPage({
               <LayoutList className="h-4 w-4" />
             </button>
           </div>
-          {canUpload && (
+          {canEditProject && (
             <UploadButton onFilesSelected={handleFilesSelected} />
           )}
         </div>
@@ -303,7 +267,7 @@ export default function ProjectPage({
           <div className="h-full flex items-center justify-center p-6 animate-in fade-in duration-300">
             <DropZone
               onFilesSelected={handleFilesSelected}
-              disabled={!canUpload}
+              disabled={!canEditProject}
               className="max-w-xl w-full"
             />
           </div>
@@ -390,16 +354,18 @@ export default function ProjectPage({
                               Download
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleShareVideo(video);
-                            }}
-                          >
-                            <LinkIcon className="mr-2 h-4 w-4" />
-                            Share
-                          </DropdownMenuItem>
-                          {canUpload && (
+                          {canEditProject ? (
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleShareVideo(video);
+                              }}
+                            >
+                              <LinkIcon className="mr-2 h-4 w-4" />
+                              Share
+                            </DropdownMenuItem>
+                          ) : null}
+                          {canEditProject && (
                             <DropdownMenuItem
                               className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                               onClick={(e) => {
@@ -553,16 +519,18 @@ export default function ProjectPage({
                           Download
                         </DropdownMenuItem>
                       )}
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleShareVideo(video);
-                        }}
-                      >
-                        <LinkIcon className="mr-2 h-4 w-4" />
-                        Share
-                      </DropdownMenuItem>
-                      {canUpload && (
+                      {canEditProject ? (
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleShareVideo(video);
+                          }}
+                        >
+                          <LinkIcon className="mr-2 h-4 w-4" />
+                          Share
+                        </DropdownMenuItem>
+                      ) : null}
+                      {canEditProject && (
                         <DropdownMenuItem
                           className="text-[var(--destructive)] focus:text-[var(--destructive)]"
                           onClick={(e) => {

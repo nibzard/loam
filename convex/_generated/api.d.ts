@@ -21,6 +21,7 @@ import type * as reactions from "../reactions.js";
 import type * as s3 from "../s3.js";
 import type * as security from "../security.js";
 import type * as shareAccess from "../shareAccess.js";
+import type * as shareLinkDefaults from "../shareLinkDefaults.js";
 import type * as shareLinks from "../shareLinks.js";
 import type * as teams from "../teams.js";
 import type * as uploadSessions from "../uploadSessions.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   s3: typeof s3;
   security: typeof security;
   shareAccess: typeof shareAccess;
+  shareLinkDefaults: typeof shareLinkDefaults;
   shareLinks: typeof shareLinks;
   teams: typeof teams;
   uploadSessions: typeof uploadSessions;

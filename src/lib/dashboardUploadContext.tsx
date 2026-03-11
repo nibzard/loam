@@ -13,6 +13,8 @@ export type DashboardUploadContextValue = {
     error?: string;
     bytesPerSecond?: number;
     estimatedSecondsRemaining?: number | null;
+    isPreparingShareLink?: boolean;
+    shareLinkError?: string;
     shareLinkUrl?: string;
     shareLinkCopied?: boolean;
   }[];

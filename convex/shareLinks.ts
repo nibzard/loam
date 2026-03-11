@@ -6,6 +6,7 @@ import { mutation, query, MutationCtx } from "./_generated/server";
 import { identityName, requireVideoAccess } from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
+import { pickReusableDefaultShareLink } from "./shareLinkDefaults";
 
 const shareLinkStatusValidator = v.union(
   v.literal("missing"),
@@ -83,6 +84,36 @@ async function deleteShareAccessGrantsForLink(
   }
 }
 
+async function insertShareLink(
+  ctx: MutationCtx,
+  args: {
+    allowDownload: boolean;
+    createdByClerkId: string;
+    createdByName: string;
+    expiresAt?: number;
+    passwordHash?: string;
+    videoId: Id<"videos">;
+  },
+) {
+  const token = await generateShareToken(ctx);
+
+  await ctx.db.insert("shareLinks", {
+    videoId: args.videoId,
+    token,
+    createdByClerkId: args.createdByClerkId,
+    createdByName: args.createdByName,
+    expiresAt: args.expiresAt,
+    allowDownload: args.allowDownload,
+    password: undefined,
+    passwordHash: args.passwordHash,
+    failedAccessAttempts: 0,
+    lockedUntil: undefined,
+    viewCount: 0,
+  });
+
+  return { token };
+}
+
 export const create = mutation({
   args: {
     videoId: v.id("videos"),
@@ -93,7 +124,6 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { user } = await requireVideoAccess(ctx, args.videoId, "member");
 
-    const token = await generateShareToken(ctx);
     const expiresAt = args.expiresInDays
       ? Date.now() + args.expiresInDays * 24 * 60 * 60 * 1000
       : undefined;
@@ -102,21 +132,52 @@ export const create = mutation({
       ? await hashPassword(normalizedPassword)
       : undefined;
 
-    await ctx.db.insert("shareLinks", {
+    return await insertShareLink(ctx, {
       videoId: args.videoId,
-      token,
       createdByClerkId: user.subject,
       createdByName: identityName(user),
       expiresAt,
       allowDownload: args.allowDownload ?? false,
-      password: undefined,
       passwordHash,
-      failedAccessAttempts: 0,
-      lockedUntil: undefined,
-      viewCount: 0,
+    });
+  },
+});
+
+export const ensureDefault = mutation({
+  args: {
+    videoId: v.id("videos"),
+  },
+  returns: v.object({
+    reused: v.boolean(),
+    token: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const { user } = await requireVideoAccess(ctx, args.videoId, "member");
+
+    const links = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+      .collect();
+
+    const reusableLink = pickReusableDefaultShareLink(links);
+    if (reusableLink) {
+      return {
+        token: reusableLink.token,
+        reused: true,
+      };
+    }
+
+    const created = await insertShareLink(ctx, {
+      videoId: args.videoId,
+      createdByClerkId: user.subject,
+      createdByName: identityName(user),
+      allowDownload: false,
     });
 
-    return { token };
+    return {
+      ...created,
+      reused: false,
+    };
   },
 });
 

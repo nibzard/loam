@@ -32,7 +32,8 @@ import {
 import { Id } from "@convex/_generated/dataModel";
 import { projectPath, teamHomePath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
-import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
+import { PLAYBACK_SESSION_REFRESH_LEAD_MS, type PlaybackSession } from "@/lib/playbackSession";
 import { useWatchProgress } from "@/lib/useWatchProgress";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
@@ -74,10 +75,7 @@ export default function VideoPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<Id<"comments"> | undefined>();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
-  const [playbackSession, setPlaybackSession] = useState<{
-    url: string;
-    posterUrl: string;
-  } | null>(null);
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [originalPlaybackUrl, setOriginalPlaybackUrl] = useState<string | null>(null);
   const [isLoadingOriginalPlayback, setIsLoadingOriginalPlayback] = useState(false);
@@ -181,10 +179,49 @@ export default function VideoPage() {
   }, [getOriginalPlaybackUrl, resolvedVideoId, video?.status, video?.s3Key]);
 
   useEffect(() => {
-    if (!video?.muxPlaybackId || !playbackUrl || activePlaybackUrl !== playbackUrl) return;
+    if (!playbackUrl || activePlaybackUrl !== playbackUrl) return;
     prefetchHlsRuntime();
-    prefetchMuxPlaybackManifest(video.muxPlaybackId);
-  }, [activePlaybackUrl, playbackUrl, video?.muxPlaybackId]);
+    prefetchPlaybackSource(playbackUrl);
+  }, [activePlaybackUrl, playbackUrl]);
+
+  useEffect(() => {
+    if (
+      !resolvedVideoId ||
+      playbackSession?.accessMode !== "signed" ||
+      playbackSession.expiresAt === null
+    ) {
+      return;
+    }
+
+    const refreshDelay = Math.max(
+      0,
+      playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
+    );
+
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      setIsLoadingPlayback(true);
+
+      void getPlaybackSession({ videoId: resolvedVideoId })
+        .then((session) => {
+          if (cancelled) return;
+          setPlaybackSession(session);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPlaybackSession(null);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setIsLoadingPlayback(false);
+        });
+    }, refreshDelay);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [getPlaybackSession, playbackSession, resolvedVideoId]);
 
   const { trackTime: trackWatchTime } = useWatchProgress({
     enabled: Boolean(activePlaybackUrl && resolvedVideoId),

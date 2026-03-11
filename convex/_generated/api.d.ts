@@ -15,6 +15,7 @@ import type * as comments from "../comments.js";
 import type * as http from "../http.js";
 import type * as mux from "../mux.js";
 import type * as muxActions from "../muxActions.js";
+import type * as playbackSessions from "../playbackSessions.js";
 import type * as projects from "../projects.js";
 import type * as reactions from "../reactions.js";
 import type * as s3 from "../s3.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mux: typeof mux;
   muxActions: typeof muxActions;
+  playbackSessions: typeof playbackSessions;
   projects: typeof projects;
   reactions: typeof reactions;
   s3: typeof s3;

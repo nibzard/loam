@@ -5,7 +5,6 @@ import { internalAction, ActionCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
-  buildMuxThumbnailUrl,
   getMuxAsset,
   verifyMuxWebhookSignature,
 } from "./mux";
@@ -54,13 +53,9 @@ function getErrorMessage(data: MuxData): string | undefined {
 function getPreferredPlaybackId(playbackIds: MuxData["playback_ids"]): string | undefined {
   if (!playbackIds || playbackIds.length === 0) return undefined;
 
-  const publicPlayback = playbackIds.find((item) => item.policy === "public" && item.id);
-  if (publicPlayback?.id) return publicPlayback.id;
-
   const signedPlayback = playbackIds.find((item) => item.policy === "signed" && item.id);
   if (signedPlayback?.id) return signedPlayback.id;
-
-  return playbackIds.find((item) => typeof item.id === "string")?.id;
+  return undefined;
 }
 
 async function resolveVideoIdFromMuxRefs(
@@ -226,7 +221,7 @@ export const processWebhook = internalAction({
             muxAssetId: assetId,
             muxPlaybackId: playbackId,
             duration,
-            thumbnailUrl: buildMuxThumbnailUrl(playbackId),
+            thumbnailUrl: undefined,
           });
           console.log("Marked video ready from Mux webhook", {
             eventType,

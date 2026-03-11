@@ -2,15 +2,13 @@ export function buildMuxPlaybackHlsUrl(playbackId: string): string {
   return `https://stream.mux.com/${playbackId}.m3u8`;
 }
 
-const prefetchedPlaybackIds = new Set<string>();
+const prefetchedPlaybackSources = new Set<string>();
 let hlsRuntimePrefetched = false;
 
-export function prefetchMuxPlaybackManifest(playbackId: string) {
+export function prefetchPlaybackSource(url: string) {
   if (typeof window === "undefined") return;
-  if (prefetchedPlaybackIds.has(playbackId)) return;
-  prefetchedPlaybackIds.add(playbackId);
-
-  const url = buildMuxPlaybackHlsUrl(playbackId);
+  if (prefetchedPlaybackSources.has(url)) return;
+  prefetchedPlaybackSources.add(url);
   fetch(url, {
     method: "GET",
     mode: "cors",
@@ -19,6 +17,10 @@ export function prefetchMuxPlaybackManifest(playbackId: string) {
   }).catch(() => {
     // Best effort only; route transitions should not depend on this.
   });
+}
+
+export function prefetchMuxPlaybackManifest(playbackId: string) {
+  prefetchPlaybackSource(buildMuxPlaybackHlsUrl(playbackId));
 }
 
 export function prefetchHlsRuntime() {

@@ -27,7 +27,7 @@ import {
 import { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { teamHomePath, videoPath } from "@/lib/routes";
-import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { prefetchHlsRuntime } from "@/lib/muxPlayback";
 import { preloadVideoPlayer } from "@/components/video-player/lazy";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { useProjectData } from "./-project.data";
@@ -76,7 +76,6 @@ type VideoIntentTargetProps = {
   teamSlug: string;
   projectId: Id<"projects">;
   videoId: Id<"videos">;
-  muxPlaybackId?: string;
   onOpen: () => void;
   children: ReactNode;
 };
@@ -86,7 +85,6 @@ function VideoIntentTarget({
   teamSlug,
   projectId,
   videoId,
-  muxPlaybackId,
   onOpen,
   children,
 }: VideoIntentTargetProps) {
@@ -99,9 +97,6 @@ function VideoIntentTarget({
     });
     preloadVideoPlayer();
     prefetchHlsRuntime();
-    if (muxPlaybackId) {
-      prefetchMuxPlaybackManifest(muxPlaybackId);
-    }
   });
 
   return (
@@ -334,7 +329,6 @@ export default function ProjectPage({
                     teamSlug={resolvedTeamSlug}
                     projectId={project._id}
                     videoId={video._id}
-                    muxPlaybackId={video.muxPlaybackId}
                     onOpen={() =>
                       navigate({
                         to: videoPath(resolvedTeamSlug, project._id, video._id),
@@ -469,7 +463,6 @@ export default function ProjectPage({
                   teamSlug={resolvedTeamSlug}
                   projectId={project._id}
                   videoId={video._id}
-                  muxPlaybackId={video.muxPlaybackId}
                   onOpen={() =>
                     navigate({
                       to: videoPath(resolvedTeamSlug, project._id, video._id),

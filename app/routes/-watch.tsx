@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { formatDuration, formatTimestamp, formatRelativeTime } from "@/lib/utils";
-import { prefetchHlsRuntime, prefetchMuxPlaybackManifest } from "@/lib/muxPlayback";
+import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
 import { AlertCircle, MessageSquare, Clock, X } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
 import { useWatchProgress } from "@/lib/useWatchProgress";
+import { type PlaybackSession } from "@/lib/playbackSession";
 import { useWatchData } from "./-watch.data";
 
 export default function WatchPage() {
@@ -26,10 +27,7 @@ export default function WatchPage() {
   const recordWatch = useAction(api.watchEventActions.recordWatch);
 
   const { videoData, comments, reactions } = useWatchData({ publicId });
-  const [playbackSession, setPlaybackSession] = useState<{
-    url: string;
-    posterUrl: string;
-  } | null>(null);
+  const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -45,16 +43,13 @@ export default function WatchPage() {
   }, []);
 
   useEffect(() => {
-    const muxPlaybackId = videoData?.video?.muxPlaybackId;
-    if (!muxPlaybackId) return;
-
+    if (!videoData?.video?._id) return;
     preloadVideoPlayer();
     prefetchHlsRuntime();
-    prefetchMuxPlaybackManifest(muxPlaybackId);
-  }, [videoData?.video?.muxPlaybackId]);
+  }, [videoData?.video?._id]);
 
   useEffect(() => {
-    if (!videoData?.video?.muxPlaybackId) {
+    if (!videoData?.video?._id) {
       setPlaybackSession(null);
       return;
     }
@@ -80,7 +75,12 @@ export default function WatchPage() {
     return () => {
       cancelled = true;
     };
-  }, [getPlaybackSession, publicId, videoData?.video?.muxPlaybackId]);
+  }, [getPlaybackSession, publicId, videoData?.video?._id]);
+
+  useEffect(() => {
+    if (!playbackSession?.url) return;
+    prefetchPlaybackSource(playbackSession.url);
+  }, [playbackSession?.url]);
 
   const flattenedComments = useMemo(() => {
     if (!comments) return [] as Array<{ _id: string; timestampSeconds: number; resolved: boolean }>;

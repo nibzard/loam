@@ -23,6 +23,7 @@ import type * as security from "../security.js";
 import type * as shareAccess from "../shareAccess.js";
 import type * as shareLinks from "../shareLinks.js";
 import type * as teams from "../teams.js";
+import type * as uploadSessions from "../uploadSessions.js";
 import type * as videoActions from "../videoActions.js";
 import type * as videoPresence from "../videoPresence.js";
 import type * as videos from "../videos.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   shareAccess: typeof shareAccess;
   shareLinks: typeof shareLinks;
   teams: typeof teams;
+  uploadSessions: typeof uploadSessions;
   videoActions: typeof videoActions;
   videoPresence: typeof videoPresence;
   videos: typeof videos;

@@ -8,6 +8,7 @@ import {
   getMuxAsset,
   verifyMuxWebhookSignature,
 } from "./mux";
+import { parseMuxUploadPassthrough } from "./uploadSessions";
 
 type MuxData = {
   id?: string;
@@ -61,14 +62,21 @@ function getPreferredPlaybackId(playbackIds: MuxData["playback_ids"]): string | 
 async function resolveVideoIdFromMuxRefs(
   ctx: ActionCtx,
   data: MuxData,
-): Promise<Id<"videos"> | null> {
+): Promise<
+  | {
+      allowLegacyWithoutSession?: boolean;
+      uploadSessionToken?: string;
+      videoId: Id<"videos">;
+    }
+  | null
+> {
   const uploadId = asString(data.upload_id);
   if (uploadId) {
     const fromUpload = (await ctx.runQuery(internal.videos.getVideoByMuxUploadId, {
       muxUploadId: uploadId,
     })) as { videoId?: Id<"videos"> } | null;
     if (fromUpload?.videoId) {
-      return fromUpload.videoId;
+      return { videoId: fromUpload.videoId };
     }
   }
 
@@ -78,13 +86,24 @@ async function resolveVideoIdFromMuxRefs(
       muxAssetId: assetId,
     })) as { videoId?: Id<"videos"> } | null;
     if (fromAsset?.videoId) {
-      return fromAsset.videoId;
+      return { videoId: fromAsset.videoId };
     }
   }
 
   const passthrough = asString(data.passthrough);
   if (passthrough) {
-    return passthrough as Id<"videos">;
+    const parsedPassthrough = parseMuxUploadPassthrough(passthrough);
+    if (parsedPassthrough) {
+      return {
+        uploadSessionToken: parsedPassthrough.uploadSessionToken,
+        videoId: parsedPassthrough.videoId as Id<"videos">,
+      };
+    }
+
+    return {
+      allowLegacyWithoutSession: true,
+      videoId: passthrough as Id<"videos">,
+    };
   }
 
   return null;
@@ -140,13 +159,13 @@ export const processWebhook = internalAction({
             break;
           }
 
-          const videoId =
+          const resolved =
             (await resolveVideoIdFromMuxRefs(ctx, {
               ...data,
               asset_id: assetId,
             })) ?? null;
 
-          if (!videoId) {
+          if (!resolved) {
             console.error("Could not resolve video for Mux asset.created", {
               eventType,
               ...eventSummary,
@@ -154,13 +173,29 @@ export const processWebhook = internalAction({
             break;
           }
 
-          await ctx.runMutation(internal.videos.setMuxAssetReference, {
-            videoId,
+          const attached = await ctx.runMutation(internal.videos.setMuxAssetReference, {
+            videoId: resolved.videoId,
             muxAssetId: assetId,
+            uploadSessionToken: resolved.uploadSessionToken,
+            allowLegacyWithoutSession: resolved.allowLegacyWithoutSession,
           });
+          if (!attached.applied) {
+            await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+              videoId: resolved.videoId,
+              muxAssetId: assetId,
+              reason: "stale_mux_webhook_asset_created",
+            });
+            console.log("Ignored stale Mux asset.created", {
+              eventType,
+              videoId: resolved.videoId,
+              assetId,
+            });
+            break;
+          }
+
           console.log("Mapped Mux asset to video", {
             eventType,
-            videoId,
+            videoId: resolved.videoId,
             assetId,
           });
           break;
@@ -198,7 +233,7 @@ export const processWebhook = internalAction({
             break;
           }
 
-          const videoId =
+          const resolved =
             (await resolveVideoIdFromMuxRefs(ctx, {
               ...data,
               asset_id: assetId,
@@ -206,7 +241,7 @@ export const processWebhook = internalAction({
               passthrough: resolvedPassthrough,
             })) ?? null;
 
-          if (!videoId) {
+          if (!resolved) {
             console.error("Could not resolve video for Mux asset.ready", {
               eventType,
               assetId,
@@ -216,16 +251,33 @@ export const processWebhook = internalAction({
             break;
           }
 
-          await ctx.runMutation(internal.videos.markAsReady, {
-            videoId,
+          const markedReady = await ctx.runMutation(internal.videos.markAsReady, {
+            videoId: resolved.videoId,
+            uploadSessionToken: resolved.uploadSessionToken,
             muxAssetId: assetId,
             muxPlaybackId: playbackId,
             duration,
             thumbnailUrl: undefined,
+            allowLegacyWithoutSession: resolved.allowLegacyWithoutSession,
           });
+          if (!markedReady.applied) {
+            await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+              videoId: resolved.videoId,
+              muxAssetId: assetId,
+              reason: "stale_mux_webhook_asset_ready",
+            });
+            console.log("Ignored stale Mux asset.ready", {
+              eventType,
+              videoId: resolved.videoId,
+              assetId,
+              playbackId,
+            });
+            break;
+          }
+
           console.log("Marked video ready from Mux webhook", {
             eventType,
-            videoId,
+            videoId: resolved.videoId,
             assetId,
             playbackId,
           });
@@ -235,12 +287,12 @@ export const processWebhook = internalAction({
 
         case "video.asset.errored": {
           const assetId = asString(data.id) ?? asString(data.asset_id);
-          const videoId = await resolveVideoIdFromMuxRefs(ctx, {
+          const resolved = await resolveVideoIdFromMuxRefs(ctx, {
             ...data,
             asset_id: assetId,
           });
 
-          if (!videoId) {
+          if (!resolved) {
             console.error("Could not resolve video for Mux asset.errored", {
               eventType,
               ...eventSummary,
@@ -252,14 +304,25 @@ export const processWebhook = internalAction({
           const errorMessage = getErrorMessage(data) ?? "Mux failed to process this asset.";
           console.error("Marking video failed from Mux asset.errored", {
             eventType,
-            videoId,
+            videoId: resolved.videoId,
             assetId,
             errorMessage,
           });
-          await ctx.runMutation(internal.videos.markAsFailed, {
-            videoId,
+          const failed = await ctx.runMutation(internal.videos.markAsFailed, {
+            videoId: resolved.videoId,
+            uploadSessionToken: resolved.uploadSessionToken,
+            muxAssetId: assetId,
             uploadError: errorMessage,
+            allowProcessingFailure: true,
+            allowLegacyWithoutSession: resolved.allowLegacyWithoutSession,
           });
+          if (failed.outcome === "stale") {
+            await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+              videoId: resolved.videoId,
+              muxAssetId: assetId,
+              reason: "stale_mux_webhook_asset_errored",
+            });
+          }
           break;
         }
 
@@ -276,12 +339,12 @@ export const processWebhook = internalAction({
         case "video.upload.cancelled":
         case "video.upload.errored": {
           const uploadId = asString(data.id) ?? asString(data.upload_id);
-          const videoId = await resolveVideoIdFromMuxRefs(ctx, {
+          const resolved = await resolveVideoIdFromMuxRefs(ctx, {
             ...data,
             upload_id: uploadId,
           });
 
-          if (!videoId) {
+          if (!resolved) {
             console.error("Could not resolve video for Mux upload failure", {
               eventType,
               ...eventSummary,
@@ -293,13 +356,16 @@ export const processWebhook = internalAction({
           const errorMessage = getErrorMessage(data) ?? "Mux upload failed or was cancelled.";
           console.error("Marking video failed from Mux upload failure", {
             eventType,
-            videoId,
+            videoId: resolved.videoId,
             uploadId,
             errorMessage,
           });
           await ctx.runMutation(internal.videos.markAsFailed, {
-            videoId,
+            videoId: resolved.videoId,
+            uploadSessionToken: resolved.uploadSessionToken,
             uploadError: errorMessage,
+            allowProcessingFailure: true,
+            allowLegacyWithoutSession: resolved.allowLegacyWithoutSession,
           });
           break;
         }

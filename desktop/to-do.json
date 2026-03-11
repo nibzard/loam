@@ -195,8 +195,8 @@
       "id": "T006",
       "title": "Build desktop state models and persistent user defaults",
       "priority": 2,
-      "status": "todo",
-      "details": "Model the recorder lifecycle cleanly in the renderer and persist only the high-value defaults called for in the architecture docs.",
+      "status": "done",
+      "details": "Added typed app lifecycle, recorder session, and localStorage-backed user defaults models; wired the shell and recorder controls to persist last project, microphone, audio/countdown settings, and post-upload defaults.",
       "steps": [
         "Create top-level app state for boot, auth, permissions, ready, recording, uploading, complete, and error states",
         "Create recorder state for selected project, target, microphone, countdown, and upload result",
@@ -213,14 +213,14 @@
         "T005"
       ],
       "files": [
+        "src/App.tsx",
+        "src/components/RecorderControls.tsx",
         "src/state/app-state.ts",
         "src/state/recorder-state.ts",
         "src/state/settings-state.ts",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:12:43Z"
     },
     {
       "id": "T007",
@@ -363,7 +363,7 @@
         "src/routes/uploading.tsx",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:14:00Z"
+      "updated_at": "2026-03-11T21:07:33Z"
     },
     {
       "id": "T011",

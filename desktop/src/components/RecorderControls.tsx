@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type {
   CaptureDisplay,
-  CaptureTarget,
   CaptureWindow,
   MicrophoneDevice,
   RecordingSnapshot,
@@ -19,25 +18,36 @@ import {
   startRecording,
   stopRecording,
 } from "../lib/tauri";
+import { resolvePreferredMicrophone, resolveTarget, type RecorderSelection } from "../state/recorder-state";
 
 type ControlsProps = {
   shellReady: boolean;
+  selection: RecorderSelection;
+  recording: RecordingSnapshot | null;
+  lastStopped: RecordingStopped | null;
+  error: string | null;
+  onSelectionChange: (updates: Partial<RecorderSelection>) => void;
+  onRecordingChange: (recording: RecordingSnapshot | null) => void;
   onStopped?: (recording: RecordingStopped) => void;
+  onErrorChange?: (error: string | null) => void;
 };
 
-export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
+export function RecorderControls({
+  shellReady,
+  selection,
+  recording,
+  lastStopped,
+  error,
+  onSelectionChange,
+  onRecordingChange,
+  onStopped,
+  onErrorChange,
+}: ControlsProps) {
   const [displays, setDisplays] = useState<CaptureDisplay[]>([]);
   const [windows, setWindows] = useState<CaptureWindow[]>([]);
   const [microphones, setMicrophones] = useState<MicrophoneDevice[]>([]);
-  const [selectedTargetKey, setSelectedTargetKey] = useState<string>("");
-  const [selectedMicrophoneId, setSelectedMicrophoneId] = useState<string>("none");
-  const [captureSystemAudio, setCaptureSystemAudio] = useState(false);
-  const [countdownSeconds, setCountdownSeconds] = useState(0);
-  const [recording, setRecording] = useState<RecordingSnapshot | null>(null);
-  const [lastStopped, setLastStopped] = useState<RecordingStopped | null>(null);
   const [systemAudioSupported, setSystemAudioSupported] = useState(false);
   const [pending, setPending] = useState<"start" | "pause" | "resume" | "stop" | "cancel" | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shellReady) {
@@ -64,28 +74,44 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
         setDisplays(nextDisplays);
         setWindows(nextWindows);
         setMicrophones(nextMicrophones);
-        setRecording(current);
+        onRecordingChange(current);
         setSystemAudioSupported(supportsSystemAudio);
 
-        if (!selectedTargetKey) {
+        if (!selection.target) {
           const defaultDisplay = nextDisplays[0];
           const defaultWindow = nextWindows[0];
           if (defaultDisplay) {
-            setSelectedTargetKey(`display:${defaultDisplay.id}`);
+            onSelectionChange({
+              target: {
+                kind: "display",
+                id: defaultDisplay.id,
+                name: defaultDisplay.name,
+              },
+            });
           } else if (defaultWindow) {
-            setSelectedTargetKey(`window:${defaultWindow.id}`);
+            onSelectionChange({
+              target: {
+                kind: "window",
+                id: defaultWindow.id,
+                name: defaultWindow.name,
+                ownerName: defaultWindow.ownerName,
+              },
+            });
           }
         }
 
-        if (selectedMicrophoneId === "none") {
-          const defaultMicrophone = nextMicrophones.find((device) => device.isDefault);
+        if (selection.microphoneId === null) {
+          const defaultMicrophone = resolvePreferredMicrophone(
+            nextMicrophones,
+            selection.microphoneId,
+          );
           if (defaultMicrophone) {
-            setSelectedMicrophoneId(defaultMicrophone.id);
+            onSelectionChange({ microphoneId: defaultMicrophone.id });
           }
         }
       } catch (nextError) {
         if (!cancelled) {
-          setError(getErrorMessage(nextError));
+          onErrorChange?.(getErrorMessage(nextError));
         }
       }
     }
@@ -95,19 +121,30 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedMicrophoneId, selectedTargetKey, shellReady]);
+  }, [
+    onErrorChange,
+    onRecordingChange,
+    onSelectionChange,
+    selection.microphoneId,
+    selection.target,
+    shellReady,
+  ]);
 
-  const selectedTarget = resolveTarget(selectedTargetKey, displays, windows);
+  const selectedTarget = resolveTarget(
+    selection.target ? `${selection.target.kind}:${selection.target.id}` : "",
+    displays,
+    windows,
+  );
   const canStart = shellReady && selectedTarget !== null && pending === null && recording === null;
 
   async function run(action: typeof pending, fn: () => Promise<void>) {
     setPending(action);
-    setError(null);
+    onErrorChange?.(null);
 
     try {
       await fn();
     } catch (nextError) {
-      setError(getErrorMessage(nextError));
+      onErrorChange?.(getErrorMessage(nextError));
     } finally {
       setPending(null);
     }
@@ -131,8 +168,12 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           <span>Target</span>
           <select
             disabled={!shellReady || recording !== null}
-            value={selectedTargetKey}
-            onChange={(event) => setSelectedTargetKey(event.target.value)}
+            value={selection.target ? `${selection.target.kind}:${selection.target.id}` : ""}
+            onChange={(event) =>
+              onSelectionChange({
+                target: resolveTarget(event.target.value, displays, windows),
+              })
+            }
           >
             <option value="">Select a target</option>
             {displays.map((display) => (
@@ -152,8 +193,12 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           <span>Microphone</span>
           <select
             disabled={!shellReady || recording !== null}
-            value={selectedMicrophoneId}
-            onChange={(event) => setSelectedMicrophoneId(event.target.value)}
+            value={selection.microphoneId ?? "none"}
+            onChange={(event) =>
+              onSelectionChange({
+                microphoneId: event.target.value === "none" ? null : event.target.value,
+              })
+            }
           >
             <option value="none">No microphone</option>
             {microphones.map((device) => (
@@ -171,17 +216,25 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
             type="number"
             min={0}
             max={10}
-            value={countdownSeconds}
-            onChange={(event) => setCountdownSeconds(Number(event.target.value) || 0)}
+            value={selection.countdownSeconds}
+            onChange={(event) =>
+              onSelectionChange({
+                countdownSeconds: Number(event.target.value) || 0,
+              })
+            }
           />
         </label>
 
         <label className="toggle">
           <input
-            checked={captureSystemAudio}
+            checked={selection.captureSystemAudio}
             disabled={!systemAudioSupported || recording !== null}
             type="checkbox"
-            onChange={(event) => setCaptureSystemAudio(event.target.checked)}
+            onChange={(event) =>
+              onSelectionChange({
+                captureSystemAudio: event.target.checked,
+              })
+            }
           />
           <span>
             System audio
@@ -198,13 +251,11 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
             run("start", async () => {
               const started = await startRecording({
                 target: selectedTarget!,
-                microphoneName:
-                  selectedMicrophoneId === "none" ? null : selectedMicrophoneId,
-                captureSystemAudio,
-                countdownSeconds,
+                microphoneName: selection.microphoneId,
+                captureSystemAudio: selection.captureSystemAudio,
+                countdownSeconds: selection.countdownSeconds,
               });
-              setRecording(started);
-              setLastStopped(null);
+              onRecordingChange(started);
             })
           }
         >
@@ -216,7 +267,7 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           disabled={recording?.phase !== "recording" || pending !== null}
           onClick={() =>
             run("pause", async () => {
-              setRecording(await pauseRecording());
+              onRecordingChange(await pauseRecording());
             })
           }
         >
@@ -228,7 +279,7 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           disabled={recording?.phase !== "paused" || pending !== null}
           onClick={() =>
             run("resume", async () => {
-              setRecording(await resumeRecording());
+              onRecordingChange(await resumeRecording());
             })
           }
         >
@@ -241,8 +292,7 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           onClick={() =>
             run("stop", async () => {
               const stopped = await stopRecording();
-              setLastStopped(stopped);
-              setRecording(null);
+              onRecordingChange(null);
               onStopped?.(stopped);
             })
           }
@@ -256,8 +306,7 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
           onClick={() =>
             run("cancel", async () => {
               await cancelRecording();
-              setRecording(null);
-              setLastStopped(null);
+              onRecordingChange(null);
             })
           }
         >
@@ -286,43 +335,6 @@ export function RecorderControls({ shellReady, onStopped }: ControlsProps) {
       {error ? <p className="error-copy">{error}</p> : null}
     </section>
   );
-}
-
-function resolveTarget(
-  selectedTargetKey: string,
-  displays: CaptureDisplay[],
-  windows: CaptureWindow[],
-): CaptureTarget | null {
-  const [kind, id] = selectedTargetKey.split(":");
-
-  if (!kind || !id) {
-    return null;
-  }
-
-  if (kind === "display") {
-    const display = displays.find((candidate) => candidate.id === id);
-    return display
-      ? {
-          kind: "display",
-          id: display.id,
-          name: display.name,
-        }
-      : null;
-  }
-
-  if (kind === "window") {
-    const window = windows.find((candidate) => candidate.id === id);
-    return window
-      ? {
-          kind: "window",
-          id: window.id,
-          name: window.name,
-          ownerName: window.ownerName,
-        }
-      : null;
-  }
-
-  return null;
 }
 
 function getErrorMessage(error: unknown) {

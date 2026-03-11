@@ -2,29 +2,30 @@ import { useAuth, useUser } from "@clerk/clerk-react";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { RecorderControls } from "./components/RecorderControls";
+import { deriveAppLifecycleState } from "./state/app-state";
+import {
+  createRecorderState,
+  resolvePreferredProject,
+  type RecorderSelection,
+  type UploadProject,
+} from "./state/recorder-state";
+import {
+  updateUserDefaults,
+  usePersistentUserDefaults,
+} from "./state/settings-state";
 import {
   completeUploadAction,
   failUploadAction,
   prepareUploadAction,
   startUploadFlow,
   type UploadFlowController,
-  type UploadFlowSnapshot,
 } from "./lib/uploadFlow";
-import type { RecordingStopped } from "./lib/tauri";
+import { checkPermissions, type PermissionSnapshot } from "./lib/tauri";
 import { LoginRoute } from "./routes/login";
 import { UploadingRoute } from "./routes/uploading";
 
-type AppScreen = "booting" | "login" | "recorder" | "uploading";
 type DesktopRoute = "recorder" | "uploading";
-
-type UploadTarget = {
-  projectId: Id<"projects">;
-  projectName: string;
-  teamName: string;
-  teamSlug: string;
-};
 
 const RECORDER_PATH = "/";
 const UPLOADING_PATH = "/uploading";
@@ -38,12 +39,15 @@ const RUNNING_UPLOAD_STEPS = new Set([
 export function App() {
   const { isLoaded, isSignedIn } = useAuth();
   const [route, setRoute] = useState<DesktopRoute>(() => readRoute());
-
-  let screen: AppScreen = "booting";
-
-  if (isLoaded) {
-    screen = isSignedIn ? (route === "uploading" ? "uploading" : "recorder") : "login";
-  }
+  const appState = deriveAppLifecycleState({
+    authLoaded: isLoaded,
+    isSignedIn: Boolean(isSignedIn),
+    permissions: null,
+    recording: null,
+    upload: null,
+    completion: null,
+    error: null,
+  });
 
   return (
     <>
@@ -51,9 +55,9 @@ export function App() {
       <div className="app-shell">
         <div className="hero-glow hero-glow-left" />
         <div className="hero-glow hero-glow-right" />
-        {screen === "booting" ? <BootScreen /> : null}
-        {screen === "login" ? <LoginRoute /> : null}
-        {screen === "recorder" || screen === "uploading" ? (
+        {appState === "booting" ? <BootScreen /> : null}
+        {appState === "authRequired" ? <LoginRoute /> : null}
+        {appState !== "booting" && appState !== "authRequired" ? (
           <RecorderShell route={route} setRoute={setRoute} />
         ) : null}
       </div>
@@ -85,6 +89,7 @@ function RecorderShell({
 }) {
   const { user } = useUser();
   const { isLoading, isAuthenticated } = useConvexAuth();
+  const userDefaults = usePersistentUserDefaults();
   const uploadTargets = useQuery(
     api.projects.listUploadTargets,
     isAuthenticated ? {} : "skip",
@@ -92,20 +97,92 @@ function RecorderShell({
   const prepareUpload = useAction(prepareUploadAction);
   const completeUpload = useAction(completeUploadAction);
   const failUpload = useAction(failUploadAction);
-  const [lastStopped, setLastStopped] = useState<RecordingStopped | null>(null);
-  const [uploadSnapshot, setUploadSnapshot] = useState<UploadFlowSnapshot | null>(null);
+  const [permissions, setPermissions] = useState<PermissionSnapshot | null>(null);
+  const [recorderState, setRecorderState] = useState(() =>
+    createRecorderState({
+      projectId: null,
+      target: null,
+      microphoneId: userDefaults.lastMicrophoneId,
+      countdownSeconds: userDefaults.countdownSeconds,
+      captureSystemAudio: userDefaults.captureSystemAudio,
+    }),
+  );
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const uploadControllerRef = useRef<UploadFlowController | null>(null);
 
-  const selectedTarget = uploadTargets?.[0] as UploadTarget | undefined;
+  const selectedProject = resolvePreferredProject(
+    uploadTargets as UploadProject[] | undefined,
+    userDefaults.lastProjectId,
+  );
   const navigationLocked =
-    uploadSnapshot !== null && RUNNING_UPLOAD_STEPS.has(uploadSnapshot.step);
+    recorderState.upload !== null && RUNNING_UPLOAD_STEPS.has(recorderState.upload.step);
+  const appState = deriveAppLifecycleState({
+    authLoaded: !isLoading,
+    isSignedIn: isAuthenticated,
+    permissions,
+    recording: recorderState.recording,
+    upload: recorderState.upload,
+    completion: recorderState.completion,
+    error: recorderState.error,
+  });
 
   const authStatus = isLoading
     ? "Exchanging Clerk session for a Convex token"
     : isAuthenticated
       ? "Authenticated"
       : "Waiting for auth";
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setPermissions(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void checkPermissions(true)
+      .then((snapshot) => {
+        if (!cancelled) {
+          setPermissions(snapshot);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setRecorderState((current) => ({
+            ...current,
+            error: getErrorMessage(error),
+          }));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!selectedProject) {
+      return;
+    }
+
+    setRecorderState((current) => {
+      if (current.selection.projectId === selectedProject.projectId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        selection: {
+          ...current.selection,
+          projectId: selectedProject.projectId,
+        },
+      };
+    });
+
+    if (userDefaults.lastProjectId !== selectedProject.projectId) {
+      updateUserDefaults({ lastProjectId: selectedProject.projectId });
+    }
+  }, [selectedProject, userDefaults.lastProjectId]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -124,19 +201,29 @@ function RecorderShell({
   }, [navigationLocked, setRoute]);
 
   async function handleBeginUpload() {
-    if (!lastStopped || !selectedTarget || uploadControllerRef.current) {
+    if (!recorderState.lastStopped || !selectedProject || uploadControllerRef.current) {
       return;
     }
 
     setUploadMessage(null);
+    setRecorderState((current) => ({
+      ...current,
+      completion: null,
+      error: null,
+    }));
 
     const controller = startUploadFlow({
-      recording: lastStopped,
-      projectId: selectedTarget.projectId,
+      recording: recorderState.lastStopped,
+      projectId: selectedProject.projectId,
       prepareUpload,
       completeUpload,
       failUpload,
-      onStateChange: setUploadSnapshot,
+      onStateChange: (snapshot) => {
+        setRecorderState((current) => ({
+          ...current,
+          upload: snapshot,
+        }));
+      },
     });
 
     uploadControllerRef.current = controller;
@@ -146,11 +233,27 @@ function RecorderShell({
     uploadControllerRef.current = null;
 
     if (result.status === "complete") {
-      setLastStopped(null);
+      setRecorderState((current) => ({
+        ...current,
+        lastStopped: null,
+        upload: result.snapshot,
+        completion: result.completion,
+        error: null,
+      }));
       setUploadMessage(`Upload finished. Share link ready at ${result.completion.shareUrl}`);
     } else if (result.status === "cancelled") {
+      setRecorderState((current) => ({
+        ...current,
+        upload: result.snapshot,
+        error: null,
+      }));
       setUploadMessage("Upload cancelled. The local recording is still available for retry.");
     } else {
+      setRecorderState((current) => ({
+        ...current,
+        upload: result.snapshot,
+        error: result.error,
+      }));
       setUploadMessage(result.error);
     }
 
@@ -161,10 +264,10 @@ function RecorderShell({
     await uploadControllerRef.current?.cancel();
   }
 
-  if (route === "uploading" && uploadSnapshot) {
+  if (route === "uploading" && recorderState.upload) {
     return (
       <UploadingRoute
-        snapshot={uploadSnapshot}
+        snapshot={recorderState.upload}
         navigationLocked={navigationLocked}
         onCancel={() => {
           void handleCancelUpload();
@@ -182,8 +285,8 @@ function RecorderShell({
             <h1>Loam Desktop Recorder</h1>
           </div>
           <div className="metric">
-            <span>Convex auth</span>
-            <strong>{authStatus}</strong>
+            <span>Lifecycle</span>
+            <strong>{formatLifecycle(appState)}</strong>
           </div>
         </div>
 
@@ -207,6 +310,15 @@ function RecorderShell({
                 : `${uploadTargets.length} target${uploadTargets.length === 1 ? "" : "s"}`
             }
             detail="Queried with the authenticated Convex client"
+          />
+          <StatusCard
+            label="Permission snapshot"
+            value={
+              permissions
+                ? `screen ${permissions.screen} / mic ${permissions.microphone}`
+                : "Pending"
+            }
+            detail={authStatus}
           />
           <StatusCard
             label="Desktop auth fallback"
@@ -253,13 +365,58 @@ function RecorderShell({
 
         <RecorderControls
           shellReady={isAuthenticated}
+          selection={recorderState.selection}
+          recording={recorderState.recording}
+          lastStopped={recorderState.lastStopped}
+          error={recorderState.error}
+          onSelectionChange={(updates) => {
+            setRecorderState((current) => ({
+              ...current,
+              selection: {
+                ...current.selection,
+                ...updates,
+              } satisfies RecorderSelection,
+            }));
+
+            if (updates.microphoneId !== undefined) {
+              updateUserDefaults({ lastMicrophoneId: updates.microphoneId });
+            }
+
+            if (updates.captureSystemAudio !== undefined) {
+              updateUserDefaults({ captureSystemAudio: updates.captureSystemAudio });
+            }
+
+            if (updates.countdownSeconds !== undefined) {
+              updateUserDefaults({ countdownSeconds: updates.countdownSeconds });
+            }
+          }}
+          onRecordingChange={(recording) => {
+            setRecorderState((current) => ({
+              ...current,
+              recording,
+              lastStopped: recording ? null : current.lastStopped,
+              error: null,
+            }));
+          }}
           onStopped={(recording) => {
-            setLastStopped(recording);
+            setRecorderState((current) => ({
+              ...current,
+              lastStopped: recording,
+              recording: null,
+              completion: null,
+              error: null,
+            }));
             setUploadMessage(null);
+          }}
+          onErrorChange={(error) => {
+            setRecorderState((current) => ({
+              ...current,
+              error,
+            }));
           }}
         />
 
-        {lastStopped ? (
+        {recorderState.lastStopped ? (
           <section className="upload-launcher">
             <div className="panel-header">
               <div>
@@ -269,8 +426,8 @@ function RecorderShell({
               <div className="metric">
                 <span>Default project</span>
                 <strong>
-                  {selectedTarget
-                    ? `${selectedTarget.teamName} / ${selectedTarget.projectName}`
+                  {selectedProject
+                    ? `${selectedProject.teamName} / ${selectedProject.projectName}`
                     : "Unavailable"}
                 </strong>
               </div>
@@ -280,10 +437,59 @@ function RecorderShell({
               the local file through Rust, then finalizes the share link in one
               guarded flow.
             </p>
+            <div className="status-grid">
+              <StatusCard
+                label="Copy link"
+                value={userDefaults.copyShareLinkAfterUpload ? "Enabled" : "Disabled"}
+                detail="Persistent default for the completion flow"
+              />
+              <StatusCard
+                label="Open browser"
+                value={userDefaults.openBrowserAfterUpload ? "Enabled" : "Disabled"}
+                detail="Persistent default for post-upload behavior"
+              />
+              <StatusCard
+                label="Recorder project"
+                value={selectedProject?.projectName ?? "Unavailable"}
+                detail={selectedProject?.teamName ?? "No uploadable project"}
+              />
+            </div>
+            <div className="controls-grid">
+              <label className="toggle">
+                <input
+                  checked={userDefaults.copyShareLinkAfterUpload}
+                  type="checkbox"
+                  onChange={(event) => {
+                    updateUserDefaults({
+                      copyShareLinkAfterUpload: event.target.checked,
+                    });
+                  }}
+                />
+                <span>
+                  Copy share link after upload
+                  <small>Stored as the default completion action</small>
+                </span>
+              </label>
+              <label className="toggle">
+                <input
+                  checked={userDefaults.openBrowserAfterUpload}
+                  type="checkbox"
+                  onChange={(event) => {
+                    updateUserDefaults({
+                      openBrowserAfterUpload: event.target.checked,
+                    });
+                  }}
+                />
+                <span>
+                  Open browser after upload
+                  <small>Stored for the completion route</small>
+                </span>
+              </label>
+            </div>
             <div className="button-row">
               <button
                 className="button button-primary"
-                disabled={!selectedTarget || uploadTargets === undefined}
+                disabled={!selectedProject || uploadTargets === undefined}
                 onClick={() => {
                   void handleBeginUpload();
                 }}
@@ -291,7 +497,7 @@ function RecorderShell({
                 Upload latest recording
               </button>
             </div>
-            {!selectedTarget && uploadTargets !== undefined ? (
+            {!selectedProject && uploadTargets !== undefined ? (
               <p className="error-copy">
                 No uploadable Loam project is available for this account.
               </p>
@@ -330,6 +536,18 @@ function navigateTo(
   }
 
   setRoute(route);
+}
+
+function formatLifecycle(state: ReturnType<typeof deriveAppLifecycleState>) {
+  return state.replace(/([A-Z])/g, " $1").replace(/^./, (value) => value.toUpperCase());
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Unknown desktop error";
 }
 
 function StatusCard({

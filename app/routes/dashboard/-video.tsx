@@ -219,7 +219,7 @@ export default function VideoPage() {
 
   useEffect(() => {
     if (!playbackUrl || activePlaybackUrl !== playbackUrl) return;
-    prefetchHlsRuntime();
+    prefetchHlsRuntime(playbackUrl);
     prefetchPlaybackSource(playbackUrl);
   }, [activePlaybackUrl, playbackUrl]);
 

@@ -25,6 +25,16 @@ const shareLinkStatusValidator = v.union(
   v.literal("ok"),
 );
 
+const shareAccessGrantFailureReasonValidator = v.union(
+  v.literal("missing"),
+  v.literal("expired"),
+  v.literal("processing"),
+  v.literal("failed"),
+  v.literal("passwordRejected"),
+  v.literal("rateLimited"),
+  v.literal("unavailable"),
+);
+
 const shareLinkRateLimiter = new RateLimiter(components.rateLimiter, {
   grantGlobal: {
     kind: "fixed window",
@@ -276,40 +286,93 @@ export const issueAccessGrant = mutation({
   returns: v.object({
     ok: v.boolean(),
     grantToken: v.union(v.string(), v.null()),
+    failureReason: v.union(shareAccessGrantFailureReasonValidator, v.null()),
+    retryAfterSeconds: v.union(v.number(), v.null()),
   }),
   handler: async (ctx, args) => {
     const globalAccessLimit = await shareLinkRateLimiter.limit(ctx, "grantGlobal");
     if (!globalAccessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "rateLimited" as const,
+        retryAfterSeconds: globalAccessLimit.retryAfter ?? null,
+      };
     }
 
     const accessLimit = await shareLinkRateLimiter.limit(ctx, "grantByToken", {
       key: args.token,
     });
     if (!accessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "rateLimited" as const,
+        retryAfterSeconds: accessLimit.retryAfter ?? null,
+      };
     }
 
     const link = await findShareLinkByToken(ctx, args.token);
 
     if (!link) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "missing" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     const now = Date.now();
 
     if (link.expiresAt && link.expiresAt <= now) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "expired" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     const video = await ctx.db.get(link.videoId);
-    if (!video || video.status !== "ready") {
-      return { ok: false, grantToken: null };
+    if (!video) {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "missing" as const,
+        retryAfterSeconds: null,
+      };
+    }
+
+    if (video.status === "failed") {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "failed" as const,
+        retryAfterSeconds: null,
+      };
+    }
+
+    if (video.status !== "ready") {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "processing" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     if (hasPasswordProtection(link)) {
       if (isShareLinkPasswordLocked(link, now)) {
-        return { ok: false, grantToken: null };
+        return {
+          ok: false,
+          grantToken: null,
+          failureReason: "rateLimited" as const,
+          retryAfterSeconds:
+            typeof link.lockedUntil === "number" && link.lockedUntil > now
+              ? Math.max(1, Math.ceil((link.lockedUntil - now) / 1000))
+              : null,
+        };
       }
 
       const password = args.password ?? "";
@@ -327,7 +390,12 @@ export const issueAccessGrant = mutation({
 
         const updates: Partial<Doc<"shareLinks">> = planSharePasswordFailure(link, now);
         await ctx.db.patch(link._id, updates);
-        return { ok: false, grantToken: null };
+        return {
+          ok: false,
+          grantToken: null,
+          failureReason: "passwordRejected" as const,
+          retryAfterSeconds: null,
+        };
       }
 
       const passwordSuccess = planSharePasswordSuccess(link);
@@ -353,6 +421,8 @@ export const issueAccessGrant = mutation({
     return {
       ok: true,
       grantToken,
+      failureReason: null,
+      retryAfterSeconds: null,
     };
   },
 });

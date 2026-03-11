@@ -62,6 +62,12 @@ const publicVideoDataValidator = v.object({
   video: clientVideoSummaryValidator,
 });
 
+const shareVideoDataValidator = v.object({
+  allowDownload: v.boolean(),
+  grantExpiresAt: v.number(),
+  video: clientVideoSummaryValidator,
+});
+
 const publicWatchBootstrapValidator = v.union(
   v.object({
     state: v.literal("missing"),
@@ -96,10 +102,14 @@ const sharePlaybackBootstrapValidator = v.union(
     state: v.literal("passwordRejected"),
   }),
   v.object({
+    state: v.literal("temporarilyUnavailable"),
+    retryAfterSeconds: v.union(v.number(), v.null()),
+  }),
+  v.object({
     state: v.literal("ready"),
     grantToken: v.string(),
     playbackSession: playbackSessionValidator,
-    videoData: publicVideoDataValidator,
+    videoData: shareVideoDataValidator,
   }),
 );
 
@@ -137,6 +147,12 @@ type PublicVideoData = {
   video: ClientVideoSummary;
 };
 
+type ShareVideoData = {
+  allowDownload: boolean;
+  grantExpiresAt: number;
+  video: ClientVideoSummary;
+};
+
 type PublicWatchBootstrap =
   | { state: "missing" }
   | {
@@ -153,16 +169,27 @@ type SharePlaybackBootstrap =
   | { state: "failed" }
   | { state: "passwordRequired" }
   | { state: "passwordRejected" }
+  | { retryAfterSeconds: number | null; state: "temporarilyUnavailable" }
   | {
       state: "ready";
       grantToken: string;
       playbackSession: PlaybackSession;
-      videoData: PublicVideoData;
+      videoData: ShareVideoData;
     };
 
 type ShareAccessGrantResult = {
+  failureReason:
+    | "expired"
+    | "failed"
+    | "missing"
+    | "passwordRejected"
+    | "processing"
+    | "rateLimited"
+    | "unavailable"
+    | null;
   ok: boolean;
   grantToken: string | null;
+  retryAfterSeconds: number | null;
 };
 
 type MarkUploadFailedResult = {
@@ -170,6 +197,43 @@ type MarkUploadFailedResult = {
   outcome: "already_failed" | "applied" | "ignored" | "stale";
   success: boolean;
 };
+
+type DownloadTarget = {
+  contentType?: string | null;
+  s3Key?: string | null;
+  status: "failed" | "processing" | "ready" | "uploading";
+  title?: string | null;
+};
+
+function mapShareGrantFailureToBootstrap(
+  failureReason: ShareAccessGrantResult["failureReason"],
+  options?: {
+    passwordProvided?: boolean;
+    retryAfterSeconds?: number | null;
+  },
+): Exclude<SharePlaybackBootstrap, { state: "bootstrapping" } | { state: "ready" }> {
+  switch (failureReason) {
+    case "missing":
+      return { state: "missing" };
+    case "expired":
+      return { state: "expired" };
+    case "processing":
+      return { state: "processing" };
+    case "failed":
+      return { state: "failed" };
+    case "passwordRejected":
+      return {
+        state: options?.passwordProvided ? "passwordRejected" : "passwordRequired",
+      };
+    case "rateLimited":
+    case "unavailable":
+    default:
+      return {
+        state: "temporarilyUnavailable",
+        retryAfterSeconds: options?.retryAfterSeconds ?? null,
+      };
+  }
+}
 
 function getExtensionFromKey(key: string, fallback = "mp4") {
   let source = key;
@@ -339,6 +403,9 @@ async function ensurePublicPlaybackIdForTarget(
   let publicPlaybackId = playbackIds.publicPlaybackId;
   if (!publicPlaybackId) {
     const created = await createPublicPlaybackId(muxAssetId);
+    if (!created.id) {
+      throw new Error("Mux did not return a public playback id");
+    }
     publicPlaybackId = created.id;
   }
 
@@ -409,6 +476,31 @@ async function buildSignedMuxPlaybackSession(
     playbackToken,
     thumbnailToken,
   });
+}
+
+async function buildDownloadResponse(target: DownloadTarget): Promise<{
+  filename: string;
+  url: string;
+}> {
+  if (target.status !== "ready") {
+    throw new Error("Video not found or not ready");
+  }
+
+  const key = getValueString(target, "s3Key");
+  if (!key) {
+    throw new Error("Original bucket file not found for this video");
+  }
+
+  const filename = buildDownloadFilename(target.title ?? undefined, key);
+
+  return {
+    filename,
+    url: await buildSignedBucketObjectUrl(key, {
+      expiresIn: 600,
+      filename,
+      contentType: target.contentType ?? "video/mp4",
+    }),
+  };
 }
 
 export const cleanupDeletedVideoAssets = internalAction({
@@ -869,38 +961,13 @@ export const getSharePlaybackBootstrap = action({
     });
 
     if (!grant.ok || !grant.grantToken) {
-      if (args.password) {
-        return { state: "passwordRejected" as const };
-      }
-
-      const refreshedShareInfo = await ctx.runQuery(api.shareLinks.getByToken, {
-        token: args.token,
+      return mapShareGrantFailureToBootstrap(grant.failureReason, {
+        passwordProvided: Boolean(args.password),
+        retryAfterSeconds: grant.retryAfterSeconds,
       });
-
-      if (refreshedShareInfo.status === "missing") {
-        return { state: "missing" as const };
-      }
-
-      if (refreshedShareInfo.status === "expired") {
-        return { state: "expired" as const };
-      }
-
-      if (refreshedShareInfo.status === "processing") {
-        return { state: "processing" as const };
-      }
-
-      if (refreshedShareInfo.status === "failed") {
-        return { state: "failed" as const };
-      }
-
-      if (refreshedShareInfo.status === "requiresPassword") {
-        return { state: "passwordRequired" as const };
-      }
-
-      return { state: "bootstrapping" as const };
     }
 
-    const videoData: PublicVideoData | null = await ctx.runQuery(api.videos.getByShareGrant, {
+    const videoData: ShareVideoData | null = await ctx.runQuery(api.videos.getByShareGrant, {
       grantToken: grant.grantToken,
     });
 
@@ -923,6 +990,29 @@ export const getSharePlaybackBootstrap = action({
   },
 });
 
+export const getSharedDownloadUrl = action({
+  args: { grantToken: v.string() },
+  returns: v.object({
+    url: v.string(),
+    filename: v.string(),
+  }),
+  handler: async (ctx, args): Promise<{ filename: string; url: string }> => {
+    const target = await ctx.runQuery(internal.videos.getShareGrantDownloadTarget, {
+      grantToken: args.grantToken,
+    });
+
+    if (!target) {
+      throw new Error("Video not found");
+    }
+
+    if (!target.allowDownload) {
+      throw new Error("Downloads are disabled for this share link");
+    }
+
+    return await buildDownloadResponse(target);
+  },
+});
+
 export const getDownloadUrl = action({
   args: { videoId: v.id("videos") },
   returns: v.object({
@@ -938,24 +1028,6 @@ export const getDownloadUrl = action({
       throw new Error("Video not found");
     }
 
-    if (video.status !== "ready") {
-      throw new Error("Video not found or not ready");
-    }
-
-    const key = getValueString(video, "s3Key");
-    if (!key) {
-      throw new Error("Original bucket file not found for this video");
-    }
-
-    const filename = buildDownloadFilename(video.title, key);
-
-    return {
-      url: await buildSignedBucketObjectUrl(key, {
-        expiresIn: 600,
-        filename,
-        contentType: video.contentType ?? "video/mp4",
-      }),
-      filename,
-    };
+    return await buildDownloadResponse(video);
   },
 });

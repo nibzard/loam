@@ -98,12 +98,12 @@ export function PublicCommentComposer({
 
   if (!user) {
     return (
-      <a href={signInHref} className="block">
-        <Button className={cn("w-full", submitButtonClassName)}>
+      <Button asChild className={cn("w-full", submitButtonClassName)}>
+        <a href={signInHref}>
           <MessageSquare className="mr-1.5 h-4 w-4" />
           Sign in to comment
-        </Button>
-      </a>
+        </a>
+      </Button>
     );
   }
 

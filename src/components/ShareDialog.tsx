@@ -55,6 +55,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newLinkOptions, setNewLinkOptions] = useState({
+    allowDownload: false,
     expiresInDays: undefined as number | undefined,
     password: undefined as string | undefined,
   });
@@ -64,11 +65,12 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     try {
       await createShareLink({
         videoId,
+        allowDownload: newLinkOptions.allowDownload,
         expiresInDays: newLinkOptions.expiresInDays,
-        allowDownload: false,
         password: newLinkOptions.password,
       });
       setNewLinkOptions({
+        allowDownload: false,
         expiresInDays: undefined,
         password: undefined,
       });
@@ -114,6 +116,13 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
       await deleteShareLink({ linkId });
     } catch (error) {
       console.error("Failed to delete share link:", error);
+    }
+  };
+
+  const openInNewTab = (path: string) => {
+    const opened = window.open(path, "_blank", "noopener,noreferrer");
+    if (opened) {
+      opened.opener = null;
     }
   };
 
@@ -181,7 +190,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                   variant="outline"
                   className="flex-1"
                   disabled={video?.visibility !== "public"}
-                  onClick={() => window.open(publicWatchPath, "_blank")}
+                  onClick={() => openInNewTab(publicWatchPath)}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open
@@ -194,7 +203,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         <div className="space-y-4 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
           <h3 className="font-bold text-sm text-[var(--foreground)]">Restricted sharing (default)</h3>
           <p className="text-xs text-[var(--foreground-subtle)]">
-            Dashboard sharing creates or reuses a default restricted link automatically. Use this panel when you need extra links with expiration or password protection.
+            Dashboard sharing creates or reuses a default restricted link automatically. Use this panel when you need extra links with expiration, password protection, or download permission.
           </p>
 
           <div>
@@ -256,6 +265,24 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
             />
           </div>
 
+          <div>
+            <label className="text-sm text-[var(--foreground-muted)]">Downloads</label>
+            <Button
+              type="button"
+              variant={newLinkOptions.allowDownload ? "default" : "outline"}
+              className="mt-1 w-full justify-between"
+              onClick={() =>
+                setNewLinkOptions((options) => ({
+                  ...options,
+                  allowDownload: !options.allowDownload,
+                }))
+              }
+            >
+              <span>Allow recipients to download the original file</span>
+              <span>{newLinkOptions.allowDownload ? "Enabled" : "Disabled"}</span>
+            </Button>
+          </div>
+
           <Button onClick={() => void handleCreateLink()} disabled={isCreating} className="w-full">
             <Plus className="mr-2 h-4 w-4" />
             {isCreating ? "Creating..." : "Create extra restricted link"}
@@ -297,6 +324,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                           Protected
                         </span>
                       ) : null}
+                      {link.allowDownload ? <span>Downloads enabled</span> : null}
                       {link.expiresAt ? (
                         <span>
                           Expires {formatRelativeTime(link.expiresAt)}
@@ -319,7 +347,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => window.open(`/share/${link.token}`, "_blank")}
+                      onClick={() => openInNewTab(`/share/${link.token}`)}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>

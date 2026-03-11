@@ -27,7 +27,6 @@ import {
 import { Id } from "@convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 import { teamHomePath, videoPath } from "@/lib/routes";
-import { prefetchHlsRuntime } from "@/lib/muxPlayback";
 import { preloadVideoPlayer } from "@/components/video-player/lazy";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { useProjectData } from "./-project.data";
@@ -68,7 +67,6 @@ function VideoIntentTarget({
       videoId,
     });
     preloadVideoPlayer();
-    prefetchHlsRuntime();
   });
 
   return (

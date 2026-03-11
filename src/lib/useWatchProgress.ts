@@ -263,9 +263,11 @@ export function useWatchProgress({
   }, [flush]);
 
   useEffect(() => {
-    void flush();
+    // The previous tracker instance is flushed by the cleanup effect tied to the
+    // old closures. Reset immediately here so pending seconds cannot leak into
+    // the next video/share target.
     resetState();
-  }, [trackerKey, flush, resetState]);
+  }, [resetState, trackerKey]);
 
   useEffect(() => {
     if (!enabled || machineRef.current?.snapshot().isCapReached) return;

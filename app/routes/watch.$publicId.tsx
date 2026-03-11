@@ -21,7 +21,7 @@ export const Route = createFileRoute("/watch/$publicId")({
       links: [...head.links, ...muxPreconnectLinks],
     };
   },
-  loader: async ({ params }) => {
+  loader: async ({ params, preload }) => {
     preloadVideoPlayer();
 
     const bootstrap = await loadWatchRouteBootstrap(convex, {
@@ -29,7 +29,9 @@ export const Route = createFileRoute("/watch/$publicId")({
     });
 
     if (bootstrap.state === "ready") {
-      prefetchHlsRuntime();
+      if (!preload) {
+        prefetchHlsRuntime(bootstrap.playbackSession.url);
+      }
       prefetchPlaybackSource(bootstrap.playbackSession.url);
     }
 

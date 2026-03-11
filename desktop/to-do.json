@@ -119,8 +119,8 @@
       "id": "T004",
       "title": "Integrate Clerk and Convex auth inside the desktop renderer",
       "priority": 1,
-      "status": "todo",
-      "details": "Use the existing loam auth model in the renderer and only introduce desktop-specific auth fallback code if Clerk-in-webview proves insufficient.",
+      "status": "done",
+      "details": "Mounted Clerk and Convex providers at the renderer root, added a local Clerk sign-in screen for unauthenticated boots, verified authenticated Convex access with projects.listUploadTargets, and kept desktopAuth as a no-op fallback boundary because Clerk works directly in the Tauri webview.",
       "steps": [
         "Create desktop Clerk and Convex provider wiring",
         "Mount providers at the renderer root",
@@ -138,15 +138,14 @@
         "T003"
       ],
       "files": [
+        "src/main.tsx",
+        "src/App.tsx",
         "src/lib/clerk.tsx",
         "src/lib/convex.tsx",
-        "src/routes/login.tsx",
         "src/lib/desktopAuth.ts",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "src/routes/login.tsx"
+      ],
+      "updated_at": "2026-03-11T20:42:03Z"
     },
     {
       "id": "T005",

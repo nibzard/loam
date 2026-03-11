@@ -1,98 +1,18 @@
-import { useMemo, useState } from "react";
+import { useAuth, useUser } from "@clerk/clerk-react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { LoginRoute } from "./routes/login";
 
-type ScreenId =
-  | "login"
-  | "permissions"
-  | "recorder"
-  | "uploading"
-  | "complete";
-
-type ScreenDefinition = {
-  id: ScreenId;
-  eyebrow: string;
-  title: string;
-  description: string;
-  hint: string;
-  metricLabel: string;
-  metricValue: string;
-};
-
-const SCREENS: ScreenDefinition[] = [
-  {
-    id: "login",
-    eyebrow: "01 auth",
-    title: "Use the existing Loam identity",
-    description:
-      "The renderer stays thin: Clerk and Convex live here, while Rust remains focused on native capture.",
-    hint: "Desktop auth wiring lands next. The shell already reserves the screen and user flow.",
-    metricLabel: "Target boot",
-    metricValue: "< 4 clicks to latest video",
-  },
-  {
-    id: "permissions",
-    eyebrow: "02 permissions",
-    title: "Ask once, get out of the way",
-    description:
-      "Screen and microphone access are treated as launch prerequisites, with direct paths to request or fix them.",
-    hint: "Permission commands are intentionally deferred to the native surface instead of hidden in the renderer.",
-    metricLabel: "Native surface",
-    metricValue: "Small by default",
-  },
-  {
-    id: "recorder",
-    eyebrow: "03 setup",
-    title: "One setup view for target, mic, and project",
-    description:
-      "The main recording screen is shaped for speed: choose a target, keep defaults sticky, and start immediately.",
-    hint: "This shell establishes the route and content regions without committing to final state management yet.",
-    metricLabel: "Primary action",
-    metricValue: "Record locally",
-  },
-  {
-    id: "uploading",
-    eyebrow: "04 upload",
-    title: "Local-first output, then a fast share link",
-    description:
-      "Uploads stay off the critical recording path. Native code streams bytes while the renderer tracks progress and result state.",
-    hint: "The backend contract returns the final share URL so the UI never rebuilds it manually.",
-    metricLabel: "Default output",
-    metricValue: "Share link",
-  },
-  {
-    id: "complete",
-    eyebrow: "05 finish",
-    title: "Copy the link and move on",
-    description:
-      "The completion state is optimized for immediacy: copy, open in browser, or start another recording without hunting.",
-    hint: "Mux playback can still be processing; the desktop shell still has a finished state with useful next actions.",
-    metricLabel: "User promise",
-    metricValue: "Fast to share",
-  },
-];
-
-const COMMAND_SURFACE = [
-  "checkPermissions()",
-  "requestPermission(permission)",
-  "openPermissionSettings(permission)",
-  "listCaptureDisplays()",
-  "listCaptureWindows()",
-  "listMicrophones()",
-  "isSystemAudioSupported()",
-  "startRecording(input)",
-  "pauseRecording()",
-  "resumeRecording()",
-  "stopRecording()",
-  "cancelRecording()",
-  "getCurrentRecording()",
-  "uploadFile(input)",
-];
+type AppScreen = "booting" | "login" | "recorder";
 
 export function App() {
-  const [activeScreen, setActiveScreen] = useState<ScreenId>("recorder");
-  const currentScreen = useMemo(
-    () => SCREENS.find((screen) => screen.id === activeScreen) ?? SCREENS[0],
-    [activeScreen],
-  );
+  const { isLoaded, isSignedIn } = useAuth();
+
+  let screen: AppScreen = "booting";
+
+  if (isLoaded) {
+    screen = isSignedIn ? "recorder" : "login";
+  }
 
   return (
     <>
@@ -100,95 +20,140 @@ export function App() {
       <div className="app-shell">
         <div className="hero-glow hero-glow-left" />
         <div className="hero-glow hero-glow-right" />
-        <header className="topbar">
-          <div>
-            <p className="kicker">Loam Desktop Recorder</p>
-            <h1>React and Tauri shell</h1>
-          </div>
-          <div className="build-chip">
-            <span className="build-label">Boot state</span>
-            <strong>Scaffolded</strong>
-          </div>
-        </header>
-
-        <main className="layout">
-          <section className="panel panel-primary">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">{currentScreen.eyebrow}</p>
-                <h2>{currentScreen.title}</h2>
-              </div>
-              <div className="metric">
-                <span>{currentScreen.metricLabel}</span>
-                <strong>{currentScreen.metricValue}</strong>
-              </div>
-            </div>
-
-            <p className="lede">{currentScreen.description}</p>
-
-            <div className="screen-grid">
-              {SCREENS.map((screen) => (
-                <button
-                  key={screen.id}
-                  className={`screen-card${screen.id === activeScreen ? " is-active" : ""}`}
-                  onClick={() => setActiveScreen(screen.id)}
-                  type="button"
-                >
-                  <span>{screen.eyebrow}</span>
-                  <strong>{screen.title}</strong>
-                  <p>{screen.hint}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="preview">
-              <div className="preview-toolbar">
-                <span className="dot" />
-                <span className="dot" />
-                <span className="dot" />
-                <span className="toolbar-label">desktop://{currentScreen.id}</span>
-              </div>
-              <div className="preview-body">
-                <div className="preview-stage">
-                  <p className="preview-kicker">{currentScreen.eyebrow}</p>
-                  <h3>{currentScreen.title}</h3>
-                  <p>{currentScreen.description}</p>
-                </div>
-                <aside className="preview-side">
-                  <div className="status-block">
-                    <span>Ready for next task</span>
-                    <strong>Auth and native commands plug into this shell next.</strong>
-                  </div>
-                  <div className="status-block muted">
-                    <span>Why this scaffold</span>
-                    <strong>Fast boot, narrow Rust surface, and one clear app route model.</strong>
-                  </div>
-                </aside>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel panel-secondary">
-            <div className="panel-header compact">
-              <div>
-                <p className="eyebrow">Native seam</p>
-                <h2>Initial command contract</h2>
-              </div>
-            </div>
-
-            <ul className="command-list">
-              {COMMAND_SURFACE.map((command) => (
-                <li key={command}>{command}</li>
-              ))}
-            </ul>
-
-            <div className="footnote">
-              The Rust bootstrap exposes only a shell health check today. Future tasks can fill the command surface without reworking app boot.
-            </div>
-          </section>
-        </main>
+        {screen === "booting" ? <BootScreen /> : null}
+        {screen === "login" ? <LoginRoute /> : null}
+        {screen === "recorder" ? <RecorderShell /> : null}
       </div>
     </>
+  );
+}
+
+function BootScreen() {
+  return (
+    <main className="layout boot-layout">
+      <section className="panel panel-primary">
+        <p className="eyebrow">desktop boot</p>
+        <h1>Connecting Clerk and Convex</h1>
+        <p className="lede">
+          The renderer waits for the shared Loam session before exposing any
+          recording UI.
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function RecorderShell() {
+  const { user } = useUser();
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const uploadTargets = useQuery(
+    api.projects.listUploadTargets,
+    isAuthenticated ? {} : "skip",
+  );
+
+  const authStatus = isLoading
+    ? "Exchanging Clerk session for a Convex token"
+    : isAuthenticated
+      ? "Authenticated"
+      : "Waiting for auth";
+
+  return (
+    <main className="layout">
+      <section className="panel panel-primary">
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">renderer auth</p>
+            <h1>Loam Desktop Recorder</h1>
+          </div>
+          <div className="metric">
+            <span>Convex auth</span>
+            <strong>{authStatus}</strong>
+          </div>
+        </div>
+
+        <p className="lede">
+          Clerk stays in the desktop webview and Convex consumes the same
+          identity. No Rust-side auth fork is required for the renderer boot
+          path.
+        </p>
+
+        <div className="status-grid">
+          <StatusCard
+            label="Signed in as"
+            value={user?.primaryEmailAddress?.emailAddress ?? user?.fullName ?? "Unknown user"}
+            detail={user?.id ?? "Missing Clerk user id"}
+          />
+          <StatusCard
+            label="Upload target probe"
+            value={
+              uploadTargets === undefined
+                ? "Loading"
+                : `${uploadTargets.length} target${uploadTargets.length === 1 ? "" : "s"}`
+            }
+            detail="Queried with the authenticated Convex client"
+          />
+          <StatusCard
+            label="Desktop auth fallback"
+            value="Not required"
+            detail="Defaulting to Clerk in-webview until a concrete incompatibility appears"
+          />
+        </div>
+
+        <div className="preview">
+          <div className="preview-toolbar">
+            <span className="dot" />
+            <span className="dot" />
+            <span className="dot" />
+            <span className="toolbar-label">desktop://recorder</span>
+          </div>
+          <div className="preview-body">
+            <div className="preview-stage">
+              <p className="preview-kicker">auth-ready shell</p>
+              <h2>Next tasks can assume an authenticated renderer</h2>
+              <p>
+                Clerk boots first, Convex picks up the token through{" "}
+                <code>ConvexProviderWithClerk</code>, and authenticated queries
+                are available to the recorder flow.
+              </p>
+            </div>
+            <aside className="preview-side">
+              <div className="status-block">
+                <span>Current proof</span>
+                <strong>
+                  <code>projects.listUploadTargets</code> resolves from the
+                  renderer.
+                </strong>
+              </div>
+              <div className="status-block muted">
+                <span>Fallback boundary</span>
+                <strong>
+                  <code>desktopAuth.ts</code> keeps any future desktop-specific
+                  override isolated.
+                </strong>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function StatusCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <article className="status-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
   );
 }
 
@@ -236,8 +201,13 @@ function GlobalStyles() {
         min-height: 100vh;
       }
 
-      button {
+      button,
+      input {
         font: inherit;
+      }
+
+      code {
+        font-family: "IBM Plex Mono", monospace;
       }
 
       .app-shell {
@@ -245,6 +215,19 @@ function GlobalStyles() {
         padding: 32px;
         position: relative;
         overflow: hidden;
+      }
+
+      .layout {
+        position: relative;
+        z-index: 1;
+        width: min(1180px, 100%);
+        margin: 0 auto;
+      }
+
+      .boot-layout {
+        min-height: calc(100vh - 64px);
+        display: flex;
+        align-items: center;
       }
 
       .hero-glow {
@@ -269,101 +252,12 @@ function GlobalStyles() {
         background: rgba(45, 90, 45, 0.18);
       }
 
-      .topbar,
       .panel {
-        position: relative;
-        z-index: 1;
-      }
-
-      .topbar {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin: 0 auto 24px;
-        max-width: 1280px;
-      }
-
-      .kicker,
-      .eyebrow,
-      .build-label,
-      .preview-kicker,
-      .toolbar-label,
-      .metric span,
-      .status-block span {
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-      }
-
-      h1,
-      h2,
-      h3,
-      strong {
-        margin: 0;
-      }
-
-      h1 {
-        font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
-        font-size: clamp(2.6rem, 5vw, 4.8rem);
-        line-height: 0.92;
-        letter-spacing: -0.05em;
-        max-width: 10ch;
-      }
-
-      h2 {
-        font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
-        font-size: clamp(1.5rem, 3vw, 2.4rem);
-        line-height: 1;
-        letter-spacing: -0.04em;
-      }
-
-      h3 {
-        font-family: "Instrument Serif", Georgia, serif;
-        font-size: clamp(2rem, 3vw, 2.8rem);
-        font-weight: 400;
-        line-height: 0.98;
-      }
-
-      .build-chip,
-      .metric,
-      .status-block,
-      .screen-card,
-      .panel,
-      .preview {
         border: 2px solid var(--border);
-        box-shadow: 10px 10px 0 0 var(--shadow-color);
-      }
-
-      .build-chip {
-        background: rgba(255, 255, 255, 0.72);
-        backdrop-filter: blur(16px);
-        min-width: 160px;
-        padding: 12px 14px;
-      }
-
-      .build-chip strong,
-      .metric strong,
-      .status-block strong {
-        display: block;
-        font-size: 1rem;
-        margin-top: 8px;
-      }
-
-      .layout {
-        display: grid;
-        gap: 24px;
-        grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.95fr);
-        margin: 0 auto;
-        max-width: 1280px;
-      }
-
-      .panel {
         background: var(--surface);
-        backdrop-filter: blur(18px);
-        padding: 24px;
+        box-shadow: 10px 10px 0 0 var(--shadow-color);
+        padding: 28px;
+        backdrop-filter: blur(16px);
       }
 
       .panel-primary {
@@ -373,179 +267,211 @@ function GlobalStyles() {
 
       .panel-header {
         display: flex;
-        align-items: flex-start;
         justify-content: space-between;
-        gap: 16px;
+        gap: 20px;
+        align-items: start;
       }
 
-      .panel-header.compact {
-        justify-content: flex-start;
+      .eyebrow,
+      .preview-kicker {
+        margin: 0 0 8px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
       }
 
-      .metric,
-      .status-block {
-        background: var(--surface-muted);
-        padding: 12px 14px;
-        max-width: 220px;
+      h1,
+      h2 {
+        margin: 0;
+        font-family: "Space Grotesk", sans-serif;
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        line-height: 0.96;
       }
 
       .lede {
-        font-size: 1.1rem;
-        line-height: 1.6;
         margin: 0;
-        max-width: 62ch;
-      }
-
-      .screen-grid {
-        display: grid;
-        gap: 14px;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
-      }
-
-      .screen-card {
-        background: rgba(255, 255, 255, 0.74);
-        cursor: pointer;
-        min-height: 180px;
-        padding: 14px;
-        text-align: left;
-        transition:
-          transform 140ms ease,
-          box-shadow 140ms ease,
-          background 140ms ease;
-      }
-
-      .screen-card:hover,
-      .screen-card:focus-visible,
-      .screen-card.is-active {
-        background: var(--accent-soft);
-        box-shadow: 6px 6px 0 0 var(--shadow-color);
-        transform: translate(4px, 4px);
-      }
-
-      .screen-card strong {
-        display: block;
-        font-size: 1.1rem;
-        margin: 12px 0 10px;
-      }
-
-      .screen-card p,
-      .preview-stage p,
-      .footnote {
+        max-width: 60ch;
         color: var(--foreground-muted);
-        line-height: 1.55;
-        margin: 0;
+        font-size: 1.05rem;
+        line-height: 1.6;
+      }
+
+      .metric,
+      .status-card,
+      .status-block {
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.64);
+        padding: 16px;
+      }
+
+      .metric span,
+      .status-card span,
+      .status-block span {
+        display: block;
+        margin-bottom: 8px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--foreground-muted);
+      }
+
+      .metric strong,
+      .status-card strong,
+      .status-block strong {
+        display: block;
+        font-size: 1rem;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .status-card p,
+      .status-block p {
+        margin: 10px 0 0;
+        color: var(--foreground-muted);
+        line-height: 1.5;
       }
 
       .preview {
-        background: linear-gradient(160deg, rgba(26, 26, 26, 0.96), rgba(45, 90, 45, 0.94));
+        border: 2px solid var(--border);
+        background: rgba(26, 26, 26, 0.93);
         color: var(--foreground-inverse);
         overflow: hidden;
       }
 
       .preview-toolbar {
-        align-items: center;
-        border-bottom: 2px solid rgba(240, 240, 232, 0.2);
         display: flex;
-        gap: 8px;
+        align-items: center;
+        gap: 10px;
         padding: 12px 16px;
+        border-bottom: 1px solid rgba(240, 240, 232, 0.18);
       }
 
       .dot {
         width: 10px;
         height: 10px;
         border-radius: 999px;
-        background: rgba(240, 240, 232, 0.5);
+        background: rgba(240, 240, 232, 0.45);
       }
 
       .toolbar-label {
-        margin-left: 8px;
-        opacity: 0.78;
+        margin-left: 6px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 12px;
+        color: rgba(240, 240, 232, 0.68);
       }
 
       .preview-body {
         display: grid;
-        gap: 20px;
-        grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.75fr);
+        grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+      }
+
+      .preview-stage,
+      .preview-side {
         padding: 24px;
       }
 
-      .preview-stage {
-        display: grid;
-        align-content: start;
-        gap: 18px;
-        min-height: 280px;
-      }
-
       .preview-stage p {
+        margin: 0;
+        max-width: 54ch;
         color: rgba(240, 240, 232, 0.74);
-        max-width: 40ch;
+        line-height: 1.6;
       }
 
       .preview-side {
+        border-left: 1px solid rgba(240, 240, 232, 0.18);
         display: grid;
-        gap: 14px;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.04);
       }
 
       .status-block {
-        background: rgba(240, 240, 232, 0.12);
-        box-shadow: 6px 6px 0 0 rgba(240, 240, 232, 0.22);
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(240, 240, 232, 0.18);
       }
 
-      .status-block.muted {
-        background: rgba(240, 240, 232, 0.08);
+      .status-block.muted strong {
+        color: rgba(240, 240, 232, 0.74);
       }
 
-      .command-list {
+      .login-shell {
+        min-height: calc(100vh - 64px);
         display: grid;
-        gap: 10px;
-        list-style: none;
+        place-items: center;
+      }
+
+      .login-layout {
+        width: min(1120px, 100%);
+        display: grid;
+        grid-template-columns: minmax(320px, 1.1fr) minmax(360px, 420px);
+        gap: 24px;
+        align-items: start;
+      }
+
+      .login-copy {
+        display: grid;
+        gap: 20px;
+      }
+
+      .login-points {
+        display: grid;
+        gap: 12px;
+      }
+
+      .login-point {
+        border-left: 4px solid var(--accent);
+        padding-left: 14px;
+      }
+
+      .login-point strong {
+        display: block;
+        margin-bottom: 4px;
+        font-family: "Space Grotesk", sans-serif;
+      }
+
+      .login-point p {
         margin: 0;
-        padding: 0;
+        color: var(--foreground-muted);
+        line-height: 1.5;
       }
 
-      .command-list li {
-        background: rgba(255, 255, 255, 0.64);
-        border: 2px solid var(--border);
-        font-family: "IBM Plex Mono", monospace;
-        font-size: 0.92rem;
-        padding: 10px 12px;
+      .login-card {
+        display: grid;
+        gap: 16px;
+        justify-items: center;
       }
 
-      .footnote {
-        border-top: 2px solid rgba(26, 26, 26, 0.18);
-        margin-top: 20px;
-        padding-top: 18px;
+      .login-note {
+        margin: 0;
+        text-align: center;
+        color: var(--foreground-muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
       }
 
-      @media (max-width: 1080px) {
-        .layout,
+      @media (max-width: 960px) {
+        .app-shell {
+          padding: 20px;
+        }
+
+        .panel-header,
+        .login-layout,
         .preview-body,
-        .screen-grid {
+        .status-grid {
           grid-template-columns: 1fr;
         }
 
-        .metric {
-          max-width: none;
-        }
-      }
-
-      @media (max-width: 720px) {
-        .app-shell {
-          padding: 18px;
-        }
-
-        .topbar,
-        .panel-header {
-          flex-direction: column;
-        }
-
-        .panel,
-        .screen-card,
-        .metric,
-        .status-block,
-        .preview,
-        .build-chip {
-          box-shadow: 6px 6px 0 0 var(--shadow-color);
+        .preview-side {
+          border-left: 0;
+          border-top: 1px solid rgba(240, 240, 232, 0.18);
         }
       }
     `}</style>

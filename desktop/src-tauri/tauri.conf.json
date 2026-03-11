@@ -27,7 +27,30 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "createUpdaterArtifacts": false
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "category": "Productivity",
+    "shortDescription": "Native macOS recorder that uploads directly to Loam share links.",
+    "longDescription": "Loam Desktop Recorder is a focused macOS capture client for recording a display or window, uploading the resulting file to Loam, and landing on a shareable link with minimal friction.",
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "minimumSystemVersion": "12.7",
+      "dmg": {
+        "windowSize": {
+          "width": 720,
+          "height": 440
+        },
+        "appPosition": {
+          "x": 190,
+          "y": 180
+        },
+        "applicationFolderPosition": {
+          "x": 520,
+          "y": 180
+        }
+      }
+    }
   }
 }

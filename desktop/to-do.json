@@ -497,7 +497,7 @@
         "src-tauri/src/state.rs",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:40:14Z"
+      "updated_at": "2026-03-11T21:41:07Z"
     },
     {
       "id": "T015",
@@ -543,7 +543,7 @@
       "id": "T016",
       "title": "Prepare the macOS desktop app for internal release use",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Finish the packaging and release-readiness work needed to use the recorder beyond local development once the core flow is stable.",
       "steps": [
         "Verify desktop build and packaging configuration for macOS",
@@ -560,13 +560,15 @@
         "T015"
       ],
       "files": [
-        "README.md",
-        "src-tauri/tauri.conf.json",
-        "package.json",
         "ARCHITECTURE.md",
+        "BACKLOG.md",
         "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "README.md",
+        "package.json",
+        "src-tauri/tauri.conf.json",
+        "src/routes/complete.tsx"
+      ],
+      "updated_at": "2026-03-11T21:43:44Z"
     }
   ]
 }

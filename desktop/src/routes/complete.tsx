@@ -19,6 +19,7 @@ export function CompleteRoute({
   const [copyState, setCopyState] = useState<"idle" | "success" | "failed">("idle");
   const [browserState, setBrowserState] = useState<"idle" | "opened" | "blocked">("idle");
   const automatedActionsRun = useRef(false);
+  const defaultBrowserDestination = getDefaultBrowserDestination(completion);
 
   useEffect(() => {
     if (automatedActionsRun.current) {
@@ -34,11 +35,11 @@ export function CompleteRoute({
       }
 
       if (openBrowserByDefault) {
-        const opened = openInBrowser(completion.shareUrl);
+        const opened = openInBrowser(defaultBrowserDestination.url);
         setBrowserState(opened ? "opened" : "blocked");
       }
     })();
-  }, [completion.shareUrl, copyShareLinkByDefault, openBrowserByDefault]);
+  }, [copyShareLinkByDefault, completion.shareUrl, defaultBrowserDestination.url, openBrowserByDefault]);
 
   const readiness = describeCompletionStatus(completion.status);
 
@@ -66,8 +67,8 @@ export function CompleteRoute({
           />
           <StatusCard
             label="Browser action"
-            value={openBrowserByDefault ? "Open in browser enabled" : "Manual open"}
-            detail={completion.canonicalDashboardUrl}
+            value={openBrowserByDefault ? `Defaults to ${defaultBrowserDestination.label}` : "Manual open"}
+            detail={defaultBrowserDestination.url}
           />
           <StatusCard
             label="Playback state"
@@ -128,7 +129,9 @@ export function CompleteRoute({
           <p className="support-copy completion-copy-state">
             {formatCopyState(copyState, copyShareLinkByDefault)}
           </p>
-          <p className="support-copy">{formatBrowserState(browserState, openBrowserByDefault)}</p>
+          <p className="support-copy">
+            {formatBrowserState(browserState, openBrowserByDefault, defaultBrowserDestination.label)}
+          </p>
           {snapshot?.videoPath ? (
             <p className="support-copy">
               Local fallback kept at <code>{snapshot.videoPath}</code>
@@ -188,6 +191,20 @@ function describeCompletionStatus(status: CompleteUploadResult["status"]) {
   }
 }
 
+function getDefaultBrowserDestination(completion: CompleteUploadResult) {
+  if (completion.status === "failed") {
+    return {
+      label: "dashboard",
+      url: completion.canonicalDashboardUrl,
+    };
+  }
+
+  return {
+    label: "share page",
+    url: completion.shareUrl,
+  };
+}
+
 async function copyToClipboard(value: string) {
   try {
     await navigator.clipboard.writeText(value);
@@ -228,18 +245,19 @@ function formatCopyState(
 function formatBrowserState(
   state: "idle" | "opened" | "blocked",
   openBrowserByDefault: boolean,
+  destinationLabel: string,
 ) {
   if (state === "opened") {
     return openBrowserByDefault
-      ? "The share page was opened automatically."
-      : "The share page was opened in the browser.";
+      ? `The ${destinationLabel} was opened automatically.`
+      : `The ${destinationLabel} was opened in the browser.`;
   }
 
   if (state === "blocked") {
-    return "The browser blocked the automatic open. Use the button to launch the share page.";
+    return `The browser blocked the automatic open. Use the buttons to launch the ${destinationLabel} or the other completion destination manually.`;
   }
 
   return openBrowserByDefault
-    ? "The share page will open automatically when the browser allows it."
-    : "Open in Browser launches the share page directly.";
+    ? `The ${destinationLabel} will open automatically when the browser allows it.`
+    : "Use the completion buttons to open the share page or dashboard directly.";
 }

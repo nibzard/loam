@@ -46,6 +46,63 @@ Current native status:
 - single-part native upload streaming is implemented with progress events and cancellation
 - macOS smoke coverage is available via `cargo run --example recording-smoke -- 3` from `src-tauri/` to validate local output and stop metadata
 
+## Internal macOS Release Notes
+
+### Required environment
+
+Desktop renderer:
+
+- `VITE_CLERK_PUBLISHABLE_KEY`: the same Clerk publishable key the web app uses
+- `VITE_CONVEX_URL`: the Convex deployment URL used by `loam`
+
+Convex/backend environment:
+
+- `VITE_CONVEX_SITE_URL` or `APP_SITE_URL`: required if completion payloads should contain absolute `share` and dashboard URLs that can be opened externally from the desktop app
+
+Auth assumptions:
+
+- Clerk runs directly inside the Tauri webview
+- Convex auth is derived from the Clerk session in the renderer
+- there is no Rust-side auth fallback in the internal release path
+
+### Internal build command
+
+On a macOS machine with Xcode command line tools, Rust, Bun, and the Tauri toolchain installed:
+
+```bash
+VITE_CLERK_PUBLISHABLE_KEY=... \
+VITE_CONVEX_URL=... \
+bun run tauri:build:macos
+```
+
+This produces the internal release artifacts as a macOS `.app` and `.dmg`.
+
+### Record-to-share default workflow
+
+1. Sign in with the existing Loam Clerk identity
+2. Grant screen and microphone permissions as needed
+3. Pick a display or window, optional microphone, and target project
+4. Record locally, then stop
+5. Desktop prepares the upload in Convex, streams the file natively, and finalizes the video record
+6. The share URL is copied by default
+7. The browser default opens the share page for `ready`, `processing`, and `uploading` results, and opens the dashboard when the result is `failed`
+
+### Known constraints for internal use
+
+- macOS only; Windows remains deferred
+- single-part uploads only, with Loam's existing 5 GiB limit
+- the release assumes Clerk works reliably inside the Tauri webview
+- share and dashboard browser opens depend on the backend returning absolute URLs
+- local fallback video output is still kept on disk after upload
+
+### Deferred before any wider release
+
+- code signing, notarization, and polished bundle assets
+- background upload resume after app restart
+- multipart uploads for recordings above 5 GiB
+- Windows support
+- any desktop-specific auth fallback if the Clerk webview path proves unstable
+
 Do not start here:
 
 - [Cap desktop auth flow](../../Cap/apps/desktop/src/utils/auth.ts)

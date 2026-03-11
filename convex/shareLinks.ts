@@ -6,6 +6,14 @@ import { mutation, query, MutationCtx } from "./_generated/server";
 import { identityName, requireVideoAccess } from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
+import {
+  hasPasswordProtection,
+  isShareLinkPasswordLocked,
+  normalizeProvidedPassword,
+  planSharePasswordFailure,
+  planSharePasswordSuccess,
+  resolveShareLinkStatus,
+} from "./shareLinkAuth";
 import { pickReusableDefaultShareLink } from "./shareLinkDefaults";
 
 const shareLinkStatusValidator = v.union(
@@ -16,10 +24,6 @@ const shareLinkStatusValidator = v.union(
   v.literal("requiresPassword"),
   v.literal("ok"),
 );
-
-const MAX_SHARE_PASSWORD_LENGTH = 256;
-const PASSWORD_MAX_FAILED_ATTEMPTS = 5;
-const PASSWORD_LOCKOUT_MS = 10 * MINUTE;
 
 const shareLinkRateLimiter = new RateLimiter(components.rateLimiter, {
   grantGlobal: {
@@ -39,24 +43,6 @@ const shareLinkRateLimiter = new RateLimiter(components.rateLimiter, {
     period: MINUTE,
   },
 });
-
-function hasPasswordProtection(
-  link: Pick<Doc<"shareLinks">, "password" | "passwordHash">,
-) {
-  return Boolean(link.passwordHash || link.password);
-}
-
-function normalizeProvidedPassword(password: string | null | undefined) {
-  if (password === undefined || password === null || password.length === 0) {
-    return undefined;
-  }
-
-  if (password.length > MAX_SHARE_PASSWORD_LENGTH) {
-    throw new Error("Password is too long");
-  }
-
-  return password;
-}
 
 async function generateShareToken(ctx: MutationCtx) {
   return await generateUniqueToken(
@@ -272,37 +258,13 @@ export const getByToken = query({
   }),
   handler: async (ctx, args) => {
     const link = await findShareLinkByToken(ctx, args.token);
-
-    if (!link) {
-      return { status: "missing" as const };
-    }
-
-    if (link.expiresAt && link.expiresAt < Date.now()) {
-      return { status: "expired" as const };
-    }
-
-    const video = await ctx.db.get(link.videoId);
-    if (!video) {
-      return { status: "missing" as const };
-    }
-
-    if (video.status === "uploading" || video.status === "processing") {
-      return { status: "processing" as const };
-    }
-
-    if (video.status === "failed") {
-      return { status: "failed" as const };
-    }
-
-    if (video.status !== "ready") {
-      return { status: "missing" as const };
-    }
-
-    if (hasPasswordProtection(link)) {
-      return { status: "requiresPassword" as const };
-    }
-
-    return { status: "ok" as const };
+    const video = link ? await ctx.db.get(link.videoId) : null;
+    return {
+      status: resolveShareLinkStatus({
+        link,
+        video,
+      }),
+    };
   },
 });
 
@@ -346,7 +308,7 @@ export const issueAccessGrant = mutation({
     }
 
     if (hasPasswordProtection(link)) {
-      if (link.lockedUntil && link.lockedUntil > now) {
+      if (isShareLinkPasswordLocked(link, now)) {
         return { ok: false, grantToken: null };
       }
 
@@ -363,27 +325,16 @@ export const issueAccessGrant = mutation({
           key: args.token,
         });
 
-        const failedAccessAttempts = (link.failedAccessAttempts ?? 0) + 1;
-        const updates: Partial<Doc<"shareLinks">> = {
-          failedAccessAttempts,
-        };
-        if (failedAccessAttempts >= PASSWORD_MAX_FAILED_ATTEMPTS) {
-          updates.failedAccessAttempts = 0;
-          updates.lockedUntil = now + PASSWORD_LOCKOUT_MS;
-        }
-
+        const updates: Partial<Doc<"shareLinks">> = planSharePasswordFailure(link, now);
         await ctx.db.patch(link._id, updates);
         return { ok: false, grantToken: null };
       }
 
-      const successUpdates: Partial<Doc<"shareLinks">> = {};
-      if ((link.failedAccessAttempts ?? 0) > 0) {
-        successUpdates.failedAccessAttempts = 0;
-      }
-      if (link.lockedUntil !== undefined) {
-        successUpdates.lockedUntil = undefined;
-      }
-      if (link.password && !link.passwordHash) {
+      const passwordSuccess = planSharePasswordSuccess(link);
+      const successUpdates: Partial<Doc<"shareLinks">> = {
+        ...passwordSuccess.updates,
+      };
+      if (passwordSuccess.shouldUpgradeLegacyPassword && link.password) {
         successUpdates.passwordHash = await hashPassword(link.password);
         successUpdates.password = undefined;
       }

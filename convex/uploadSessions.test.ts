@@ -40,6 +40,32 @@ test("duplicate completion calls for the active upload collapse to a stable no-o
   );
 });
 
+test("completion attempts distinguish ready and failed uploads from active ingest starts", () => {
+  assert.deepEqual(
+    classifyUploadCompletionAttempt(
+      {
+        s3Key: "videos/current.mp4",
+        status: "ready",
+        uploadSessionToken: "session_current",
+      },
+      "session_current",
+    ),
+    { kind: "already_ready" },
+  );
+
+  assert.deepEqual(
+    classifyUploadCompletionAttempt(
+      {
+        s3Key: "videos/current.mp4",
+        status: "failed",
+        uploadSessionToken: "session_current",
+      },
+      "session_current",
+    ),
+    { kind: "retry_required" },
+  );
+});
+
 test("stale upload sessions cannot claim completion after a retry rotates the token", () => {
   const state = {
     s3Key: "videos/current.mp4",
@@ -81,6 +107,37 @@ test("active upload failures retain cleanup targets while stale failures become 
       uploadSessionToken: "session_old",
     }),
     { kind: "stale" },
+  );
+});
+
+test("processing uploads ignore non-processing failures unless explicitly allowed", () => {
+  const processingState = {
+    muxAssetId: "asset_current",
+    s3Key: "videos/current.mp4",
+    status: "processing" as const,
+    uploadSessionToken: "session_current",
+  };
+
+  assert.deepEqual(
+    classifyUploadFailureAttempt(processingState, {
+      allowProcessingFailure: false,
+      uploadSessionToken: "session_current",
+    }),
+    { kind: "ignored" },
+  );
+
+  assert.deepEqual(
+    classifyUploadFailureAttempt(processingState, {
+      allowProcessingFailure: true,
+      uploadSessionToken: "session_current",
+    }),
+    {
+      kind: "apply",
+      cleanup: {
+        muxAssetId: "asset_current",
+        s3Key: "videos/current.mp4",
+      },
+    },
   );
 });
 

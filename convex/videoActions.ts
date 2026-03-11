@@ -13,6 +13,7 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   createMuxAssetFromInputUrl,
+  createSignedPlaybackId,
   createPublicPlaybackId,
   deletePlaybackId,
   deleteMuxAsset,
@@ -424,15 +425,28 @@ async function ensureSignedPlaybackIdForTarget(
   ctx: ActionCtx,
   target: PlaybackTarget,
 ): Promise<string> {
+  if (target.muxPlaybackId) {
+    return target.muxPlaybackId;
+  }
+
   const muxAssetId = requireMuxAssetId(target);
   const asset = await getMuxAsset(muxAssetId);
   const playbackIds = resolveMuxPlaybackIds(
     (asset.playback_ids ?? []) as Array<{ id?: string; policy?: string }>,
   );
 
+  let signedPlaybackId = playbackIds.signedPlaybackId;
+  if (!signedPlaybackId) {
+    const created = await createSignedPlaybackId(muxAssetId);
+    if (!created.id) {
+      throw new Error("Mux did not return a signed playback id");
+    }
+    signedPlaybackId = created.id;
+  }
+
   const plan = planSignedPlaybackAccess({
     publicPlaybackIds: playbackIds.publicPlaybackIds,
-    signedPlaybackId: playbackIds.signedPlaybackId,
+    signedPlaybackId,
     target,
   });
 
@@ -460,7 +474,7 @@ async function ensureSignedPlaybackIdForTarget(
     await setThumbnailUrl(ctx, target._id, plan.thumbnailUrl);
   }
 
-  return playbackIds.signedPlaybackId as string;
+  return signedPlaybackId;
 }
 
 async function buildSignedMuxPlaybackSession(

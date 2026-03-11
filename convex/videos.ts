@@ -6,6 +6,14 @@ import { Doc, Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
 import { assertTeamCanStoreBytes } from "./billingHelpers";
+import {
+  classifyUploadCompletionAttempt,
+  classifyUploadFailureAttempt,
+  doesUploadReferenceMatch,
+  getNextUploadGeneration,
+  getUploadCleanupTargets,
+  STALE_UPLOAD_OBJECT_CLEANUP_DELAY_MS,
+} from "./uploadSessions";
 
 const visibilityValidator = v.union(v.literal("public"), v.literal("private"));
 
@@ -66,6 +74,54 @@ function buildPlaybackTarget(
   };
 }
 
+async function scheduleUploadCleanup(
+  ctx: MutationCtx,
+  args: {
+    videoId: Id<"videos">;
+    reason: string;
+    cleanup: ReturnType<typeof getUploadCleanupTargets>;
+  },
+) {
+  if (!args.cleanup) {
+    return false;
+  }
+
+  await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+    videoId: args.videoId,
+    s3Key: args.cleanup.s3Key,
+    muxAssetId: args.cleanup.muxAssetId,
+    reason: args.reason,
+  });
+
+  if (args.cleanup.s3Key) {
+    await ctx.scheduler.runAfter(
+      STALE_UPLOAD_OBJECT_CLEANUP_DELAY_MS,
+      internal.videoActions.cleanupDeletedVideoAssets,
+      {
+        videoId: args.videoId,
+        s3Key: args.cleanup.s3Key,
+        reason: `${args.reason}_delayed`,
+      },
+    );
+  }
+
+  return true;
+}
+
+function buildFailedUploadPatch(uploadError: string | undefined) {
+  return {
+    muxAssetStatus: "errored" as const,
+    uploadError,
+    status: "failed" as const,
+    s3Key: undefined,
+    muxUploadId: undefined,
+    muxAssetId: undefined,
+    muxPlaybackId: undefined,
+    thumbnailUrl: undefined,
+    duration: undefined,
+  };
+}
+
 export const create = mutation({
   args: {
     projectId: v.id("projects"),
@@ -98,6 +154,7 @@ export const create = mutation({
       workflowStatus: "review",
       visibility: "private",
       publicId,
+      uploadGeneration: 0,
     });
 
     return { videoId, publicId };
@@ -291,8 +348,29 @@ export const setUploadInfo = internalMutation({
     s3Key: v.string(),
     fileSize: v.number(),
     contentType: v.string(),
+    uploadSessionToken: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    cleanupScheduled: boolean;
+    uploadGeneration: number;
+  }> => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) {
+      throw new Error("Video not found");
+    }
+
+    if (video.status === "ready") {
+      throw new Error("Ready videos cannot be replaced through the upload pipeline.");
+    }
+
+    const cleanup = getUploadCleanupTargets(video);
+    const cleanupScheduled = await scheduleUploadCleanup(ctx, {
+      videoId: args.videoId,
+      cleanup,
+      reason: "superseded_upload_session",
+    });
+    const uploadGeneration = getNextUploadGeneration(video.uploadGeneration);
+
     await ctx.db.patch(args.videoId, {
       s3Key: args.s3Key,
       muxUploadId: undefined,
@@ -305,7 +383,14 @@ export const setUploadInfo = internalMutation({
       fileSize: args.fileSize,
       contentType: args.contentType,
       status: "uploading",
+      uploadGeneration,
+      uploadSessionToken: args.uploadSessionToken,
     });
+
+    return {
+      cleanupScheduled,
+      uploadGeneration,
+    };
   },
 });
 
@@ -314,11 +399,20 @@ export const reconcileUploadedObjectMetadata = internalMutation({
     videoId: v.id("videos"),
     fileSize: v.number(),
     contentType: v.string(),
+    uploadSessionToken: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ applied: boolean }> => {
     const video = await ctx.db.get(args.videoId);
     if (!video) {
       throw new Error("Video not found");
+    }
+
+    const matchesCurrentUpload = doesUploadReferenceMatch(video, {
+      uploadSessionToken: args.uploadSessionToken,
+      allowLegacyWithoutSession: args.uploadSessionToken === undefined,
+    });
+    if (!matchesCurrentUpload) {
+      return { applied: false };
     }
 
     const project = await ctx.db.get(video.projectId);
@@ -341,31 +435,85 @@ export const reconcileUploadedObjectMetadata = internalMutation({
       fileSize: actualSize,
       contentType: args.contentType,
     });
+
+    return { applied: true };
   },
 });
 
 export const markAsProcessing = internalMutation({
   args: {
     videoId: v.id("videos"),
+    uploadSessionToken: v.string(),
   },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.videoId, {
-      status: "processing",
-      muxAssetStatus: "preparing",
-      uploadError: undefined,
-    });
+  handler: async (
+    ctx,
+    args,
+  ): Promise<
+    | {
+        outcome:
+          | "stale"
+          | "missing_object"
+          | "already_processing"
+          | "already_ready"
+          | "retry_required";
+      }
+    | {
+        outcome: "started";
+        contentType?: string;
+        s3Key: string;
+        uploadGeneration: number;
+      }
+  > => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) {
+      return { outcome: "stale" };
+    }
+
+    const decision = classifyUploadCompletionAttempt(video, args.uploadSessionToken);
+    switch (decision.kind) {
+      case "start_ingest":
+        await ctx.db.patch(args.videoId, {
+          status: "processing",
+          muxAssetStatus: "preparing",
+          uploadError: undefined,
+        });
+        return {
+          outcome: "started",
+          contentType: video.contentType,
+          s3Key: decision.s3Key,
+          uploadGeneration: video.uploadGeneration ?? 0,
+        };
+      default:
+        return { outcome: decision.kind };
+    }
   },
 });
 
 export const markAsReady = internalMutation({
   args: {
     videoId: v.id("videos"),
+    uploadSessionToken: v.optional(v.string()),
     muxAssetId: v.string(),
     muxPlaybackId: v.string(),
     duration: v.optional(v.number()),
     thumbnailUrl: v.optional(v.string()),
+    allowLegacyWithoutSession: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ applied: boolean }> => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) {
+      return { applied: false };
+    }
+
+    const matchesCurrentUpload = doesUploadReferenceMatch(video, {
+      uploadSessionToken: args.uploadSessionToken,
+      muxAssetId: args.muxAssetId,
+      allowLegacyWithoutSession: args.allowLegacyWithoutSession,
+    });
+    if (!matchesCurrentUpload || video.status === "failed") {
+      return { applied: false };
+    }
+
     await ctx.db.patch(args.videoId, {
       muxAssetId: args.muxAssetId,
       muxPlaybackId: args.muxPlaybackId,
@@ -375,20 +523,57 @@ export const markAsReady = internalMutation({
       uploadError: undefined,
       status: "ready",
     });
+
+    return { applied: true };
   },
 });
 
 export const markAsFailed = internalMutation({
   args: {
     videoId: v.id("videos"),
+    uploadSessionToken: v.optional(v.string()),
+    muxAssetId: v.optional(v.string()),
     uploadError: v.optional(v.string()),
+    allowProcessingFailure: v.optional(v.boolean()),
+    allowLegacyWithoutSession: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.videoId, {
-      muxAssetStatus: "errored",
-      uploadError: args.uploadError,
-      status: "failed",
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    cleanupScheduled: boolean;
+    outcome: "stale" | "ignored" | "already_failed" | "applied";
+  }> => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) {
+      return { cleanupScheduled: false, outcome: "stale" };
+    }
+
+    const decision = classifyUploadFailureAttempt(video, {
+      uploadSessionToken: args.uploadSessionToken,
+      muxAssetId: args.muxAssetId,
+      allowProcessingFailure: args.allowProcessingFailure ?? false,
+      allowLegacyWithoutSession: args.allowLegacyWithoutSession,
     });
+    if (decision.kind === "stale" || decision.kind === "ignored") {
+      return { cleanupScheduled: false, outcome: decision.kind };
+    }
+
+    if (decision.kind === "already_failed") {
+      return { cleanupScheduled: false, outcome: "already_failed" };
+    }
+
+    await ctx.db.patch(args.videoId, buildFailedUploadPatch(args.uploadError));
+    const cleanupScheduled = await scheduleUploadCleanup(ctx, {
+      videoId: args.videoId,
+      cleanup: decision.cleanup,
+      reason: "failed_upload_session",
+    });
+
+    return {
+      cleanupScheduled,
+      outcome: "applied",
+    };
   },
 });
 
@@ -396,13 +581,31 @@ export const setMuxAssetReference = internalMutation({
   args: {
     videoId: v.id("videos"),
     muxAssetId: v.string(),
+    uploadSessionToken: v.optional(v.string()),
+    allowLegacyWithoutSession: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ applied: boolean }> => {
+    const video = await ctx.db.get(args.videoId);
+    if (!video) {
+      return { applied: false };
+    }
+
+    const matchesCurrentUpload = doesUploadReferenceMatch(video, {
+      uploadSessionToken: args.uploadSessionToken,
+      muxAssetId: args.muxAssetId,
+      allowLegacyWithoutSession: args.allowLegacyWithoutSession,
+    });
+    if (!matchesCurrentUpload || video.status === "failed") {
+      return { applied: false };
+    }
+
     await ctx.db.patch(args.videoId, {
       muxAssetId: args.muxAssetId,
       muxAssetStatus: "preparing",
       status: "processing",
     });
+
+    return { applied: true };
   },
 });
 

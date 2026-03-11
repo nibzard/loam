@@ -8,6 +8,7 @@ export interface ManagedUploadItem {
   id: string;
   projectId: Id<"projects">;
   file: File;
+  uploadSessionToken?: string;
   videoId?: Id<"videos">;
   progress: number;
   status: UploadStatus;
@@ -53,6 +54,7 @@ export function useVideoUploadManager() {
         ]);
 
         let createdVideoId: Id<"videos"> | undefined;
+        let activeUploadSessionToken: string | undefined;
 
         try {
           const createdVideo = await createVideo({
@@ -71,12 +73,21 @@ export function useVideoUploadManager() {
             ),
           );
 
-          const { url } = await getUploadUrl({
+          const { url, uploadSessionToken } = await getUploadUrl({
             videoId: createdVideoId,
             filename: file.name,
             fileSize: file.size,
             contentType: file.type || "video/mp4",
           });
+          activeUploadSessionToken = uploadSessionToken;
+
+          setUploads((prev) =>
+            prev.map((upload) =>
+              upload.id === uploadId
+                ? { ...upload, uploadSessionToken }
+                : upload,
+            ),
+          );
 
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -147,7 +158,10 @@ export function useVideoUploadManager() {
             xhr.send(file);
           });
 
-          await markUploadComplete({ videoId: createdVideoId });
+          await markUploadComplete({
+            videoId: createdVideoId,
+            uploadSessionToken,
+          });
 
           setUploads((prev) =>
             prev.map((upload) =>
@@ -177,7 +191,10 @@ export function useVideoUploadManager() {
           );
 
           if (createdVideoId) {
-            markUploadFailed({ videoId: createdVideoId }).catch(console.error);
+            markUploadFailed({
+              videoId: createdVideoId,
+              uploadSessionToken: activeUploadSessionToken,
+            }).catch(console.error);
           }
         }
       }
@@ -192,7 +209,10 @@ export function useVideoUploadManager() {
         upload.abortController.abort();
       }
       if (upload?.videoId) {
-        markUploadFailed({ videoId: upload.videoId }).catch(console.error);
+        markUploadFailed({
+          videoId: upload.videoId,
+          uploadSessionToken: upload.uploadSessionToken,
+        }).catch(console.error);
       }
       setUploads((prev) => prev.filter((item) => item.id !== uploadId));
     },

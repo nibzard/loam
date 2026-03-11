@@ -83,6 +83,8 @@ export default defineSchema({
         v.literal("errored")
       )
     ),
+    uploadGeneration: v.optional(v.number()),
+    uploadSessionToken: v.optional(v.string()),
     // Metadata
     s3Key: v.optional(v.string()),
     duration: v.optional(v.number()),

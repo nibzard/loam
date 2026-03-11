@@ -29,6 +29,7 @@ import {
 } from "./playbackSessions";
 import { BUCKET_NAME, getS3Client } from "./s3";
 import { generateOpaqueToken } from "./security";
+import { buildMuxUploadPassthrough } from "./uploadSessions";
 
 const GIBIBYTE = 1024 ** 3;
 const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 5 * GIBIBYTE;
@@ -52,6 +53,25 @@ type PlaybackTarget = {
   status: "uploading" | "processing" | "ready" | "failed";
   thumbnailUrl?: string | null;
   visibility: "public" | "private";
+};
+
+type GetUploadUrlResult = {
+  cleanupScheduled: boolean;
+  url: string;
+  uploadGeneration: number;
+  uploadId: string;
+  uploadSessionToken: string;
+};
+
+type MarkUploadCompleteResult = {
+  outcome: "already_processing" | "already_ready" | "started" | "stale";
+  success: boolean;
+};
+
+type MarkUploadFailedResult = {
+  cleanupScheduled: boolean;
+  outcome: "already_failed" | "applied" | "ignored" | "stale";
+  success: boolean;
 };
 
 function getExtensionFromKey(key: string, fallback = "mp4") {
@@ -297,6 +317,7 @@ export const cleanupDeletedVideoAssets = internalAction({
     videoId: v.optional(v.id("videos")),
     s3Key: v.optional(v.string()),
     muxAssetId: v.optional(v.string()),
+    reason: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (_ctx, args) => {
@@ -312,6 +333,7 @@ export const cleanupDeletedVideoAssets = internalAction({
       } catch (error) {
         console.error("Failed to delete S3 object for removed video", {
           videoId: args.videoId,
+          reason: args.reason,
           s3Key: args.s3Key,
           error,
         });
@@ -325,6 +347,7 @@ export const cleanupDeletedVideoAssets = internalAction({
         console.error("Failed to delete Mux asset for removed video", {
           videoId: args.videoId,
           muxAssetId: args.muxAssetId,
+          reason: args.reason,
           error,
         });
       }
@@ -366,10 +389,13 @@ export const getUploadUrl = action({
     contentType: v.string(),
   },
   returns: v.object({
+    cleanupScheduled: v.boolean(),
     url: v.string(),
     uploadId: v.string(),
+    uploadGeneration: v.number(),
+    uploadSessionToken: v.string(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GetUploadUrlResult> => {
     await requireVideoMemberAccess(ctx, args.videoId);
     const normalizedContentType = validateUploadRequestOrThrow({
       fileSize: args.fileSize,
@@ -379,6 +405,7 @@ export const getUploadUrl = action({
     const s3 = getS3Client();
     const ext = getExtensionFromKey(args.filename);
     const key = `videos/${args.videoId}/${Date.now()}-${generateOpaqueToken(16)}.${ext}`;
+    const uploadSessionToken = generateOpaqueToken(24);
     const command = new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: key,
@@ -386,41 +413,90 @@ export const getUploadUrl = action({
     });
     const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
-    await ctx.runMutation(internal.videos.setUploadInfo, {
+    const result = await ctx.runMutation(internal.videos.setUploadInfo, {
       videoId: args.videoId,
       s3Key: key,
       fileSize: args.fileSize,
       contentType: normalizedContentType,
-    });
+      uploadSessionToken,
+    }) as {
+      cleanupScheduled: boolean;
+      uploadGeneration: number;
+    };
 
-    return { url, uploadId: key };
+    return {
+      cleanupScheduled: result.cleanupScheduled,
+      url,
+      uploadGeneration: result.uploadGeneration,
+      uploadId: key,
+      uploadSessionToken,
+    };
   },
 });
 
 export const markUploadComplete = action({
   args: {
     videoId: v.id("videos"),
+    uploadSessionToken: v.string(),
   },
   returns: v.object({
+    outcome: v.union(
+      v.literal("already_processing"),
+      v.literal("already_ready"),
+      v.literal("started"),
+      v.literal("stale"),
+    ),
     success: v.boolean(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<MarkUploadCompleteResult> => {
     await requireVideoMemberAccess(ctx, args.videoId);
 
-    const video = await ctx.runQuery(api.videos.getVideoForPlayback, {
+    const processing = await ctx.runMutation(internal.videos.markAsProcessing, {
       videoId: args.videoId,
-    });
-
-    if (!video || !video.s3Key) {
+      uploadSessionToken: args.uploadSessionToken,
+    }) as
+      | {
+          outcome:
+            | "stale"
+            | "missing_object"
+            | "already_processing"
+            | "already_ready"
+            | "retry_required";
+        }
+      | {
+          outcome: "started";
+          contentType?: string;
+          s3Key: string;
+          uploadGeneration: number;
+        };
+    if (processing.outcome === "stale") {
+      return { outcome: "stale", success: true };
+    }
+    if (processing.outcome === "already_processing") {
+      return { outcome: "already_processing", success: true };
+    }
+    if (processing.outcome === "already_ready") {
+      return { outcome: "already_ready", success: true };
+    }
+    if (processing.outcome === "retry_required") {
+      throw new Error("Upload session is no longer pending. Request a new upload URL.");
+    }
+    if (processing.outcome === "missing_object") {
       throw new Error("Original bucket file not found for this video");
     }
+    const activeProcessing = processing as {
+      contentType?: string;
+      outcome: "started";
+      s3Key: string;
+      uploadGeneration: number;
+    };
 
     try {
       const s3 = getS3Client();
       const head = await s3.send(
         new HeadObjectCommand({
           Bucket: BUCKET_NAME,
-          Key: video.s3Key,
+          Key: activeProcessing.s3Key,
         }),
       );
       const contentLengthRaw = head.ContentLength;
@@ -437,79 +513,107 @@ export const markUploadComplete = action({
       }
 
       const normalizedContentType = normalizeContentType(
-        head.ContentType ?? video.contentType,
+        head.ContentType ?? activeProcessing.contentType,
       );
       if (!isAllowedUploadContentType(normalizedContentType)) {
         throw new Error("Unsupported video format. Allowed: mp4, mov, webm, mkv.");
       }
 
-      await ctx.runMutation(internal.videos.reconcileUploadedObjectMetadata, {
+      const reconciled = await ctx.runMutation(internal.videos.reconcileUploadedObjectMetadata, {
         videoId: args.videoId,
         fileSize: contentLength,
         contentType: normalizedContentType,
-      });
+        uploadSessionToken: args.uploadSessionToken,
+      }) as { applied: boolean };
+      if (!reconciled.applied) {
+        return { outcome: "stale", success: true };
+      }
 
-      await ctx.runMutation(internal.videos.markAsProcessing, {
-        videoId: args.videoId,
-      });
-
-      const ingestUrl = await buildSignedBucketObjectUrl(video.s3Key, {
+      const ingestUrl = await buildSignedBucketObjectUrl(activeProcessing.s3Key, {
         expiresIn: 60 * 60 * 24,
       });
-      const asset = await createMuxAssetFromInputUrl(args.videoId, ingestUrl);
+      const asset = await createMuxAssetFromInputUrl(
+        buildMuxUploadPassthrough(args.videoId, args.uploadSessionToken),
+        ingestUrl,
+      );
       if (asset.id) {
-        await ctx.runMutation(internal.videos.setMuxAssetReference, {
+        const attached = await ctx.runMutation(internal.videos.setMuxAssetReference, {
           videoId: args.videoId,
           muxAssetId: asset.id,
-        });
+          uploadSessionToken: args.uploadSessionToken,
+        }) as { applied: boolean };
+        if (!attached.applied) {
+          await ctx.scheduler.runAfter(0, internal.videoActions.cleanupDeletedVideoAssets, {
+            videoId: args.videoId,
+            muxAssetId: asset.id,
+            reason: "stale_mux_asset_after_retry",
+          });
+          return { outcome: "stale", success: true };
+        }
       }
     } catch (error) {
       const shouldDeleteObject = shouldDeleteUploadedObjectOnFailure(error);
-      if (shouldDeleteObject) {
-        const s3 = getS3Client();
-        try {
-          await s3.send(
-            new DeleteObjectCommand({
-              Bucket: BUCKET_NAME,
-              Key: video.s3Key,
-            }),
-          );
-        } catch {
-          // No-op: preserve original processing failure.
-        }
-      }
-
       const uploadError =
         shouldDeleteObject && error instanceof Error
           ? error.message
           : "Mux ingest failed after upload.";
-      await ctx.runMutation(internal.videos.markAsFailed, {
+      const failed = await ctx.runMutation(internal.videos.markAsFailed, {
         videoId: args.videoId,
+        uploadSessionToken: args.uploadSessionToken,
         uploadError,
-      });
+        allowProcessingFailure: true,
+      }) as {
+        cleanupScheduled: boolean;
+        outcome: "stale" | "ignored" | "already_failed" | "applied";
+      };
+      if (
+        failed.outcome === "stale" ||
+        failed.outcome === "ignored" ||
+        failed.outcome === "already_failed"
+      ) {
+        return { outcome: "stale", success: true };
+      }
       throw error;
     }
 
-    return { success: true };
+    return { outcome: "started", success: true };
   },
 });
 
 export const markUploadFailed = action({
   args: {
     videoId: v.id("videos"),
+    uploadSessionToken: v.optional(v.string()),
   },
   returns: v.object({
+    cleanupScheduled: v.boolean(),
+    outcome: v.union(
+      v.literal("already_failed"),
+      v.literal("applied"),
+      v.literal("ignored"),
+      v.literal("stale"),
+    ),
     success: v.boolean(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<MarkUploadFailedResult> => {
     await requireVideoMemberAccess(ctx, args.videoId);
 
-    await ctx.runMutation(internal.videos.markAsFailed, {
+    const result = await ctx.runMutation(internal.videos.markAsFailed, {
       videoId: args.videoId,
+      uploadSessionToken: args.uploadSessionToken,
       uploadError: "Upload failed before Mux could process the asset.",
-    });
+      allowProcessingFailure: false,
+      allowLegacyWithoutSession: args.uploadSessionToken === undefined,
+    }) as {
+      cleanupScheduled: boolean;
+      outcome: "stale" | "ignored" | "already_failed" | "applied";
+    };
 
-    return { success: true };
+    return {
+      cleanupScheduled: result.cleanupScheduled,
+      outcome: result.outcome,
+      success: true,
+    };
   },
 });
 

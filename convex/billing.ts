@@ -19,6 +19,7 @@ const stripeClient = new StripeSubscriptions(components.stripe, {});
 const stripe = new Stripe(stripeClient.apiKey);
 const TEAM_TRIAL_DAYS = 7;
 const DEFAULT_APP_SITE_URL = "https://loam.video";
+const DEFAULT_WWW_APP_SITE_URL = "https://www.loam.video";
 
 const DEV_ALLOWED_REDIRECT_ORIGINS = [
   "http://localhost:3000",
@@ -49,17 +50,36 @@ function parseAllowedOrigin(input: string | undefined | null): string | null {
   }
 }
 
+function addOriginVariants(origins: Set<string>, input: string | undefined | null) {
+  const origin = parseAllowedOrigin(input);
+  if (!origin) return;
+
+  origins.add(origin);
+
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "https:") return;
+
+    if (parsed.hostname.startsWith("www.")) {
+      parsed.hostname = parsed.hostname.slice(4);
+      origins.add(parsed.origin);
+      return;
+    }
+
+    parsed.hostname = `www.${parsed.hostname}`;
+    origins.add(parsed.origin);
+  } catch {
+    // Ignore malformed variant expansion and keep the parsed origin.
+  }
+}
+
 function getAllowedRedirectOrigins() {
   const origins = new Set<string>();
 
-  const appSiteOrigin = parseAllowedOrigin(process.env.APP_SITE_URL);
-  if (appSiteOrigin) origins.add(appSiteOrigin);
-
-  const viteSiteOrigin = parseAllowedOrigin(process.env.VITE_CONVEX_SITE_URL);
-  if (viteSiteOrigin) origins.add(viteSiteOrigin);
-
-  const defaultOrigin = parseAllowedOrigin(DEFAULT_APP_SITE_URL);
-  if (defaultOrigin) origins.add(defaultOrigin);
+  addOriginVariants(origins, process.env.APP_SITE_URL);
+  addOriginVariants(origins, process.env.VITE_CONVEX_SITE_URL);
+  addOriginVariants(origins, DEFAULT_APP_SITE_URL);
+  addOriginVariants(origins, DEFAULT_WWW_APP_SITE_URL);
 
   for (const origin of DEV_ALLOWED_REDIRECT_ORIGINS) {
     origins.add(origin);

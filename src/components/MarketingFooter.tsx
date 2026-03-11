@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 
 export function MarketingFooter() {
   return (
-    <footer className="border-t-2 border-[var(--border)] px-6 py-16 bg-[var(--foreground)] text-[var(--foreground-inverse)]">
+    <footer className="border-t-2 border-[var(--border)] bg-[var(--surface-strong)] px-6 py-16 text-[var(--foreground-inverse)]">
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-16">
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
+            <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[var(--foreground-inverse)]/65">
               Product
             </h3>
             <ul className="space-y-3 text-sm font-bold">
@@ -37,7 +37,7 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
+            <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[var(--foreground-inverse)]/65">
               Compare
             </h3>
             <ul className="space-y-3 text-sm font-bold">
@@ -60,7 +60,7 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
+            <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[var(--foreground-inverse)]/65">
               Use cases
             </h3>
             <ul className="space-y-3 text-sm font-bold">
@@ -83,26 +83,26 @@ export function MarketingFooter() {
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-[var(--foreground-muted)] mb-4">
-              Open source
+            <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[var(--foreground-inverse)]/65">
+              Forked from
             </h3>
             <ul className="space-y-3 text-sm font-bold">
               <li>
                 <a
-                  href="https://github.com/nibzard/loam"
+                  href="https://lawn.video"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-[var(--accent-light)] transition-colors"
                 >
-                  GitHub
+                  lawn.video <span aria-hidden="true">♥</span>
                 </a>
               </li>
             </ul>
           </div>
         </div>
-        <div className="border-t border-[var(--border-subtle)] pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <span className="font-black text-3xl tracking-tighter">loam.</span>
-          <span className="text-sm text-[var(--foreground-muted)]">
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--foreground-inverse)]/15 pt-8 md:flex-row">
+          <span className="font-brand text-3xl font-bold tracking-tighter">loam.</span>
+          <span className="text-sm text-[var(--foreground-inverse)]/70">
             Async video sharing for teams.
           </span>
         </div>

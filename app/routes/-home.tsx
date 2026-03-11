@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { MarketingFooter } from "@/components/MarketingFooter";
-import { SITE_URL } from "@/lib/seo";
 
 export default function Homepage() {
   const [scrolled, setScrolled] = useState(false);
@@ -16,12 +15,12 @@ export default function Homepage() {
 
   return (
     <div
-      className="min-h-screen font-mono bg-[var(--background)] text-[var(--foreground)] selection:bg-[var(--accent)] selection:text-[var(--foreground-inverse)]"
+      className="min-h-screen font-sans bg-[var(--background)] text-[var(--foreground)] selection:bg-[var(--accent)] selection:text-[var(--foreground-inverse)]"
     >
       {/* Minimal nav */}
       <nav className={`fixed w-full top-0 z-50 px-6 py-4 flex justify-between items-center transition-all duration-200 ${scrolled ? "bg-[var(--background)] border-b-2 border-[var(--border)] text-[var(--foreground)]" : "bg-[var(--background)] border-b-2 border-[var(--border)] text-[var(--foreground-inverse)]"}`}>
         <div className="flex items-center gap-4">
-          <span className={`text-xl font-black tracking-tighter transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>loam.</span>
+          <span className={`font-brand text-xl font-bold tracking-tighter transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>loam.</span>
         </div>
         <div className="flex gap-6 items-center text-sm font-bold uppercase tracking-wide">
           <a href="#pricing" className="hover:text-[var(--accent)] underline-offset-4">Pricing</a>
@@ -39,7 +38,7 @@ export default function Homepage() {
       {/* Hero */}
       <section 
         className="relative px-6 pt-32 pb-32 md:pb-24 min-h-[85vh] flex flex-col justify-end bg-cover bg-center bg-no-repeat text-[var(--foreground-inverse)] border-b-2 border-[var(--border)] overflow-x-clip"
-        style={{ backgroundImage: `url('/grassy-bg.avif')` }}
+        style={{ backgroundImage: `url('/loam.jpg')` }}
       >
         {/* Lighter tint since text is now in highly contrasting blocks or heavily shadowed */}
         <div className="absolute inset-0 bg-[var(--media-overlay-subtle)] pointer-events-none" />
@@ -47,9 +46,10 @@ export default function Homepage() {
         <div className="relative z-10 w-full max-w-7xl mx-auto">
           {/* Massive Title with Brutalist Depth */}
           <h1 
-            className="text-[25vw] sm:text-[22vw] font-black leading-[0.75] tracking-tighter ml-[-0.5vw]"
+            className="font-brand-display ml-[-0.7vw] text-[27vw] leading-[0.8] tracking-[-0.1em] sm:text-[23vw]"
             style={{ 
-              textShadow: "8px 8px 0 var(--shadow-color), 0 20px 40px var(--media-shadow)",
+              WebkitTextStroke: "2px var(--border)",
+              textShadow: "6px 6px 0 var(--accent), 12px 12px 0 var(--shadow-color), 0 20px 40px var(--media-shadow)",
             }}
           >
             loam
@@ -73,13 +73,10 @@ export default function Homepage() {
                 <span className="block text-xs md:text-sm font-bold uppercase tracking-wider text-[var(--foreground-muted)] mt-1 md:mt-2">Flat team pricing</span>
               </div>
               <Link to="/sign-up"
-                className="bg-[var(--foreground)] text-[var(--foreground-inverse)] px-6 py-4 md:px-8 md:py-5 border-2 border-[var(--border)] font-black text-lg md:text-xl hover:bg-[var(--accent)] transition-colors flex items-center justify-center shadow-[6px_6px_0px_0px_var(--shadow-color)] md:shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] md:hover:shadow-[6px_6px_0px_0px_var(--shadow-color)] self-start sm:self-auto"
+                className="bg-[var(--foreground)] text-[var(--background)] px-6 py-4 md:px-8 md:py-5 border-2 border-[var(--border)] font-black text-lg md:text-xl hover:bg-[var(--accent)] hover:text-[var(--background)] transition-colors flex items-center justify-center shadow-[6px_6px_0px_0px_var(--shadow-color)] md:shadow-[8px_8px_0px_0px_var(--shadow-color)] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-[4px_4px_0px_0px_var(--shadow-color)] md:hover:shadow-[6px_6px_0px_0px_var(--shadow-color)] self-start sm:self-auto"
               >
                 START 7-DAY TRIAL →
               </Link>
-              <p className="text-sm text-[var(--accent-light)] font-bold mt-3 uppercase tracking-wider">
-                Credit card required for trial
-              </p>
             </div>
           </div>
         </div>
@@ -182,32 +179,28 @@ export default function Homepage() {
                   <div className="text-5xl font-black tracking-tighter mb-8 text-[var(--accent-light)]">loam</div>
                   
                   <div className="mb-8">
-                    <div className="text-3xl font-black text-[var(--accent-light)]">From $15</div>
-                    <div className="text-[var(--foreground-muted)] font-bold uppercase text-sm tracking-wider">Flat workspace / month</div>
+                    <div className="text-3xl font-black text-[var(--accent-light)]">Flat $15/mo</div>
+                    <div className="text-[var(--foreground-muted)] font-bold uppercase text-sm tracking-wider">Workspace / month</div>
                   </div>
 
                   <ul className="space-y-4 text-lg font-medium">
-                    <li className="flex items-start gap-3">
-                      <span className="text-[var(--accent-light)] font-black">✓</span>
-                      Fast playback
-                    </li>
                     <li className="flex items-start gap-3">
                       <span className="text-[var(--accent-light)] font-black">✓</span>
                       Focused async sharing
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="text-[var(--accent-light)] font-black">✓</span>
-                      Simple link workflow
+                      Unlimited seats
                     </li>
                     <li className="flex items-start gap-3">
                       <span className="text-[var(--accent-light)] font-black">✓</span>
-                      Fully open source
+                      Simple link workflow
                     </li>
                   </ul>
                   
                   <div className="mt-12 pt-6 border-t border-[var(--border-subtle)]">
                     <span className="block text-sm font-bold text-[var(--foreground-muted)] uppercase tracking-wider mb-1">Yearly savings (5 users)</span>
-                    <span className="text-4xl font-black text-[var(--accent-light)]">$900</span>
+                    <span className="text-4xl font-black text-[var(--accent-light)] line-through">$900</span>
                   </div>
                 </div>
               </div>
@@ -290,41 +283,6 @@ export default function Homepage() {
       </section>
 
       <MarketingFooter />
-
-      {/* JSON-LD Structured Data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "loam",
-            description:
-              "Async video sharing for teams. Share screen recordings, walkthroughs, and video feedback with fast playback and simple links.",
-            url: SITE_URL,
-            applicationCategory: "MultimediaApplication",
-            operatingSystem: "Web",
-            offers: [
-              {
-                "@type": "Offer",
-                name: "Starter",
-                price: "15.00",
-                priceCurrency: "USD",
-                description:
-                  "Unlimited seats, 100GB storage, 5,000 shared-link watch minutes, and 4,000 member watch minutes per month",
-              },
-              {
-                "@type": "Offer",
-                name: "Pro",
-                price: "49.00",
-                priceCurrency: "USD",
-                description:
-                  "Unlimited seats, 500GB storage, 15,000 shared-link watch minutes, and 10,000 member watch minutes per month",
-              },
-            ],
-          }),
-        }}
-      />
     </div>
   );
 }

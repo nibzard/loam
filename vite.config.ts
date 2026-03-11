@@ -1,9 +1,38 @@
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: "use-sync-external-store/shim/with-selector.js",
+        replacement: fileURLToPath(
+          new URL(
+            "./src/lib/use-sync-external-store-with-selector-shim.ts",
+            import.meta.url,
+          ),
+        ),
+      },
+      {
+        find: "use-sync-external-store/shim/with-selector",
+        replacement: fileURLToPath(
+          new URL(
+            "./src/lib/use-sync-external-store-with-selector-shim.ts",
+            import.meta.url,
+          ),
+        ),
+      },
+      {
+        find: "use-sync-external-store/shim",
+        replacement: fileURLToPath(
+          new URL("./src/lib/use-sync-external-store-shim.ts", import.meta.url),
+        ),
+      },
+    ],
+  },
   plugins: [
     tsconfigPaths({
       projects: ["./tsconfig.json"],

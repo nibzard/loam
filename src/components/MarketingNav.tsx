@@ -20,7 +20,7 @@ export function MarketingNav() {
       className={`fixed w-full top-0 z-50 px-6 py-4 flex justify-between items-center transition-all duration-200 ${scrolled ? "bg-[var(--background)] border-b-2 border-[var(--border)] shadow-[2px_2px_0px_0px_var(--shadow-color)]" : "bg-[var(--background)] border-b-2 border-[var(--border)]"}`}
     >
       <div className="flex items-center gap-4">
-        <Link to="/" className="text-xl font-black tracking-tighter">
+        <Link to="/" className="font-brand text-xl font-bold tracking-tighter">
           loam.
         </Link>
       </div>

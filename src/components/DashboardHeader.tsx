@@ -66,7 +66,7 @@ export function DashboardHeader({
   return (
     <header className="flex-shrink-0 border-b-2 border-[var(--border)] bg-[var(--background)] grid grid-cols-[1fr_auto] sm:grid-cols-[auto_1fr_auto] items-center px-4 sm:px-6">
       {/* Breadcrumb */}
-      <div className="flex items-center text-xl font-black tracking-tighter text-[var(--foreground)] min-w-0 h-11 sm:h-14">
+      <div className="flex items-center font-brand text-xl font-bold tracking-tighter text-[var(--foreground)] min-w-0 h-11 sm:h-14">
         <Link
           to="/dashboard"
           preload="intent"

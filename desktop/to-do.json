@@ -437,7 +437,7 @@
       "id": "T013",
       "title": "Add backend tests for the desktop recorder contract",
       "priority": 3,
-      "status": "todo",
+      "status": "done",
       "details": "Verify that desktopRecorder prepare, complete, and fail flows preserve loam's auth, upload, share-link, and canonical URL expectations.",
       "steps": [
         "Add tests for prepareUpload",
@@ -454,12 +454,14 @@
         "T002"
       ],
       "files": [
+        "../convex/desktopRecorder.test.ts",
         "../convex/desktopRecorder.ts",
-        "README.md",
         "ARCHITECTURE.md",
+        "BACKLOG.md",
         "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "README.md"
+      ],
+      "updated_at": "2026-03-11T21:45:00Z"
     },
     {
       "id": "T014",

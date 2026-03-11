@@ -248,16 +248,16 @@
       ],
       "files": [
         "src/App.tsx",
-        "src/routes/recorder.tsx",
-        "src/components/RecorderControls.tsx",
-        "src/components/PermissionGate.tsx",
         "src/components/CaptureTargetPicker.tsx",
         "src/components/MicrophonePicker.tsx",
+        "src/components/PermissionGate.tsx",
         "src/components/ProjectPicker.tsx",
+        "src/components/RecorderControls.tsx",
         "src/lib/routes.ts",
+        "src/routes/recorder.tsx",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:23:40Z"
+      "updated_at": "2026-03-11T21:24:00Z"
     },
     {
       "id": "T008",
@@ -369,7 +369,7 @@
       "id": "T011",
       "title": "Implement the completion flow that defaults to share links",
       "priority": 2,
-      "status": "todo",
+      "status": "done",
       "details": "Make the default post-upload outcome immediate by copying the share URL, exposing browser and dashboard actions, and handling processing states cleanly.",
       "steps": [
         "Create the complete route",
@@ -387,12 +387,11 @@
       ],
       "files": [
         "src/routes/complete.tsx",
+        "src/lib/routes.ts",
         "src/lib/uploadFlow.ts",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "src/App.tsx"
+      ],
+      "updated_at": "2026-03-11T21:35:00Z"
     },
     {
       "id": "T012",

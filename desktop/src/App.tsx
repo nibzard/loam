@@ -25,6 +25,7 @@ import {
   type PermissionSnapshot,
 } from "./lib/tauri";
 import { navigateTo, readRoute, type DesktopRoute } from "./lib/routes";
+import { CompleteRoute } from "./routes/complete";
 import { LoginRoute } from "./routes/login";
 import { RecorderRoute } from "./routes/recorder";
 import { UploadingRoute } from "./routes/uploading";
@@ -416,7 +417,8 @@ function RecorderShell({
         completion: result.completion,
         error: null,
       }));
-      setUploadMessage(`Upload finished. Share link ready at ${result.completion.shareUrl}`);
+      setUploadMessage(null);
+      navigateTo("complete", setRoute, true);
     } else if (result.status === "cancelled") {
       setRecorderState((current) => ({
         ...current,
@@ -431,9 +433,8 @@ function RecorderShell({
         error: result.error,
       }));
       setUploadMessage(result.error);
+      navigateTo("recorder", setRoute, true);
     }
-
-    navigateTo("recorder", setRoute, true);
   }
 
   async function handleCancelUpload() {
@@ -501,6 +502,27 @@ function RecorderShell({
         navigationLocked={navigationLocked}
         onCancel={() => {
           void handleCancelUpload();
+        }}
+      />
+    );
+  }
+
+  if (route === "complete" && recorderState.completion) {
+    return (
+      <CompleteRoute
+        completion={recorderState.completion}
+        snapshot={recorderState.upload}
+        copyShareLinkByDefault={userDefaults.copyShareLinkAfterUpload}
+        openBrowserByDefault={userDefaults.openBrowserAfterUpload}
+        onReturnToRecorder={() => {
+          setRecorderState((current) => ({
+            ...current,
+            completion: null,
+            upload: null,
+            error: null,
+          }));
+          setUploadMessage(null);
+          navigateTo("recorder", setRoute, true);
         }}
       />
     );
@@ -970,6 +992,11 @@ function GlobalStyles() {
         padding: 0 18px;
         font-weight: 700;
         cursor: pointer;
+        color: inherit;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
 
       .button:disabled {
@@ -985,6 +1012,14 @@ function GlobalStyles() {
       .button-danger {
         background: #9c3026;
         color: var(--foreground-inverse);
+      }
+
+      .button-secondary {
+        background: rgba(124, 184, 124, 0.18);
+      }
+
+      .button-link {
+        appearance: none;
       }
 
       .recording-summary {
@@ -1040,6 +1075,38 @@ function GlobalStyles() {
         padding: 16px;
         font-weight: 700;
         overflow-wrap: anywhere;
+      }
+
+      .completion-card {
+        display: grid;
+        gap: 18px;
+        border: 2px solid var(--border);
+        background: rgba(255, 255, 255, 0.78);
+        padding: 24px;
+        box-shadow: 10px 10px 0 0 rgba(26, 26, 26, 0.18);
+      }
+
+      .completion-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        align-items: start;
+      }
+
+      .share-link-row {
+        border: 2px solid var(--border);
+        background: rgba(124, 184, 124, 0.18);
+        padding: 16px;
+        overflow-x: auto;
+      }
+
+      .share-link-row code {
+        display: block;
+        overflow-wrap: anywhere;
+      }
+
+      .completion-copy-state {
+        font-weight: 700;
       }
 
       .login-shell {

@@ -156,6 +156,18 @@ function deriveTitle(videoPath: string) {
   return stripped || "recording";
 }
 
+function deriveCompletionStatusText(status: CompleteUploadResult["status"]) {
+  switch (status) {
+    case "ready":
+      return "Share link ready";
+    case "processing":
+    case "uploading":
+      return "Upload complete, playback processing";
+    case "failed":
+      return "Upload complete, playback needs attention";
+  }
+}
+
 export function startUploadFlow(input: StartUploadFlowInput): UploadFlowController {
   const title = (input.title ?? deriveTitle(input.recording.videoPath)).trim() || "recording";
   const contentType = input.contentType ?? "video/mp4";
@@ -285,7 +297,7 @@ export function startUploadFlow(input: StartUploadFlowInput): UploadFlowControll
 
       publish({
         step: "complete",
-        statusText: "Upload complete",
+        statusText: deriveCompletionStatusText(completion.status),
         bytesSent: snapshot.totalBytes ?? snapshot.bytesSent,
         fractionCompleted: 1,
         shareUrl: completion.shareUrl,

@@ -1,14 +1,23 @@
-export type DesktopRoute = "recorder" | "uploading";
+export type DesktopRoute = "recorder" | "uploading" | "complete";
 
 export const RECORDER_PATH = "/";
 export const UPLOADING_PATH = "/uploading";
+export const COMPLETE_PATH = "/complete";
 
 export function readRoute(): DesktopRoute {
   if (typeof window === "undefined") {
     return "recorder";
   }
 
-  return window.location.pathname === UPLOADING_PATH ? "uploading" : "recorder";
+  if (window.location.pathname === UPLOADING_PATH) {
+    return "uploading";
+  }
+
+  if (window.location.pathname === COMPLETE_PATH) {
+    return "complete";
+  }
+
+  return "recorder";
 }
 
 export function navigateTo(
@@ -21,7 +30,12 @@ export function navigateTo(
     return;
   }
 
-  const path = route === "uploading" ? UPLOADING_PATH : RECORDER_PATH;
+  const path =
+    route === "uploading"
+      ? UPLOADING_PATH
+      : route === "complete"
+        ? COMPLETE_PATH
+        : RECORDER_PATH;
   const currentPath = window.location.pathname;
 
   if (currentPath !== path) {

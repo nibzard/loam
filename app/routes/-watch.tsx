@@ -4,6 +4,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useUser } from "@clerk/tanstack-react-start";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
+import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,11 +37,16 @@ export default function WatchPage() {
   const [commentError, setCommentError] = useState<string | null>(null);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const [viewerClientId, setViewerClientId] = useState<string | null>(null);
+  const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
 
   useEffect(() => {
     setViewerClientId(getOrCreateViewerClientId());
   }, []);
+
+  useEffect(() => {
+    setWatchCapKind(null);
+  }, [publicId]);
 
   useEffect(() => {
     if (!videoData?.video?._id) return;
@@ -124,7 +130,7 @@ export default function WatchPage() {
   };
 
   const { trackTime } = useWatchProgress({
-    enabled: Boolean(playbackSession?.url && videoData?.video?._id),
+    enabled: Boolean(playbackSession?.url && videoData?.video?._id && !watchCapKind),
     trackerKey: videoData?.video?._id ?? publicId,
     getTarget: () => ({ publicId }),
     getClientId: () => {
@@ -135,6 +141,11 @@ export default function WatchPage() {
       return nextClientId ?? undefined;
     },
     recordWatch,
+    onCapReached: ({ usageKind }) => {
+      if (usageKind) {
+        setWatchCapKind(usageKind);
+      }
+    },
   });
 
   const handleTimeUpdate = useCallback(
@@ -251,7 +262,9 @@ export default function WatchPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Video player area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[var(--media-background)]">
-          {playbackSession?.url ? (
+          {watchCapKind ? (
+            <WatchCapNotice usageKind={watchCapKind} controlsBelow />
+          ) : playbackSession?.url ? (
             <Suspense fallback={playerFallback}>
               <LazyVideoPlayer
                 ref={playerRef}

@@ -3,7 +3,10 @@ import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import { getUser, identityAvatarUrl, identityEmail, identityName, requireUser, requireTeamAccess } from "./auth";
-import { getTeamSubscriptionState } from "./billingHelpers";
+import {
+  getCurrentBillingMonthKey,
+  getTeamSubscriptionState,
+} from "./billingHelpers";
 import { generateUniqueToken } from "./security";
 
 function normalizedEmail(value: string) {
@@ -56,6 +59,10 @@ export const create = mutation({
       ownerClerkId: user.subject,
       plan: "basic",
       billingStatus: "not_subscribed",
+      currentWatchUsageMonthKey: getCurrentBillingMonthKey(new Date()),
+      currentMemberWatchSeconds: 0,
+      currentSharedWatchSeconds: 0,
+      currentWatchUsageUpdatedAt: Date.now(),
     });
 
     await ctx.db.insert("teamMembers", {

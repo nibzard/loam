@@ -15,6 +15,7 @@ type RecordWatchArgs = RecordWatchTarget & {
 type RecordWatchResult = {
   recorded: boolean;
   capReached: boolean;
+  usageKind: "member" | "shared" | null;
   consumedWatchSeconds: number;
   requestedWatchSeconds: number;
 };
@@ -31,7 +32,7 @@ interface WatchProgressOptions {
   flushThresholdSeconds?: number;
   maxDeltaSeconds?: number;
   minReportSeconds?: number;
-  onCapReached?: () => void;
+  onCapReached?: (args: { usageKind: "member" | "shared" | null }) => void;
 }
 
 const DEFAULT_FLUSH_INTERVAL_MS = 10000;
@@ -97,7 +98,7 @@ export function useWatchProgress({
       if (result.capReached && result.consumedWatchSeconds < result.requestedWatchSeconds) {
         isCapReachedRef.current = true;
         pendingWatchSecondsRef.current = 0;
-        onCapReached?.();
+        onCapReached?.({ usageKind: result.usageKind });
         clearTimer();
         return;
       }

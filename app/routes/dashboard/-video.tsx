@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
+import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -80,6 +81,7 @@ export default function VideoPage() {
   const [originalPlaybackUrl, setOriginalPlaybackUrl] = useState<string | null>(null);
   const [isLoadingOriginalPlayback, setIsLoadingOriginalPlayback] = useState(false);
   const [preferredSource, setPreferredSource] = useState<"mux720" | "original">("original");
+  const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
   const isPlayable = video?.status === "ready" && Boolean(video?.muxPlaybackId);
   const playbackUrl = playbackSession?.url ?? null;
@@ -114,6 +116,10 @@ export default function VideoPage() {
       navigate({ to: context.canonicalPath, replace: true });
     }
   }, [shouldCanonicalize, context, navigate]);
+
+  useEffect(() => {
+    setWatchCapKind(null);
+  }, [resolvedVideoId]);
 
   useEffect(() => {
     if (!video || video.status === "uploading" || video.status === "failed") return;
@@ -224,10 +230,15 @@ export default function VideoPage() {
   }, [getPlaybackSession, playbackSession, resolvedVideoId]);
 
   const { trackTime: trackWatchTime } = useWatchProgress({
-    enabled: Boolean(activePlaybackUrl && resolvedVideoId),
+    enabled: Boolean(activePlaybackUrl && resolvedVideoId && !watchCapKind),
     trackerKey: resolvedVideoId?.toString() ?? null,
     getTarget: () => ({ videoId: resolvedVideoId! }),
     recordWatch,
+    onCapReached: ({ usageKind }) => {
+      if (usageKind) {
+        setWatchCapKind(usageKind);
+      }
+    },
   });
 
   const handleTimeUpdate = useCallback(
@@ -479,7 +490,9 @@ export default function VideoPage() {
             </div>
           ) : null}
 
-          {activePlaybackUrl ? (
+          {watchCapKind ? (
+            <WatchCapNotice usageKind={watchCapKind} controlsBelow />
+          ) : activePlaybackUrl ? (
             <Suspense fallback={playerFallback}>
               <LazyVideoPlayer
                 ref={playerRef}

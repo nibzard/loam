@@ -16,6 +16,10 @@ export default defineSchema({
     stripeSubscriptionId: v.optional(v.string()),
     stripePriceId: v.optional(v.string()),
     billingStatus: v.optional(v.string()),
+    currentWatchUsageMonthKey: v.optional(v.string()),
+    currentMemberWatchSeconds: v.optional(v.number()),
+    currentSharedWatchSeconds: v.optional(v.number()),
+    currentWatchUsageUpdatedAt: v.optional(v.number()),
   })
     .index("by_slug", ["slug"])
     .index("by_owner", ["ownerClerkId"])

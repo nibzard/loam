@@ -184,6 +184,8 @@ test("share route enter fetches bootstrap once and prewarms granted queries", as
       url: "https://stream.mux.com/video.m3u8",
     },
     videoData: {
+      allowDownload: true,
+      grantExpiresAt: 1_739_568_000_000,
       video: {
         _id: "video_123" as never,
         title: "Shared video",
@@ -237,6 +239,34 @@ test("share route enter does not prewarm grant queries when bootstrap is not rea
   });
 
   assert.deepEqual(result, { state: "expired" });
+  assert.deepEqual(
+    calls.prewarm.map((call) => call.name),
+    [getFunctionName(api.shareLinks.getByToken)],
+  );
+});
+
+test("share route enter preserves temporary-unavailable states without prewarming grant queries", async () => {
+  resetPrewarmDedupeForTests();
+
+  const { calls, client } = createMockClient({
+    actionImpl: async (name) => {
+      assert.equal(name, getFunctionName(api.videoActions.getSharePlaybackBootstrap));
+      return {
+        state: "temporarilyUnavailable" as const,
+        retryAfterSeconds: 30,
+      };
+    },
+  });
+
+  const result = await loadShareRouteBootstrap(client, {
+    token: "share_123",
+    preload: false,
+  });
+
+  assert.deepEqual(result, {
+    state: "temporarilyUnavailable",
+    retryAfterSeconds: 30,
+  });
   assert.deepEqual(
     calls.prewarm.map((call) => call.name),
     [getFunctionName(api.shareLinks.getByToken)],

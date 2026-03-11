@@ -20,6 +20,7 @@ import {
 import { cn, formatDuration, formatTimestamp } from "@/lib/utils";
 import { triggerDownload } from "@/lib/download";
 import { isPlaybackAccessError } from "@/lib/playbackErrors";
+import { isHlsPlaybackSource, shouldLoadHlsJsForSource } from "@/lib/muxPlayback";
 
 interface Comment {
   _id: string;
@@ -71,10 +72,6 @@ type QualityLevelOption = {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
-}
-
-function isHlsSource(src: string) {
-  return src.includes(".m3u8");
 }
 
 export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(
@@ -558,7 +555,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       video.removeAttribute("src");
       video.load();
 
-      if (isHlsSource(src)) {
+      if (shouldLoadHlsJsForSource(src, video)) {
         const { default: Hls } = await import("hls.js");
         if (cancelled) return;
 
@@ -606,6 +603,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
         } else {
           video.src = src;
         }
+      } else if (isHlsPlaybackSource(src)) {
+        video.src = src;
       } else {
         video.src = src;
       }
@@ -721,7 +720,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const displayTime = isScrubbing ? scrubTime : currentTime;
   const playedPercent = duration > 0 ? clamp(displayTime / duration, 0, 1) : 0;
   const canDownload = allowDownload && (Boolean(downloadUrl) || Boolean(onRequestDownload));
-  const isHls = isHlsSource(src);
+  const isHls = isHlsPlaybackSource(src);
   const hasExternalQualityOptions = Boolean(qualityOptionsConfig && qualityOptionsConfig.length > 0);
   const qualityLabel = useMemo(() => {
     if (hasExternalQualityOptions) {

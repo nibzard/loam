@@ -55,11 +55,11 @@ export default function WatchPage() {
   useEffect(() => {
     if (!videoData?.video?._id) return;
     preloadVideoPlayer();
-    prefetchHlsRuntime();
   }, [videoData?.video?._id]);
 
   useEffect(() => {
     if (!playbackSession?.url) return;
+    prefetchHlsRuntime(playbackSession.url);
     prefetchPlaybackSource(playbackSession.url);
   }, [playbackSession?.url]);
 

@@ -1,6 +1,6 @@
 "use node";
 
-import { buildMuxPlaybackUrl, buildMuxThumbnailUrl } from "./mux";
+import { buildMuxPlaybackUrl, buildMuxThumbnailUrl } from "./muxPlayback";
 
 export const SIGNED_PLAYBACK_SESSION_TTL = "15m";
 export const SIGNED_PLAYBACK_SESSION_TTL_MS = 15 * 60 * 1000;

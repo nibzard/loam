@@ -27,6 +27,19 @@ import { useWatchProgress } from "@/lib/useWatchProgress";
 import { isReadyShareBootstrap } from "./-publicPlaybackLoaders";
 import { prewarmShare, useShareData } from "./-share.data";
 
+function formatRetryDelay(retryAfterSeconds: number | null | undefined) {
+  if (!retryAfterSeconds || retryAfterSeconds <= 0) {
+    return null;
+  }
+
+  if (retryAfterSeconds < 60) {
+    return `${retryAfterSeconds} second${retryAfterSeconds === 1 ? "" : "s"}`;
+  }
+
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+}
+
 export default function SharePage() {
   const params = useParams({ strict: false });
   const token = params.token as string;
@@ -36,6 +49,7 @@ export default function SharePage() {
   const createComment = useMutation(api.comments.createForShareGrant);
   const createReaction = useMutation(api.reactions.createForShareGrant);
   const requestPlaybackBootstrap = useAction(api.videoActions.getSharePlaybackBootstrap);
+  const getSharedDownloadUrl = useAction(api.videoActions.getSharedDownloadUrl);
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
   const recordWatch = useAction(api.watchEventActions.recordWatch);
 
@@ -98,11 +112,11 @@ export default function SharePage() {
   useEffect(() => {
     if (!videoData?.video?._id) return;
     preloadVideoPlayer();
-    prefetchHlsRuntime();
   }, [videoData?.video?._id]);
 
   useEffect(() => {
     if (!playbackSession?.url) return;
+    prefetchHlsRuntime(playbackSession.url);
     prefetchPlaybackSource(playbackSession.url);
   }, [playbackSession?.url]);
 
@@ -250,6 +264,17 @@ export default function SharePage() {
     [reactions],
   );
 
+  const requestDownload = useCallback(async () => {
+    if (!grantToken || !videoData?.allowDownload) return null;
+
+    try {
+      return await getSharedDownloadUrl({ grantToken });
+    } catch (error) {
+      console.error("Failed to prepare shared download:", error);
+      return null;
+    }
+  }, [getSharedDownloadUrl, grantToken, videoData?.allowDownload]);
+
   const handleSubmitComment = useCallback(
     async ({ text, timestampSeconds }: { text: string; timestampSeconds: number }) => {
       if (!grantToken) {
@@ -295,7 +320,7 @@ export default function SharePage() {
             token,
             grantToken: nextBootstrap.grantToken,
           });
-          prefetchHlsRuntime();
+          prefetchHlsRuntime(nextBootstrap.playbackSession.url);
           prefetchPlaybackSource(nextBootstrap.playbackSession.url);
         }
       } finally {
@@ -416,6 +441,39 @@ export default function SharePage() {
     );
   }
 
+  if (bootstrap.state === "temporarilyUnavailable") {
+    const retryDelayLabel = formatRetryDelay(bootstrap.retryAfterSeconds);
+
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[var(--surface-alt)] flex items-center justify-center mb-4 border-2 border-[var(--border)]">
+              <AlertCircle className="h-6 w-6 text-[var(--foreground-muted)]" />
+            </div>
+            <CardTitle>Unable to open this share right now</CardTitle>
+            <CardDescription>
+              {retryDelayLabel
+                ? `This link is temporarily throttled. Try again in about ${retryDelayLabel}.`
+                : "The share link could not be opened right now. Try again in a moment."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              onClick={() => {
+                void handleAcquireGrant(passwordInput || undefined);
+              }}
+              disabled={isRequestingGrant}
+            >
+              {isRequestingGrant ? "Retrying..." : "Try again"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!videoData?.video) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
@@ -498,7 +556,8 @@ export default function SharePage() {
                 comments={flattenedComments}
                 onTimeUpdate={handleTimeUpdate}
                 onPlaybackAccessError={handlePlaybackAccessError}
-                allowDownload={false}
+                allowDownload={videoData.allowDownload}
+                onRequestDownload={requestDownload}
               />
               </Suspense>
             ) : (

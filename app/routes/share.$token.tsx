@@ -30,7 +30,9 @@ export const Route = createFileRoute("/share/$token")({
     });
 
     if (bootstrap.state === "ready") {
-      prefetchHlsRuntime();
+      if (!preload) {
+        prefetchHlsRuntime(bootstrap.playbackSession.url);
+      }
       prefetchPlaybackSource(bootstrap.playbackSession.url);
     }
 

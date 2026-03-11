@@ -68,11 +68,12 @@ export async function syncTeamSubscriptionFromWebhookWithCtx(
       .unique();
   }
 
-  if (!team && args.stripeCustomerId) {
+  const stripeCustomerId = args.stripeCustomerId;
+  if (!team && stripeCustomerId) {
     team = await ctx.db
       .query("teams")
       .withIndex("by_stripe_customer_id", (q) =>
-        q.eq("stripeCustomerId", args.stripeCustomerId),
+        q.eq("stripeCustomerId", stripeCustomerId),
       )
       .unique();
   }

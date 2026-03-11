@@ -1,0 +1,1 @@
+{"eval_id":1,"eval_name":"deploy-live","prompt":"deploy live","assertions":["Mentions bun run lint, bun run typecheck, and bun run typecheck:convex before deploy","Mentions vercel --prod as the deploy command","Reports both deployment URL and aliased live URL in the final output"]}

@@ -19,6 +19,7 @@ import {
   PLAYBACK_SESSION_REFRESH_LEAD_MS,
   type PlaybackSession,
 } from "@/lib/playbackSession";
+import { usePublicViewerAuth } from "@/lib/publicViewerAuth";
 import { formatDuration, formatRelativeTime, formatTimestamp } from "@/lib/utils";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { getOrCreateViewerClientId } from "@/lib/viewerClientId";
@@ -68,6 +69,7 @@ export default function SharePage() {
   const playbackRefreshInFlightRef = useRef(false);
   const playbackSessionKeyRef = useRef(0);
   const lastPlaybackAccessErrorAtRef = useRef(0);
+  const { user, isLoaded: isPublicViewerLoaded } = usePublicViewerAuth();
 
   useEffect(() => {
     setBootstrap(loaderBootstrap);
@@ -89,6 +91,7 @@ export default function SharePage() {
     videoId: videoData?.video?._id,
     enabled: canTrackPresence,
     shareGrantToken: grantToken ?? undefined,
+    sessionKey: `${isPublicViewerLoaded ? "loaded" : "loading"}:${user?.id ?? "guest"}`,
   });
   const signInHref = `/sign-in?redirect_url=${encodeURIComponent(`/share/${token}`)}`;
 

@@ -1,4 +1,4 @@
-
+import { useAuth } from "@clerk/tanstack-react-start";
 import { useConvex, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
@@ -52,6 +52,7 @@ export default function VideoPage() {
   const projectId = params.projectId as Id<"projects">;
   const videoId = params.videoId as Id<"videos">;
   const convex = useConvex();
+  const { isLoaded: isAuthLoaded, userId } = useAuth();
 
   const {
     context,
@@ -116,6 +117,7 @@ export default function VideoPage() {
   const { watchers } = useVideoPresence({
     videoId: resolvedVideoId,
     enabled: Boolean(resolvedVideoId),
+    sessionKey: `${isAuthLoaded ? "loaded" : "loading"}:${userId ?? "guest"}`,
   });
 
   useEffect(() => {

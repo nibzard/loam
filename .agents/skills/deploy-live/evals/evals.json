@@ -1,0 +1,23 @@
+{
+  "skill_name": "deploy-live",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "deploy live",
+      "expected_output": "Runs the required lint and typecheck commands, deploys with vercel --prod, and reports the production and alias URLs.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "ship this playback hotfix to production and verify the fix is actually live on www.loam.video",
+      "expected_output": "Runs preflight checks, deploys to Vercel/Convex, and then performs a targeted production verification of the playback path instead of stopping at deployment success.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "production still looks broken after deploy, inspect what is live and debug the Convex side",
+      "expected_output": "Uses production-focused Vercel and Convex inspection commands to determine whether the right build is live and to reproduce backend failures against production state.",
+      "files": []
+    }
+  ]
+}

@@ -22,6 +22,7 @@ export function useVideoPresence(input: {
   enabled?: boolean;
   shareGrantToken?: string;
   intervalMs?: number;
+  sessionKey?: string;
 }) {
   const convex = useConvex();
   const heartbeat = useMutation(api.videoPresence.heartbeat);
@@ -29,14 +30,24 @@ export function useVideoPresence(input: {
 
   const [clientId, setClientId] = useState<string | null>(null);
   const [roomToken, setRoomToken] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const sessionTokenRef = useRef<string | null>(null);
+  const intervalRef = useRef<number | null>(null);
+  const heartbeatInFlightRef = useRef(false);
+  const hasMountedRef = useRef(false);
 
   const {
     videoId,
     enabled = true,
     shareGrantToken,
     intervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
+    sessionKey = "anonymous",
   } = input;
+
+  const sessionId = useMemo(
+    () => crypto.randomUUID(),
+    [clientId, sessionKey, shareGrantToken, videoId],
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -44,35 +55,71 @@ export function useVideoPresence(input: {
   }, []);
 
   useEffect(() => {
+    sessionTokenRef.current = sessionToken;
+  }, [sessionToken]);
+
+  useEffect(() => {
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    heartbeatInFlightRef.current = false;
+    setRoomToken(null);
+    setSessionToken(null);
+
+    const previousSessionToken = sessionTokenRef.current;
+    sessionTokenRef.current = null;
+
+    if (previousSessionToken) {
+      void disconnect({ sessionToken: previousSessionToken }).catch(() => {
+        // Ignore teardown failures while rotating presence sessions.
+      });
+    }
+  }, [disconnect, sessionId]);
+
+  useEffect(() => {
     if (!enabled || !videoId || !clientId) {
       setRoomToken(null);
+      setSessionToken(null);
       return;
     }
 
     let active = true;
-    const sessionId = crypto.randomUUID();
 
     const runHeartbeat = async () => {
-      const result = await heartbeat({
-        videoId,
-        sessionId,
-        clientId,
-        interval: intervalMs,
-        shareGrantToken,
-      });
+      if (heartbeatInFlightRef.current) {
+        return;
+      }
 
-      if (!active) return;
-      sessionTokenRef.current = result.sessionToken;
-      setRoomToken(result.roomToken);
+      heartbeatInFlightRef.current = true;
+      try {
+        const result = await heartbeat({
+          videoId,
+          sessionId,
+          clientId,
+          interval: intervalMs,
+          shareGrantToken,
+        });
+
+        if (!active) return;
+        setSessionToken(result.sessionToken);
+        setRoomToken(result.roomToken);
+      } catch (error) {
+        if (active) {
+          console.error("Failed to update video presence heartbeat", error);
+        }
+      } finally {
+        heartbeatInFlightRef.current = false;
+      }
     };
 
     const handleBeforeUnload = () => {
-      const sessionToken = sessionTokenRef.current;
-      if (!sessionToken) return;
+      if (!sessionTokenRef.current) return;
 
       const payload = {
         path: DISCONNECT_PATH,
-        args: { sessionToken },
+        args: { sessionToken: sessionTokenRef.current },
       };
 
       const blob = new Blob([JSON.stringify(payload)], {
@@ -81,28 +128,58 @@ export function useVideoPresence(input: {
       navigator.sendBeacon(`${convex.url}/api/mutation`, blob);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (intervalRef.current !== null) {
+          window.clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        if (sessionTokenRef.current) {
+          void disconnect({ sessionToken: sessionTokenRef.current }).catch(() => {
+            // Ignore disconnect failures when the page is backgrounded.
+          });
+        }
+        return;
+      }
+
+      void runHeartbeat();
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+      }
+      intervalRef.current = window.setInterval(() => {
+        void runHeartbeat();
+      }, intervalMs);
+    };
+
     void runHeartbeat();
-    const heartbeatIntervalId = window.setInterval(() => {
+    intervalRef.current = window.setInterval(() => {
       void runHeartbeat();
     }, intervalMs);
 
     window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       active = false;
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.clearInterval(heartbeatIntervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (intervalRef.current !== null) {
+        window.clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
 
-      const sessionToken = sessionTokenRef.current;
-      sessionTokenRef.current = null;
       setRoomToken(null);
-      if (sessionToken) {
-        void disconnect({ sessionToken }).catch(() => {
+      if (hasMountedRef.current && sessionTokenRef.current) {
+        void disconnect({ sessionToken: sessionTokenRef.current }).catch(() => {
           // Ignore disconnect failures during teardown.
         });
       }
     };
-  }, [clientId, convex.url, disconnect, enabled, heartbeat, intervalMs, shareGrantToken, videoId]);
+  }, [clientId, convex.url, disconnect, enabled, heartbeat, intervalMs, sessionId, shareGrantToken, videoId]);
+
+  useEffect(() => {
+    hasMountedRef.current = true;
+  }, []);
 
   const state = useQuery(
     api.videoPresence.list,

@@ -151,8 +151,8 @@
       "id": "T005",
       "title": "Implement native permissions and device enumeration commands",
       "priority": 1,
-      "status": "todo",
-      "details": "Expose a minimal typed command surface for screen and microphone permissions plus capture target and microphone discovery.",
+      "status": "done",
+      "details": "Implemented a minimal native command surface for screen and microphone permissions, capture display/window enumeration, microphone discovery, system-audio support detection, and typed renderer wrappers with browser-safe fallbacks.",
       "steps": [
         "Implement screen and microphone permission status checks",
         "Implement permission request and open-settings commands",
@@ -169,15 +169,14 @@
         "T003"
       ],
       "files": [
+        "src-tauri/Cargo.toml",
+        "src-tauri/src/main.rs",
         "src-tauri/src/permissions.rs",
         "src-tauri/src/devices.rs",
         "src/lib/tauri.ts",
-        "src-tauri/src/main.rs",
-        "README.md",
-        "ARCHITECTURE.md",
-        "IMPLEMENTATION-PLAN.md",
-        "BACKLOG.md"
-      ]
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-11T21:05:00Z"
     },
     {
       "id": "T006",

@@ -283,23 +283,23 @@
       ],
       "files": [
         "src-tauri/Cargo.toml",
+        "src-tauri/src/errors.rs",
         "src-tauri/src/main.rs",
         "src-tauri/src/permissions.rs",
-        "src-tauri/src/errors.rs",
-        "src-tauri/src/state.rs",
         "src-tauri/src/recorder.rs",
-        "src/lib/tauri.ts",
-        "src/components/RecorderControls.tsx",
+        "src-tauri/src/state.rs",
         "src/App.tsx",
+        "src/components/RecorderControls.tsx",
+        "src/lib/tauri.ts",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:15:00Z"
+      "updated_at": "2026-03-11T20:57:53Z"
     },
     {
       "id": "T009",
       "title": "Implement native file upload streaming with progress and cancellation",
       "priority": 1,
-      "status": "todo",
+      "status": "done",
       "details": "Stream the recorded local file to the presigned S3 URL from Rust so large uploads do not block the renderer and progress can be surfaced immediately.",
       "steps": [
         "Implement uploadFile to accept a local video path and presigned upload URL",
@@ -317,14 +317,18 @@
         "T008"
       ],
       "files": [
+        "src-tauri/Cargo.toml",
         "src-tauri/src/upload.rs",
         "src-tauri/src/errors.rs",
+        "src-tauri/src/state.rs",
         "src-tauri/src/main.rs",
+        "src/lib/tauri.ts",
         "README.md",
         "ARCHITECTURE.md",
         "IMPLEMENTATION-PLAN.md",
         "BACKLOG.md"
-      ]
+      ],
+      "updated_at": "2026-03-11T21:00:57Z"
     },
     {
       "id": "T010",

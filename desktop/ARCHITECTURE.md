@@ -138,6 +138,7 @@ desktop/
 - local file output
 - byte-stream upload from local file path to presigned URL
 - progress events during upload
+- cancellation of the active native upload request
 
 ### Convex owns
 
@@ -192,6 +193,7 @@ Minimum commands:
 - `cancelRecording()`
 - `getCurrentRecording()`
 - `uploadFile(input)`
+- `cancelUpload(uploadId?)`
 
 Source references:
 

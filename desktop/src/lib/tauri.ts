@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type PermissionKind = "screen" | "microphone";
 export type PermissionStatus = "notNeeded" | "empty" | "granted" | "denied";
@@ -75,6 +76,28 @@ export type DesktopShellStatus = {
   shellVersion: string;
 };
 
+export type UploadFileInput = {
+  uploadUrl: string;
+  videoPath: string;
+  contentType: string;
+  uploadId?: string | null;
+};
+
+export type UploadProgressEvent = {
+  uploadId: string;
+  videoPath: string;
+  bytesSent: number;
+  totalBytes: number;
+  fractionCompleted: number;
+};
+
+export type UploadCompleted = {
+  uploadId: string;
+  videoPath: string;
+  totalBytes: number;
+  statusCode: number;
+};
+
 type CommandMap = {
   get_shell_status: DesktopShellStatus;
   check_permissions: PermissionSnapshot;
@@ -90,6 +113,8 @@ type CommandMap = {
   stop_recording: RecordingStopped;
   cancel_recording: void;
   get_current_recording: RecordingSnapshot | null;
+  upload_file: UploadCompleted;
+  cancel_upload: void;
 };
 
 declare global {
@@ -155,6 +180,8 @@ function getBrowserFallback<K extends keyof CommandMap>(
     case "stop_recording":
     case "cancel_recording":
     case "get_current_recording":
+    case "upload_file":
+    case "cancel_upload":
       throw new Error(`Command ${command} requires runtime handling`);
     default: {
       const exhaustiveCheck: never = command;
@@ -307,4 +334,26 @@ export async function getCurrentRecording(): Promise<RecordingSnapshot | null> {
   }
 
   return invokeDesktop("get_current_recording");
+}
+
+export function uploadFile(input: UploadFileInput): Promise<UploadCompleted> {
+  return invokeDesktop("upload_file", { input });
+}
+
+export function cancelUpload(uploadId?: string | null): Promise<void> {
+  return invokeDesktop("cancel_upload", {
+    uploadId: uploadId ?? null,
+  });
+}
+
+export async function listenToUploadProgress(
+  onProgress: (event: UploadProgressEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauriDesktop()) {
+    return () => {};
+  }
+
+  return listen<UploadProgressEvent>("upload-progress", ({ payload }) => {
+    onProgress(payload);
+  });
 }

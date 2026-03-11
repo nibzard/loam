@@ -177,11 +177,11 @@ Primary references:
 
 ### `desktop/src-tauri/src/upload.rs`
 
-- [ ] Accept a presigned upload URL and local file path.
-- [ ] Stream file bytes from Rust.
-- [ ] Emit progress events.
-- [ ] Support cancellation.
-- [ ] Keep implementation single-part in v1.
+- [x] Accept a presigned upload URL and local file path.
+- [x] Stream file bytes from Rust.
+- [x] Emit progress events.
+- [x] Support cancellation.
+- [x] Keep implementation single-part in v1.
 
 Primary references:
 

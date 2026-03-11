@@ -40,6 +40,11 @@ Start here:
 - [Cap target picker UI](../../Cap/apps/desktop/src/routes/target-select-overlay.tsx)
 - [Cap upload pipeline](../../Cap/apps/desktop/src-tauri/src/upload.rs)
 
+Current native status:
+
+- recording lifecycle commands are implemented
+- single-part native upload streaming is implemented with progress events and cancellation
+
 Do not start here:
 
 - [Cap desktop auth flow](../../Cap/apps/desktop/src/utils/auth.ts)

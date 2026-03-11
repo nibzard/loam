@@ -5,6 +5,7 @@ mod errors;
 mod permissions;
 mod recorder;
 mod state;
+mod upload;
 
 use serde::Serialize;
 
@@ -28,6 +29,7 @@ fn get_shell_status() -> DesktopShellStatus {
 fn main() {
     tauri::Builder::default()
         .manage(state::RecorderState::default())
+        .manage(state::UploadState::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_status,
             permissions::check_permissions,
@@ -42,7 +44,9 @@ fn main() {
             recorder::resume_recording,
             recorder::stop_recording,
             recorder::cancel_recording,
-            recorder::get_current_recording
+            recorder::get_current_recording,
+            upload::upload_file,
+            upload::cancel_upload
         ])
         .run(tauri::generate_context!())
         .expect("failed to run loam desktop shell");

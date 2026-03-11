@@ -2,7 +2,7 @@
 
 ## Status
 
-Planning complete. Implementation not started.
+Planning complete. Native recording and native upload streaming are in progress.
 
 ## Delivery Principle
 

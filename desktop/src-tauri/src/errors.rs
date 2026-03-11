@@ -24,8 +24,18 @@ pub enum RecorderError {
     MissingMicrophonePermission,
     #[error("InvalidCaptureTarget")]
     InvalidCaptureTarget,
+    #[error("UploadAlreadyInProgress")]
+    UploadAlreadyInProgress,
+    #[error("UploadNotInProgress")]
+    UploadNotInProgress,
+    #[error("UploadCancelled")]
+    UploadCancelled,
+    #[error("UploadFailed/{0}")]
+    UploadFailed(String),
     #[error("Io/{0}")]
     Io(#[from] std::io::Error),
+    #[error("Http/{0}")]
+    Http(#[from] reqwest::Error),
     #[error("Recording/{0}")]
     Recording(String),
 }

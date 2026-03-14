@@ -1,6 +1,6 @@
 "use client";
 
-import { ConvexReactClient } from "convex/react";
+import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { useAuth } from "@clerk/tanstack-react-start";
 import { ReactNode } from "react";
@@ -19,6 +19,10 @@ export function ConvexClientProvider({ children }: { children: ReactNode }) {
       {children}
     </ConvexProviderWithClerk>
   );
+}
+
+export function ConvexPublicClientProvider({ children }: { children: ReactNode }) {
+  return <ConvexProvider client={convex}>{children}</ConvexProvider>;
 }
 
 export { convex };

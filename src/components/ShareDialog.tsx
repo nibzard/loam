@@ -32,6 +32,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatRelativeTime } from "@/lib/utils";
+import {
+  buildRestrictedSharePath,
+  buildRestrictedShareUrl,
+  copyTextToClipboard,
+} from "@/lib/shareLinks";
 
 interface ShareDialogProps {
   videoId: Id<"videos">;
@@ -50,6 +55,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
   const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newLinkOptions, setNewLinkOptions] = useState({
+    allowDownload: false,
     expiresInDays: undefined as number | undefined,
     password: undefined as string | undefined,
   });
@@ -59,11 +65,12 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     try {
       await createShareLink({
         videoId,
+        allowDownload: newLinkOptions.allowDownload,
         expiresInDays: newLinkOptions.expiresInDays,
-        allowDownload: false,
         password: newLinkOptions.password,
       });
       setNewLinkOptions({
+        allowDownload: false,
         expiresInDays: undefined,
         password: undefined,
       });
@@ -86,17 +93,19 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     }
   };
 
-  const handleCopyLink = (token: string) => {
-    const url = `${window.location.origin}/share/${token}`;
-    navigator.clipboard.writeText(url);
+  const handleCopyLink = async (token: string) => {
+    const url = buildRestrictedShareUrl(token, window.location.origin);
+    const copied = await copyTextToClipboard(url);
+    if (!copied) return;
     setCopiedId(token);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleCopyPublicLink = () => {
+  const handleCopyPublicLink = async () => {
     if (!video?.publicId) return;
     const url = `${window.location.origin}/watch/${video.publicId}`;
-    navigator.clipboard.writeText(url);
+    const copied = await copyTextToClipboard(url);
+    if (!copied) return;
     setCopiedId("public");
     setTimeout(() => setCopiedId(null), 2000);
   };
@@ -110,6 +119,13 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     }
   };
 
+  const openInNewTab = (path: string) => {
+    const opened = window.open(path, "_blank", "noopener,noreferrer");
+    if (opened) {
+      opened.opener = null;
+    }
+  };
+
   const publicWatchPath = video?.publicId ? `/watch/${video.publicId}` : null;
 
   return (
@@ -118,16 +134,16 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         <DialogHeader>
           <DialogTitle>Share video</DialogTitle>
           <DialogDescription>
-            Videos stay private by default. Create a restricted share link for external access, or enable a public URL if you want anyone with the link to view it.
+            Restricted share links are the default way to share externally. Enable a public URL only when you intentionally want anyone with the link to view it.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-sm text-[var(--foreground)]">Visibility</h3>
+              <h3 className="font-bold text-sm text-[var(--foreground)]">Public URL (advanced)</h3>
               <p className="text-xs text-[var(--foreground-subtle)]">
-                Private disables the public URL. Restricted share links still work while the video remains private.
+                Keep videos private by default. Restricted share links still work while the video stays private.
               </p>
             </div>
             <Badge variant={video?.visibility === "public" ? "success" : "secondary"}>
@@ -164,7 +180,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={handleCopyPublicLink}
+                  onClick={() => void handleCopyPublicLink()}
                   disabled={video?.visibility !== "public"}
                 >
                   {copiedId === "public" ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
@@ -174,7 +190,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                   variant="outline"
                   className="flex-1"
                   disabled={video?.visibility !== "public"}
-                  onClick={() => window.open(publicWatchPath, "_blank")}
+                  onClick={() => openInNewTab(publicWatchPath)}
                 >
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open
@@ -185,9 +201,9 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         </div>
 
         <div className="space-y-4 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
-          <h3 className="font-bold text-sm text-[var(--foreground)]">Create restricted share link</h3>
+          <h3 className="font-bold text-sm text-[var(--foreground)]">Restricted sharing (default)</h3>
           <p className="text-xs text-[var(--foreground-subtle)]">
-            Best for external sharing. The video stays private in your workspace and only this link grants access.
+            Dashboard sharing creates or reuses a default restricted link automatically. Use this panel when you need extra links with expiration, password protection, or download permission.
           </p>
 
           <div>
@@ -249,9 +265,27 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
             />
           </div>
 
-          <Button onClick={handleCreateLink} disabled={isCreating} className="w-full">
+          <div>
+            <label className="text-sm text-[var(--foreground-muted)]">Downloads</label>
+            <Button
+              type="button"
+              variant={newLinkOptions.allowDownload ? "default" : "outline"}
+              className="mt-1 w-full justify-between"
+              onClick={() =>
+                setNewLinkOptions((options) => ({
+                  ...options,
+                  allowDownload: !options.allowDownload,
+                }))
+              }
+            >
+              <span>Allow recipients to download the original file</span>
+              <span>{newLinkOptions.allowDownload ? "Enabled" : "Disabled"}</span>
+            </Button>
+          </div>
+
+          <Button onClick={() => void handleCreateLink()} disabled={isCreating} className="w-full">
             <Plus className="mr-2 h-4 w-4" />
-            {isCreating ? "Creating..." : "Create restricted link"}
+            {isCreating ? "Creating..." : "Create extra restricted link"}
           </Button>
         </div>
 
@@ -273,7 +307,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <code className="text-sm bg-[var(--surface-alt)] px-2 py-0.5 font-mono truncate max-w-[200px]">
-                        /share/{link.token}
+                        {buildRestrictedSharePath(link.token)}
                       </code>
                       {link.isExpired ? (
                         <Badge variant="destructive">Expired</Badge>
@@ -290,6 +324,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                           Protected
                         </span>
                       ) : null}
+                      {link.allowDownload ? <span>Downloads enabled</span> : null}
                       {link.expiresAt ? (
                         <span>
                           Expires {formatRelativeTime(link.expiresAt)}
@@ -301,7 +336,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleCopyLink(link.token)}
+                      onClick={() => void handleCopyLink(link.token)}
                     >
                       {copiedId === link.token ? (
                         <Check className="h-4 w-4 text-[var(--accent)]" />
@@ -312,7 +347,7 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => window.open(`/share/${link.token}`, "_blank")}
+                      onClick={() => openInNewTab(`/share/${link.token}`)}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>

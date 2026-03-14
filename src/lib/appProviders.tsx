@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 
 import { ClerkClientProvider } from "@/lib/clerk";
-import { ConvexClientProvider } from "@/lib/convex";
+import { ConvexClientProvider, ConvexPublicClientProvider } from "@/lib/convex";
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
@@ -11,4 +11,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
       <ConvexClientProvider>{children}</ConvexClientProvider>
     </ClerkClientProvider>
   );
+}
+
+export function PublicAppProviders({ children }: { children: ReactNode }) {
+  return <ConvexPublicClientProvider>{children}</ConvexPublicClientProvider>;
 }

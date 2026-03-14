@@ -251,8 +251,9 @@ export const getByShareGrant = query({
     }
 
     return {
-      video: buildClientVideoSummary(video),
+      allowDownload: resolved.shareLink.allowDownload,
       grantExpiresAt: resolved.grant.expiresAt,
+      video: buildClientVideoSummary(video),
     };
   },
 });
@@ -732,6 +733,30 @@ export const getShareGrantPlaybackTarget = internalQuery({
     }
 
     return buildPlaybackTarget(video);
+  },
+});
+
+export const getShareGrantDownloadTarget = internalQuery({
+  args: { grantToken: v.string() },
+  handler: async (ctx, args) => {
+    const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
+    if (!resolved) {
+      return null;
+    }
+
+    const video = await ctx.db.get(resolved.shareLink.videoId);
+    if (!video) {
+      return null;
+    }
+
+    return {
+      _id: video._id,
+      allowDownload: resolved.shareLink.allowDownload,
+      contentType: video.contentType,
+      s3Key: video.s3Key,
+      status: video.status,
+      title: video.title,
+    };
   },
 });
 

@@ -62,6 +62,8 @@ export default function DashboardLayout() {
     uploads,
     uploadFilesToProject,
     cancelUpload,
+    copyShareLinkForUpload,
+    dismissUpload,
   } = useVideoUploadManager();
   const [isGlobalDragActive, setIsGlobalDragActive] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
@@ -254,9 +256,13 @@ export default function DashboardLayout() {
               error={upload.error}
               bytesPerSecond={upload.bytesPerSecond}
               estimatedSecondsRemaining={upload.estimatedSecondsRemaining}
+              isPreparingShareLink={upload.isPreparingShareLink}
+              shareLinkError={upload.shareLinkError}
               shareLinkUrl={upload.shareLinkUrl}
               shareLinkCopied={upload.shareLinkCopied}
               onCancel={() => cancelUpload(upload.id)}
+              onCopyShareLink={() => void copyShareLinkForUpload(upload.id)}
+              onDismiss={() => dismissUpload(upload.id)}
             />
           ))}
         </div>

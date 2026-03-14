@@ -40,6 +40,156 @@ const DEFAULT_FLUSH_THRESHOLD_SECONDS = 5;
 const DEFAULT_MAX_DELTA_SECONDS = 4;
 const DEFAULT_MIN_REPORT_SECONDS = 1;
 
+type WatchProgressMachineSnapshot = {
+  generation: number;
+  isCapReached: boolean;
+  isFlushing: boolean;
+  lastTime: number | null;
+  pendingWatchSeconds: number;
+};
+
+type FlushStartArgs = {
+  enabled: boolean;
+  minReportSeconds: number;
+  target: RecordWatchTarget;
+};
+
+type FlushStartResult =
+  | {
+      generation: number;
+      requestedWatchSeconds: number;
+      target: RecordWatchTarget;
+    }
+  | null;
+
+type FlushFinishResult = {
+  capReached: boolean;
+  shouldStopTracking: boolean;
+};
+
+export function createWatchProgressMachine() {
+  const state: WatchProgressMachineSnapshot = {
+    generation: 0,
+    isCapReached: false,
+    isFlushing: false,
+    lastTime: null,
+    pendingWatchSeconds: 0,
+  };
+
+  return {
+    reset() {
+      state.generation += 1;
+      state.isCapReached = false;
+      state.isFlushing = false;
+      state.lastTime = null;
+      state.pendingWatchSeconds = 0;
+    },
+
+    trackTime({
+      enabled,
+      flushThresholdSeconds,
+      maxDeltaSeconds,
+      time,
+    }: {
+      enabled: boolean;
+      flushThresholdSeconds: number;
+      maxDeltaSeconds: number;
+      time: number;
+    }) {
+      if (!enabled || state.isCapReached) return false;
+
+      const normalizedTime = Number.isFinite(time) ? Math.max(0, time) : 0;
+      const lastTime = state.lastTime;
+      state.lastTime = normalizedTime;
+
+      if (lastTime === null) return false;
+
+      const delta = normalizedTime - lastTime;
+      if (delta <= 0) return false;
+
+      const trackedDelta = Math.min(delta, maxDeltaSeconds);
+      if (trackedDelta <= 0) return false;
+
+      state.pendingWatchSeconds += trackedDelta;
+      return state.pendingWatchSeconds >= flushThresholdSeconds;
+    },
+
+    startFlush({
+      enabled,
+      minReportSeconds,
+      target,
+    }: FlushStartArgs): FlushStartResult {
+      if (!enabled || state.isCapReached || state.isFlushing) return null;
+
+      if (!target.videoId && !target.publicId && !target.grantToken) {
+        state.pendingWatchSeconds = 0;
+        state.lastTime = null;
+        return null;
+      }
+
+      const requestedWatchSeconds = Math.floor(state.pendingWatchSeconds);
+      if (requestedWatchSeconds < minReportSeconds) return null;
+
+      state.pendingWatchSeconds -= requestedWatchSeconds;
+      state.isFlushing = true;
+
+      return {
+        generation: state.generation,
+        requestedWatchSeconds,
+        target,
+      };
+    },
+
+    finishFlush(
+      generation: number,
+      result: RecordWatchResult,
+    ): FlushFinishResult {
+      if (generation === state.generation) {
+        state.isFlushing = false;
+      }
+
+      if (generation !== state.generation) {
+        return {
+          capReached: state.isCapReached,
+          shouldStopTracking: false,
+        };
+      }
+
+      if (result.capReached && result.consumedWatchSeconds < result.requestedWatchSeconds) {
+        state.isCapReached = true;
+        state.pendingWatchSeconds = 0;
+        return {
+          capReached: true,
+          shouldStopTracking: true,
+        };
+      }
+
+      if (!result.recorded || result.consumedWatchSeconds <= 0) {
+        state.pendingWatchSeconds += result.requestedWatchSeconds;
+      }
+
+      return {
+        capReached: state.isCapReached,
+        shouldStopTracking: false,
+      };
+    },
+
+    failFlush(generation: number, requestedWatchSeconds: number) {
+      if (generation === state.generation) {
+        state.isFlushing = false;
+      }
+
+      if (generation !== state.generation) return;
+
+      state.pendingWatchSeconds += requestedWatchSeconds;
+    },
+
+    snapshot() {
+      return { ...state };
+    },
+  };
+}
+
 export function useWatchProgress({
   enabled,
   trackerKey,
@@ -52,11 +202,12 @@ export function useWatchProgress({
   minReportSeconds = DEFAULT_MIN_REPORT_SECONDS,
   onCapReached,
 }: WatchProgressOptions) {
-  const lastTimeRef = useRef<number | null>(null);
-  const pendingWatchSecondsRef = useRef(0);
-  const isCapReachedRef = useRef(false);
-  const isFlushingRef = useRef(false);
+  const machineRef = useRef<ReturnType<typeof createWatchProgressMachine> | null>(null);
   const intervalRef = useRef<number | null>(null);
+
+  if (machineRef.current === null) {
+    machineRef.current = createWatchProgressMachine();
+  }
 
   const clearTimer = useCallback(() => {
     if (intervalRef.current !== null) {
@@ -67,49 +218,35 @@ export function useWatchProgress({
 
   const resetState = useCallback(() => {
     clearTimer();
-    lastTimeRef.current = null;
-    pendingWatchSecondsRef.current = 0;
-    isCapReachedRef.current = false;
+    machineRef.current?.reset();
   }, [clearTimer]);
 
   const flush = useCallback(async () => {
-    if (!enabled || isCapReachedRef.current || isFlushingRef.current) return;
+    const machine = machineRef.current;
+    if (!machine) return;
 
     const target = getTarget();
-    if (!target.videoId && !target.publicId && !target.grantToken) {
-      pendingWatchSecondsRef.current = 0;
-      lastTimeRef.current = null;
-      return;
-    }
-
-    const requestedWatchSeconds = Math.floor(pendingWatchSecondsRef.current);
-    if (requestedWatchSeconds < minReportSeconds) return;
-
-    pendingWatchSecondsRef.current -= requestedWatchSeconds;
-    isFlushingRef.current = true;
+    const started = machine.startFlush({
+      enabled,
+      minReportSeconds,
+      target,
+    });
+    if (!started) return;
 
     try {
       const result = await recordWatch({
-        ...target,
+        ...started.target,
         clientId: getClientId?.(),
-        watchedSeconds: requestedWatchSeconds,
+        watchedSeconds: started.requestedWatchSeconds,
       });
 
-      if (result.capReached && result.consumedWatchSeconds < result.requestedWatchSeconds) {
-        isCapReachedRef.current = true;
-        pendingWatchSecondsRef.current = 0;
+      const finish = machine.finishFlush(started.generation, result);
+      if (finish.capReached && finish.shouldStopTracking) {
         onCapReached?.({ usageKind: result.usageKind });
         clearTimer();
-        return;
-      }
-
-      if (!result.recorded || result.consumedWatchSeconds <= 0) {
-        pendingWatchSecondsRef.current += requestedWatchSeconds;
       }
     } catch {
-      pendingWatchSecondsRef.current += requestedWatchSeconds;
-    } finally {
-      isFlushingRef.current = false;
+      machine.failFlush(started.generation, started.requestedWatchSeconds);
     }
   }, [
     enabled,
@@ -126,12 +263,14 @@ export function useWatchProgress({
   }, [flush]);
 
   useEffect(() => {
-    void flush();
+    // The previous tracker instance is flushed by the cleanup effect tied to the
+    // old closures. Reset immediately here so pending seconds cannot leak into
+    // the next video/share target.
     resetState();
-  }, [trackerKey, flush, resetState]);
+  }, [resetState, trackerKey]);
 
   useEffect(() => {
-    if (!enabled || isCapReachedRef.current) return;
+    if (!enabled || machineRef.current?.snapshot().isCapReached) return;
 
     intervalRef.current = window.setInterval(flushLoop, flushIntervalMs);
     return () => {
@@ -148,26 +287,17 @@ export function useWatchProgress({
 
   const trackTime = useCallback(
     (time: number) => {
-      if (!enabled || isCapReachedRef.current) return;
-
-      const normalizedTime = Number.isFinite(time) ? Math.max(0, time) : 0;
-      const lastTime = lastTimeRef.current;
-      lastTimeRef.current = normalizedTime;
-
-      if (lastTime === null) return;
-
-      const delta = normalizedTime - lastTime;
-      if (delta <= 0) return;
-
-      const trackedDelta = Math.min(delta, maxDeltaSeconds);
-      if (trackedDelta <= 0) return;
-
-      pendingWatchSecondsRef.current += trackedDelta;
-      if (pendingWatchSecondsRef.current >= flushThresholdSeconds) {
+      const shouldFlush = machineRef.current?.trackTime({
+        enabled,
+        flushThresholdSeconds,
+        maxDeltaSeconds,
+        time,
+      });
+      if (shouldFlush) {
         void flush();
       }
     },
-    [enabled, flush, flushThresholdSeconds, maxDeltaSeconds, minReportSeconds],
+    [enabled, flush, flushThresholdSeconds, maxDeltaSeconds],
   );
 
   return { trackTime };

@@ -2,7 +2,7 @@
 
 import { Progress } from "@/components/ui/progress";
 import { formatBytes } from "@/lib/utils";
-import { X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { X, CheckCircle, AlertCircle, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export type UploadStatus = "pending" | "uploading" | "processing" | "complete" | "error";
@@ -27,9 +27,13 @@ interface UploadProgressProps {
   error?: string;
   bytesPerSecond?: number;
   estimatedSecondsRemaining?: number | null;
+  isPreparingShareLink?: boolean;
+  shareLinkError?: string;
   shareLinkUrl?: string;
   shareLinkCopied?: boolean;
   onCancel?: () => void;
+  onCopyShareLink?: () => void;
+  onDismiss?: () => void;
 }
 
 export function UploadProgress({
@@ -40,9 +44,13 @@ export function UploadProgress({
   error,
   bytesPerSecond = 0,
   estimatedSecondsRemaining = null,
+  isPreparingShareLink = false,
+  shareLinkError,
   shareLinkUrl,
   shareLinkCopied = false,
   onCancel,
+  onCopyShareLink,
+  onDismiss,
 }: UploadProgressProps) {
   return (
     <div className="border-2 border-[var(--border)] p-4 bg-[var(--background)]">
@@ -71,6 +79,16 @@ export function UploadProgress({
               <X className="h-4 w-4" />
             </Button>
           )}
+          {(status === "complete" || status === "error") && onDismiss && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onDismiss}
+              className="h-7 w-7 text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -94,13 +112,44 @@ export function UploadProgress({
       )}
 
       {status === "complete" && (
-        <p className="text-xs text-[var(--accent)] mt-2">
-          {shareLinkCopied
-            ? "Share link copied. It will start working as soon as processing finishes."
-            : shareLinkUrl
-              ? "Share link ready."
-              : "Upload complete. Video is private until you share it."}
-        </p>
+        <div className="mt-2 space-y-2">
+          {isPreparingShareLink ? (
+            <p className="text-xs text-[var(--foreground-muted)]">
+              Preparing share link...
+            </p>
+          ) : shareLinkError ? (
+            <>
+              <p className="text-xs text-[var(--destructive)]">{shareLinkError}</p>
+              {onCopyShareLink ? (
+                <Button size="sm" variant="outline" onClick={onCopyShareLink}>
+                  <Copy className="h-3.5 w-3.5" />
+                  Retry share link
+                </Button>
+              ) : null}
+            </>
+          ) : shareLinkUrl ? (
+            <>
+              <p className="text-xs text-[var(--accent)]">
+                {shareLinkCopied
+                  ? "Share link copied. It will start working as soon as processing finishes."
+                  : "Share link ready to copy. Playback starts after processing finishes."}
+              </p>
+              <code className="block truncate bg-[var(--surface-alt)] px-2 py-1 font-mono text-[11px] text-[var(--foreground)]">
+                {shareLinkUrl}
+              </code>
+              {onCopyShareLink ? (
+                <Button size="sm" variant="outline" onClick={onCopyShareLink}>
+                  <Copy className="h-3.5 w-3.5" />
+                  {shareLinkCopied ? "Copy again" : "Copy share link"}
+                </Button>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-xs text-[var(--foreground-muted)]">
+              Upload complete. Video is private until you share it.
+            </p>
+          )}
+        </div>
       )}
 
       {status === "error" && error && (

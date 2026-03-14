@@ -3,6 +3,10 @@ import { useCallback, useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import type { UploadStatus } from "@/components/upload/UploadProgress";
+import { copyTextToClipboard, prepareDefaultShareLink } from "@/lib/shareLinks";
+
+const AUTO_DISMISS_COPIED_UPLOAD_DELAY_MS = 8000;
+const DEFAULT_SHARE_LINK_ERROR = "Could not prepare share link. Try again.";
 
 export interface ManagedUploadItem {
   id: string;
@@ -15,6 +19,8 @@ export interface ManagedUploadItem {
   error?: string;
   bytesPerSecond?: number;
   estimatedSecondsRemaining?: number | null;
+  isPreparingShareLink?: boolean;
+  shareLinkError?: string;
   shareLinkUrl?: string;
   shareLinkCopied?: boolean;
   abortController?: AbortController;
@@ -32,7 +38,108 @@ export function useVideoUploadManager() {
   const getUploadUrl = useAction(api.videoActions.getUploadUrl);
   const markUploadComplete = useAction(api.videoActions.markUploadComplete);
   const markUploadFailed = useAction(api.videoActions.markUploadFailed);
+  const ensureDefaultShareLink = useMutation(api.shareLinks.ensureDefault);
   const [uploads, setUploads] = useState<ManagedUploadItem[]>([]);
+
+  const dismissUpload = useCallback((uploadId: string) => {
+    setUploads((prev) => prev.filter((item) => item.id !== uploadId));
+  }, []);
+
+  const scheduleCopiedUploadDismiss = useCallback((uploadId: string) => {
+    window.setTimeout(() => {
+      setUploads((prev) => {
+        const upload = prev.find((item) => item.id === uploadId);
+        if (!upload || upload.status !== "complete" || !upload.shareLinkCopied) {
+          return prev;
+        }
+        return prev.filter((item) => item.id !== uploadId);
+      });
+    }, AUTO_DISMISS_COPIED_UPLOAD_DELAY_MS);
+  }, []);
+
+  const prepareShareLink = useCallback(
+    async (args: {
+      existingUrl?: string;
+      uploadId: string;
+      videoId: Id<"videos">;
+    }) => {
+      setUploads((prev) =>
+        prev.map((upload) =>
+          upload.id === args.uploadId
+            ? {
+                ...upload,
+                isPreparingShareLink: true,
+                shareLinkError: undefined,
+              }
+            : upload,
+        ),
+      );
+
+      try {
+        const result = args.existingUrl
+          ? {
+              copied: await copyTextToClipboard(args.existingUrl),
+              url: args.existingUrl,
+            }
+          : await prepareDefaultShareLink({
+              videoId: args.videoId,
+              ensureDefaultShareLink,
+            });
+
+        setUploads((prev) =>
+          prev.map((upload) =>
+            upload.id === args.uploadId
+              ? {
+                  ...upload,
+                  isPreparingShareLink: false,
+                  shareLinkCopied: result.copied,
+                  shareLinkError: undefined,
+                  shareLinkUrl: result.url,
+                }
+              : upload,
+          ),
+        );
+
+        if (result.copied) {
+          scheduleCopiedUploadDismiss(args.uploadId);
+        }
+
+        return result;
+      } catch {
+        setUploads((prev) =>
+          prev.map((upload) =>
+            upload.id === args.uploadId
+              ? {
+                  ...upload,
+                  isPreparingShareLink: false,
+                  shareLinkCopied: false,
+                  shareLinkError: DEFAULT_SHARE_LINK_ERROR,
+                }
+              : upload,
+          ),
+        );
+
+        return null;
+      }
+    },
+    [ensureDefaultShareLink, scheduleCopiedUploadDismiss],
+  );
+
+  const copyShareLinkForUpload = useCallback(
+    async (uploadId: string) => {
+      const upload = uploads.find((item) => item.id === uploadId);
+      if (!upload?.videoId) {
+        return null;
+      }
+
+      return await prepareShareLink({
+        uploadId,
+        videoId: upload.videoId,
+        existingUrl: upload.shareLinkUrl,
+      });
+    },
+    [prepareShareLink, uploads],
+  );
 
   const uploadFilesToProject = useCallback(
     async (projectId: Id<"projects">, files: File[]) => {
@@ -168,16 +275,20 @@ export function useVideoUploadManager() {
               upload.id === uploadId
                 ? {
                     ...upload,
+                    isPreparingShareLink: true,
                     status: "complete",
                     progress: 100,
+                    shareLinkCopied: false,
+                    shareLinkError: undefined,
                   }
                 : upload,
             ),
           );
 
-          setTimeout(() => {
-            setUploads((prev) => prev.filter((upload) => upload.id !== uploadId));
-          }, 3000);
+          void prepareShareLink({
+            uploadId,
+            videoId: createdVideoId,
+          });
         } catch (error) {
           const errorMessage =
             error instanceof Error ? error.message : "Upload failed";
@@ -199,7 +310,13 @@ export function useVideoUploadManager() {
         }
       }
     },
-    [createVideo, getUploadUrl, markUploadComplete, markUploadFailed],
+    [
+      createVideo,
+      getUploadUrl,
+      markUploadComplete,
+      markUploadFailed,
+      prepareShareLink,
+    ],
   );
 
   const cancelUpload = useCallback(
@@ -223,5 +340,7 @@ export function useVideoUploadManager() {
     uploads,
     uploadFilesToProject,
     cancelUpload,
+    copyShareLinkForUpload,
+    dismissUpload,
   };
 }

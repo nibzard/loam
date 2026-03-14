@@ -13,6 +13,7 @@ import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import {
   createMuxAssetFromInputUrl,
+  createSignedPlaybackId,
   createPublicPlaybackId,
   deletePlaybackId,
   deleteMuxAsset,
@@ -27,6 +28,10 @@ import {
   SIGNED_PLAYBACK_SESSION_TTL,
   type PlaybackSession,
 } from "./playbackSessions";
+import {
+  planPublicPlaybackAccess,
+  planSignedPlaybackAccess,
+} from "./playbackAccess";
 import { BUCKET_NAME, getS3Client } from "./s3";
 import { generateOpaqueToken } from "./security";
 import { buildMuxUploadPassthrough } from "./uploadSessions";
@@ -45,6 +50,69 @@ const playbackSessionValidator = v.object({
   posterUrl: v.string(),
   url: v.string(),
 });
+
+const clientVideoSummaryValidator = v.object({
+  _id: v.id("videos"),
+  title: v.string(),
+  description: v.optional(v.string()),
+  duration: v.optional(v.number()),
+  thumbnailUrl: v.optional(v.string()),
+});
+
+const publicVideoDataValidator = v.object({
+  video: clientVideoSummaryValidator,
+});
+
+const shareVideoDataValidator = v.object({
+  allowDownload: v.boolean(),
+  grantExpiresAt: v.number(),
+  video: clientVideoSummaryValidator,
+});
+
+const publicWatchBootstrapValidator = v.union(
+  v.object({
+    state: v.literal("missing"),
+  }),
+  v.object({
+    state: v.literal("ready"),
+    playbackSession: playbackSessionValidator,
+    videoData: publicVideoDataValidator,
+  }),
+);
+
+const sharePlaybackBootstrapValidator = v.union(
+  v.object({
+    state: v.literal("bootstrapping"),
+  }),
+  v.object({
+    state: v.literal("missing"),
+  }),
+  v.object({
+    state: v.literal("expired"),
+  }),
+  v.object({
+    state: v.literal("processing"),
+  }),
+  v.object({
+    state: v.literal("failed"),
+  }),
+  v.object({
+    state: v.literal("passwordRequired"),
+  }),
+  v.object({
+    state: v.literal("passwordRejected"),
+  }),
+  v.object({
+    state: v.literal("temporarilyUnavailable"),
+    retryAfterSeconds: v.union(v.number(), v.null()),
+  }),
+  v.object({
+    state: v.literal("ready"),
+    grantToken: v.string(),
+    playbackSession: playbackSessionValidator,
+    videoData: shareVideoDataValidator,
+  }),
+);
 
 type PlaybackTarget = {
   _id: Id<"videos">;
@@ -68,11 +136,105 @@ type MarkUploadCompleteResult = {
   success: boolean;
 };
 
+type ClientVideoSummary = {
+  _id: Id<"videos">;
+  title: string;
+  description?: string;
+  duration?: number;
+  thumbnailUrl?: string;
+};
+
+type PublicVideoData = {
+  video: ClientVideoSummary;
+};
+
+type ShareVideoData = {
+  allowDownload: boolean;
+  grantExpiresAt: number;
+  video: ClientVideoSummary;
+};
+
+type PublicWatchBootstrap =
+  | { state: "missing" }
+  | {
+      state: "ready";
+      playbackSession: PlaybackSession;
+      videoData: PublicVideoData;
+    };
+
+type SharePlaybackBootstrap =
+  | { state: "bootstrapping" }
+  | { state: "missing" }
+  | { state: "expired" }
+  | { state: "processing" }
+  | { state: "failed" }
+  | { state: "passwordRequired" }
+  | { state: "passwordRejected" }
+  | { retryAfterSeconds: number | null; state: "temporarilyUnavailable" }
+  | {
+      state: "ready";
+      grantToken: string;
+      playbackSession: PlaybackSession;
+      videoData: ShareVideoData;
+    };
+
+type ShareAccessGrantResult = {
+  failureReason:
+    | "expired"
+    | "failed"
+    | "missing"
+    | "passwordRejected"
+    | "processing"
+    | "rateLimited"
+    | "unavailable"
+    | null;
+  ok: boolean;
+  grantToken: string | null;
+  retryAfterSeconds: number | null;
+};
+
 type MarkUploadFailedResult = {
   cleanupScheduled: boolean;
   outcome: "already_failed" | "applied" | "ignored" | "stale";
   success: boolean;
 };
+
+type DownloadTarget = {
+  contentType?: string | null;
+  s3Key?: string | null;
+  status: "failed" | "processing" | "ready" | "uploading";
+  title?: string | null;
+};
+
+function mapShareGrantFailureToBootstrap(
+  failureReason: ShareAccessGrantResult["failureReason"],
+  options?: {
+    passwordProvided?: boolean;
+    retryAfterSeconds?: number | null;
+  },
+): Exclude<SharePlaybackBootstrap, { state: "bootstrapping" } | { state: "ready" }> {
+  switch (failureReason) {
+    case "missing":
+      return { state: "missing" };
+    case "expired":
+      return { state: "expired" };
+    case "processing":
+      return { state: "processing" };
+    case "failed":
+      return { state: "failed" };
+    case "passwordRejected":
+      return {
+        state: options?.passwordProvided ? "passwordRejected" : "passwordRequired",
+      };
+    case "rateLimited":
+    case "unavailable":
+    default:
+      return {
+        state: "temporarilyUnavailable",
+        retryAfterSeconds: options?.retryAfterSeconds ?? null,
+      };
+  }
+}
 
 function getExtensionFromKey(key: string, fallback = "mp4") {
   let source = key;
@@ -242,12 +404,18 @@ async function ensurePublicPlaybackIdForTarget(
   let publicPlaybackId = playbackIds.publicPlaybackId;
   if (!publicPlaybackId) {
     const created = await createPublicPlaybackId(muxAssetId);
+    if (!created.id) {
+      throw new Error("Mux did not return a public playback id");
+    }
     publicPlaybackId = created.id;
   }
 
-  const session = buildPublicPlaybackSession(publicPlaybackId);
-  if (target.visibility === "public" && target.thumbnailUrl !== session.posterUrl) {
-    await setThumbnailUrl(ctx, target._id, session.posterUrl);
+  const plan = planPublicPlaybackAccess({
+    publicPlaybackId,
+    target,
+  });
+  if (plan.thumbnailUrl !== undefined) {
+    await setThumbnailUrl(ctx, target._id, plan.thumbnailUrl);
   }
 
   return publicPlaybackId;
@@ -257,41 +425,53 @@ async function ensureSignedPlaybackIdForTarget(
   ctx: ActionCtx,
   target: PlaybackTarget,
 ): Promise<string> {
+  if (target.muxPlaybackId) {
+    return target.muxPlaybackId;
+  }
+
   const muxAssetId = requireMuxAssetId(target);
   const asset = await getMuxAsset(muxAssetId);
   const playbackIds = resolveMuxPlaybackIds(
     (asset.playback_ids ?? []) as Array<{ id?: string; policy?: string }>,
   );
 
-  const signedPlaybackId = playbackIds.signedPlaybackId;
+  let signedPlaybackId = playbackIds.signedPlaybackId;
   if (!signedPlaybackId) {
-    throw new Error("Signed playback is not configured for this video");
+    const created = await createSignedPlaybackId(muxAssetId);
+    if (!created.id) {
+      throw new Error("Mux did not return a signed playback id");
+    }
+    signedPlaybackId = created.id;
   }
 
-  if (signedPlaybackId !== target.muxPlaybackId) {
+  const plan = planSignedPlaybackAccess({
+    publicPlaybackIds: playbackIds.publicPlaybackIds,
+    signedPlaybackId,
+    target,
+  });
+
+  if (plan.muxPlaybackId !== undefined) {
     await ctx.runMutation(internal.videos.setMuxPlaybackId, {
       videoId: target._id,
-      muxPlaybackId: signedPlaybackId,
+      muxPlaybackId: plan.muxPlaybackId,
     });
   }
 
-  if (target.visibility === "private") {
-    for (const publicPlaybackId of playbackIds.publicPlaybackIds) {
-      try {
-        await deletePlaybackId(muxAssetId, publicPlaybackId);
-      } catch (error) {
-        console.error("Failed to remove stale public playback id", {
-          videoId: target._id,
-          muxAssetId,
-          publicPlaybackId,
-          error,
-        });
-      }
+  for (const publicPlaybackId of plan.publicPlaybackIdsToDelete) {
+    try {
+      await deletePlaybackId(muxAssetId, publicPlaybackId);
+    } catch (error) {
+      console.error("Failed to remove stale public playback id", {
+        videoId: target._id,
+        muxAssetId,
+        publicPlaybackId,
+        error,
+      });
     }
+  }
 
-    if (target.thumbnailUrl) {
-      await setThumbnailUrl(ctx, target._id, null);
-    }
+  if (plan.thumbnailUrl !== undefined) {
+    await setThumbnailUrl(ctx, target._id, plan.thumbnailUrl);
   }
 
   return signedPlaybackId;
@@ -310,6 +490,31 @@ async function buildSignedMuxPlaybackSession(
     playbackToken,
     thumbnailToken,
   });
+}
+
+async function buildDownloadResponse(target: DownloadTarget): Promise<{
+  filename: string;
+  url: string;
+}> {
+  if (target.status !== "ready") {
+    throw new Error("Video not found or not ready");
+  }
+
+  const key = getValueString(target, "s3Key");
+  if (!key) {
+    throw new Error("Original bucket file not found for this video");
+  }
+
+  const filename = buildDownloadFilename(target.title ?? undefined, key);
+
+  return {
+    filename,
+    url: await buildSignedBucketObjectUrl(key, {
+      expiresIn: 600,
+      filename,
+      contentType: target.contentType ?? "video/mp4",
+    }),
+  };
 }
 
 export const cleanupDeletedVideoAssets = internalAction({
@@ -691,6 +896,32 @@ export const getPublicPlaybackSession = action({
   },
 });
 
+export const getPublicWatchBootstrap = action({
+  args: { publicId: v.string() },
+  returns: publicWatchBootstrapValidator,
+  handler: async (ctx, args): Promise<PublicWatchBootstrap> => {
+    const videoData: PublicVideoData | null = await ctx.runQuery(api.videos.getByPublicId, {
+      publicId: args.publicId,
+    });
+
+    if (!videoData?.video) {
+      return { state: "missing" as const };
+    }
+
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(internal.videos.getPublicPlaybackTarget, {
+      publicId: args.publicId,
+    }) as PlaybackTarget | null);
+
+    const playbackId = await ensurePublicPlaybackIdForTarget(ctx, target);
+
+    return {
+      state: "ready" as const,
+      playbackSession: buildPublicPlaybackSession(playbackId),
+      videoData,
+    };
+  },
+});
+
 export const getSharedPlaybackSession = action({
   args: { grantToken: v.string() },
   returns: playbackSessionValidator,
@@ -704,6 +935,95 @@ export const getSharedPlaybackSession = action({
 
     const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
     return await buildSignedMuxPlaybackSession(playbackId);
+  },
+});
+
+export const getSharePlaybackBootstrap = action({
+  args: {
+    token: v.string(),
+    password: v.optional(v.string()),
+  },
+  returns: sharePlaybackBootstrapValidator,
+  handler: async (ctx, args): Promise<SharePlaybackBootstrap> => {
+    const shareInfo = await ctx.runQuery(api.shareLinks.getByToken, {
+      token: args.token,
+    });
+
+    if (shareInfo.status === "missing") {
+      return { state: "missing" as const };
+    }
+
+    if (shareInfo.status === "expired") {
+      return { state: "expired" as const };
+    }
+
+    if (shareInfo.status === "processing") {
+      return { state: "processing" as const };
+    }
+
+    if (shareInfo.status === "failed") {
+      return { state: "failed" as const };
+    }
+
+    if (shareInfo.status === "requiresPassword" && !args.password) {
+      return { state: "passwordRequired" as const };
+    }
+
+    const grant: ShareAccessGrantResult = await ctx.runMutation(api.shareLinks.issueAccessGrant, {
+      password: args.password,
+      token: args.token,
+    });
+
+    if (!grant.ok || !grant.grantToken) {
+      return mapShareGrantFailureToBootstrap(grant.failureReason, {
+        passwordProvided: Boolean(args.password),
+        retryAfterSeconds: grant.retryAfterSeconds,
+      });
+    }
+
+    const videoData: ShareVideoData | null = await ctx.runQuery(api.videos.getByShareGrant, {
+      grantToken: grant.grantToken,
+    });
+
+    if (!videoData?.video) {
+      return { state: "missing" as const };
+    }
+
+    const target = requireReadyPlaybackTarget(await ctx.runQuery(internal.videos.getShareGrantPlaybackTarget, {
+      grantToken: grant.grantToken,
+    }) as PlaybackTarget | null);
+
+    const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
+
+    return {
+      state: "ready" as const,
+      grantToken: grant.grantToken,
+      playbackSession: await buildSignedMuxPlaybackSession(playbackId),
+      videoData,
+    };
+  },
+});
+
+export const getSharedDownloadUrl = action({
+  args: { grantToken: v.string() },
+  returns: v.object({
+    url: v.string(),
+    filename: v.string(),
+  }),
+  handler: async (ctx, args): Promise<{ filename: string; url: string }> => {
+    const target = await ctx.runQuery(internal.videos.getShareGrantDownloadTarget, {
+      grantToken: args.grantToken,
+    });
+
+    if (!target) {
+      throw new Error("Video not found");
+    }
+
+    if (!target.allowDownload) {
+      throw new Error("Downloads are disabled for this share link");
+    }
+
+    return await buildDownloadResponse(target);
   },
 });
 
@@ -722,24 +1042,6 @@ export const getDownloadUrl = action({
       throw new Error("Video not found");
     }
 
-    if (video.status !== "ready") {
-      throw new Error("Video not found or not ready");
-    }
-
-    const key = getValueString(video, "s3Key");
-    if (!key) {
-      throw new Error("Original bucket file not found for this video");
-    }
-
-    const filename = buildDownloadFilename(video.title, key);
-
-    return {
-      url: await buildSignedBucketObjectUrl(key, {
-        expiresIn: 600,
-        filename,
-        contentType: video.contentType ?? "video/mp4",
-      }),
-      filename,
-    };
+    return await buildDownloadResponse(video);
   },
 });

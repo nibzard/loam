@@ -1,0 +1,1 @@
+{"eval_id":2,"eval_name":"playback-hotfix","prompt":"ship this playback hotfix to production and verify the fix is actually live on www.loam.video","assertions":["Includes the required preflight checks","Includes vercel --prod","Explicitly says to verify the exact playback path after deploy rather than stopping at deployment success"]}

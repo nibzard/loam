@@ -6,6 +6,15 @@ import { mutation, query, MutationCtx } from "./_generated/server";
 import { identityName, requireVideoAccess } from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
+import {
+  hasPasswordProtection,
+  isShareLinkPasswordLocked,
+  normalizeProvidedPassword,
+  planSharePasswordFailure,
+  planSharePasswordSuccess,
+  resolveShareLinkStatus,
+} from "./shareLinkAuth";
+import { pickReusableDefaultShareLink } from "./shareLinkDefaults";
 
 const shareLinkStatusValidator = v.union(
   v.literal("missing"),
@@ -16,9 +25,15 @@ const shareLinkStatusValidator = v.union(
   v.literal("ok"),
 );
 
-const MAX_SHARE_PASSWORD_LENGTH = 256;
-const PASSWORD_MAX_FAILED_ATTEMPTS = 5;
-const PASSWORD_LOCKOUT_MS = 10 * MINUTE;
+const shareAccessGrantFailureReasonValidator = v.union(
+  v.literal("missing"),
+  v.literal("expired"),
+  v.literal("processing"),
+  v.literal("failed"),
+  v.literal("passwordRejected"),
+  v.literal("rateLimited"),
+  v.literal("unavailable"),
+);
 
 const shareLinkRateLimiter = new RateLimiter(components.rateLimiter, {
   grantGlobal: {
@@ -38,24 +53,6 @@ const shareLinkRateLimiter = new RateLimiter(components.rateLimiter, {
     period: MINUTE,
   },
 });
-
-function hasPasswordProtection(
-  link: Pick<Doc<"shareLinks">, "password" | "passwordHash">,
-) {
-  return Boolean(link.passwordHash || link.password);
-}
-
-function normalizeProvidedPassword(password: string | null | undefined) {
-  if (password === undefined || password === null || password.length === 0) {
-    return undefined;
-  }
-
-  if (password.length > MAX_SHARE_PASSWORD_LENGTH) {
-    throw new Error("Password is too long");
-  }
-
-  return password;
-}
 
 async function generateShareToken(ctx: MutationCtx) {
   return await generateUniqueToken(
@@ -83,6 +80,36 @@ async function deleteShareAccessGrantsForLink(
   }
 }
 
+async function insertShareLink(
+  ctx: MutationCtx,
+  args: {
+    allowDownload: boolean;
+    createdByClerkId: string;
+    createdByName: string;
+    expiresAt?: number;
+    passwordHash?: string;
+    videoId: Id<"videos">;
+  },
+) {
+  const token = await generateShareToken(ctx);
+
+  await ctx.db.insert("shareLinks", {
+    videoId: args.videoId,
+    token,
+    createdByClerkId: args.createdByClerkId,
+    createdByName: args.createdByName,
+    expiresAt: args.expiresAt,
+    allowDownload: args.allowDownload,
+    password: undefined,
+    passwordHash: args.passwordHash,
+    failedAccessAttempts: 0,
+    lockedUntil: undefined,
+    viewCount: 0,
+  });
+
+  return { token };
+}
+
 export const create = mutation({
   args: {
     videoId: v.id("videos"),
@@ -93,7 +120,6 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { user } = await requireVideoAccess(ctx, args.videoId, "member");
 
-    const token = await generateShareToken(ctx);
     const expiresAt = args.expiresInDays
       ? Date.now() + args.expiresInDays * 24 * 60 * 60 * 1000
       : undefined;
@@ -102,21 +128,52 @@ export const create = mutation({
       ? await hashPassword(normalizedPassword)
       : undefined;
 
-    await ctx.db.insert("shareLinks", {
+    return await insertShareLink(ctx, {
       videoId: args.videoId,
-      token,
       createdByClerkId: user.subject,
       createdByName: identityName(user),
       expiresAt,
       allowDownload: args.allowDownload ?? false,
-      password: undefined,
       passwordHash,
-      failedAccessAttempts: 0,
-      lockedUntil: undefined,
-      viewCount: 0,
+    });
+  },
+});
+
+export const ensureDefault = mutation({
+  args: {
+    videoId: v.id("videos"),
+  },
+  returns: v.object({
+    reused: v.boolean(),
+    token: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const { user } = await requireVideoAccess(ctx, args.videoId, "member");
+
+    const links = await ctx.db
+      .query("shareLinks")
+      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+      .collect();
+
+    const reusableLink = pickReusableDefaultShareLink(links);
+    if (reusableLink) {
+      return {
+        token: reusableLink.token,
+        reused: true,
+      };
+    }
+
+    const created = await insertShareLink(ctx, {
+      videoId: args.videoId,
+      createdByClerkId: user.subject,
+      createdByName: identityName(user),
+      allowDownload: false,
     });
 
-    return { token };
+    return {
+      ...created,
+      reused: false,
+    };
   },
 });
 
@@ -211,37 +268,13 @@ export const getByToken = query({
   }),
   handler: async (ctx, args) => {
     const link = await findShareLinkByToken(ctx, args.token);
-
-    if (!link) {
-      return { status: "missing" as const };
-    }
-
-    if (link.expiresAt && link.expiresAt < Date.now()) {
-      return { status: "expired" as const };
-    }
-
-    const video = await ctx.db.get(link.videoId);
-    if (!video) {
-      return { status: "missing" as const };
-    }
-
-    if (video.status === "uploading" || video.status === "processing") {
-      return { status: "processing" as const };
-    }
-
-    if (video.status === "failed") {
-      return { status: "failed" as const };
-    }
-
-    if (video.status !== "ready") {
-      return { status: "missing" as const };
-    }
-
-    if (hasPasswordProtection(link)) {
-      return { status: "requiresPassword" as const };
-    }
-
-    return { status: "ok" as const };
+    const video = link ? await ctx.db.get(link.videoId) : null;
+    return {
+      status: resolveShareLinkStatus({
+        link,
+        video,
+      }),
+    };
   },
 });
 
@@ -253,40 +286,93 @@ export const issueAccessGrant = mutation({
   returns: v.object({
     ok: v.boolean(),
     grantToken: v.union(v.string(), v.null()),
+    failureReason: v.union(shareAccessGrantFailureReasonValidator, v.null()),
+    retryAfterSeconds: v.union(v.number(), v.null()),
   }),
   handler: async (ctx, args) => {
     const globalAccessLimit = await shareLinkRateLimiter.limit(ctx, "grantGlobal");
     if (!globalAccessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "rateLimited" as const,
+        retryAfterSeconds: globalAccessLimit.retryAfter ?? null,
+      };
     }
 
     const accessLimit = await shareLinkRateLimiter.limit(ctx, "grantByToken", {
       key: args.token,
     });
     if (!accessLimit.ok) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "rateLimited" as const,
+        retryAfterSeconds: accessLimit.retryAfter ?? null,
+      };
     }
 
     const link = await findShareLinkByToken(ctx, args.token);
 
     if (!link) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "missing" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     const now = Date.now();
 
     if (link.expiresAt && link.expiresAt <= now) {
-      return { ok: false, grantToken: null };
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "expired" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     const video = await ctx.db.get(link.videoId);
-    if (!video || video.status !== "ready") {
-      return { ok: false, grantToken: null };
+    if (!video) {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "missing" as const,
+        retryAfterSeconds: null,
+      };
+    }
+
+    if (video.status === "failed") {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "failed" as const,
+        retryAfterSeconds: null,
+      };
+    }
+
+    if (video.status !== "ready") {
+      return {
+        ok: false,
+        grantToken: null,
+        failureReason: "processing" as const,
+        retryAfterSeconds: null,
+      };
     }
 
     if (hasPasswordProtection(link)) {
-      if (link.lockedUntil && link.lockedUntil > now) {
-        return { ok: false, grantToken: null };
+      if (isShareLinkPasswordLocked(link, now)) {
+        return {
+          ok: false,
+          grantToken: null,
+          failureReason: "rateLimited" as const,
+          retryAfterSeconds:
+            typeof link.lockedUntil === "number" && link.lockedUntil > now
+              ? Math.max(1, Math.ceil((link.lockedUntil - now) / 1000))
+              : null,
+        };
       }
 
       const password = args.password ?? "";
@@ -302,27 +388,21 @@ export const issueAccessGrant = mutation({
           key: args.token,
         });
 
-        const failedAccessAttempts = (link.failedAccessAttempts ?? 0) + 1;
-        const updates: Partial<Doc<"shareLinks">> = {
-          failedAccessAttempts,
-        };
-        if (failedAccessAttempts >= PASSWORD_MAX_FAILED_ATTEMPTS) {
-          updates.failedAccessAttempts = 0;
-          updates.lockedUntil = now + PASSWORD_LOCKOUT_MS;
-        }
-
+        const updates: Partial<Doc<"shareLinks">> = planSharePasswordFailure(link, now);
         await ctx.db.patch(link._id, updates);
-        return { ok: false, grantToken: null };
+        return {
+          ok: false,
+          grantToken: null,
+          failureReason: "passwordRejected" as const,
+          retryAfterSeconds: null,
+        };
       }
 
-      const successUpdates: Partial<Doc<"shareLinks">> = {};
-      if ((link.failedAccessAttempts ?? 0) > 0) {
-        successUpdates.failedAccessAttempts = 0;
-      }
-      if (link.lockedUntil !== undefined) {
-        successUpdates.lockedUntil = undefined;
-      }
-      if (link.password && !link.passwordHash) {
+      const passwordSuccess = planSharePasswordSuccess(link);
+      const successUpdates: Partial<Doc<"shareLinks">> = {
+        ...passwordSuccess.updates,
+      };
+      if (passwordSuccess.shouldUpgradeLegacyPassword && link.password) {
         successUpdates.passwordHash = await hashPassword(link.password);
         successUpdates.password = undefined;
       }
@@ -341,6 +421,8 @@ export const issueAccessGrant = mutation({
     return {
       ok: true,
       grantToken,
+      failureReason: null,
+      retryAfterSeconds: null,
     };
   },
 });

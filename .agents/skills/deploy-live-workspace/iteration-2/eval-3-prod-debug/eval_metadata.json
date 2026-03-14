@@ -1,0 +1,1 @@
+{"eval_id":3,"eval_name":"prod-debug","prompt":"production still looks broken after deploy, inspect what is live and debug the Convex side","assertions":["Uses production-focused Vercel or alias inspection","Uses bunx convex run/data/logs production inspection commands","Treats production debugging as a reproduction task rather than generic guesswork"]}

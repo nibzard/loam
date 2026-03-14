@@ -1,6 +1,6 @@
 # Loam Desktop Recorder
 
-This directory contains the planning docs for a minimal native recorder for `loam`.
+This directory contains the current implementation and supporting docs for a minimal native recorder for `loam`.
 
 The intent is not to fork Cap Desktop as a product. The intent is to study Cap's native recording architecture, lift the right ideas and lower-level seams, and build a much smaller recorder that uses `loam` as the backend for auth, uploads, projects, and share links.
 
@@ -21,12 +21,14 @@ The intent is not to fork Cap Desktop as a product. The intent is to study Cap's
 - [Architecture](./ARCHITECTURE.md)
 - [Implementation Plan](./IMPLEMENTATION-PLAN.md)
 - [Backlog](./BACKLOG.md)
+- [macOS Finish Plan](./MACOS-FINISH-PLAN.md)
 
 ## Read Order
 
 1. [Architecture](./ARCHITECTURE.md)
 2. [Implementation Plan](./IMPLEMENTATION-PLAN.md)
 3. [Backlog](./BACKLOG.md)
+4. [macOS Finish Plan](./MACOS-FINISH-PLAN.md)
 
 ## Core References In Cap
 
@@ -43,8 +45,11 @@ Start here:
 Current native status:
 
 - recording lifecycle commands are implemented
+- the desktop Convex upload contract is implemented in `../convex/desktopRecorder.ts`
 - single-part native upload streaming is implemented with progress events and cancellation
+- desktop backend contract tests pass on Linux via `bun test /home/agent/loam/convex/desktopRecorder.test.ts`
 - macOS smoke coverage is available via `cargo run --example recording-smoke -- 3` from `src-tauri/` to validate local output and stop metadata
+- Convex generated API refresh is still pending a configured deployment before manual `desktopRecorder:*` function references can be removed from the renderer
 
 ## Internal macOS Release Notes
 

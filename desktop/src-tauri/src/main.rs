@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use loam_desktop::{devices, permissions, recorder, state, upload};
+use loam_desktop::{browser, devices, permissions, recorder, state, upload};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -26,6 +26,7 @@ fn main() {
         .manage(state::UploadState::default())
         .invoke_handler(tauri::generate_handler![
             get_shell_status,
+            browser::open_external_url,
             permissions::check_permissions,
             permissions::request_permission,
             permissions::open_permission_settings,

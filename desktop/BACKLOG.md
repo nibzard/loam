@@ -1,6 +1,13 @@
 # Loam Desktop Recorder Backlog
 
-This is the file-by-file implementation backlog for the first version of the desktop recorder.
+This is the historical file-by-file implementation backlog for the first version of the desktop recorder.
+
+Status note as of 2026-03-14:
+
+- the core desktop implementation now exists at the repository root, not under a nested `desktop/` directory
+- most build work below has already landed
+- use [to-do.json](./to-do.json) for the current task state
+- use [MACOS-FINISH-PLAN.md](./MACOS-FINISH-PLAN.md) for the remaining macOS-specific finish work
 
 ## Backend Work
 

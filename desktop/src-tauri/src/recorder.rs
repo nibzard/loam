@@ -74,6 +74,7 @@ pub struct RecordingOutputValidation {
 
 pub enum NativeRecorderSlot {
     Idle,
+    Starting,
     Active(ActiveRecording),
     Stopping,
 }
@@ -130,10 +131,12 @@ pub async fn start_recording(
     input: StartRecordingInput,
 ) -> Result<RecordingSnapshot, String> {
     {
-        let guard = state.inner.lock().await;
+        let mut guard = state.inner.lock().await;
         match &*guard {
-            NativeRecorderSlot::Idle => {}
-            NativeRecorderSlot::Active(_) => {
+            NativeRecorderSlot::Idle => {
+                *guard = NativeRecorderSlot::Starting;
+            }
+            NativeRecorderSlot::Starting | NativeRecorderSlot::Active(_) => {
                 return Err(RecorderError::RecordingAlreadyInProgress.into_string());
             }
             NativeRecorderSlot::Stopping => {
@@ -142,21 +145,34 @@ pub async fn start_recording(
         }
     }
 
-    ensure_recording_preconditions(&input)?;
+    let start_result = async {
+        ensure_recording_preconditions(&input)?;
 
-    if input.countdown_seconds > 0 {
-        tokio::time::sleep(Duration::from_secs(input.countdown_seconds)).await;
+        if input.countdown_seconds > 0 {
+            tokio::time::sleep(Duration::from_secs(input.countdown_seconds)).await;
+        }
+
+        ensure_recording_preconditions(&input)?;
+
+        start_platform_recording(input).await
     }
-
-    ensure_recording_preconditions(&input)?;
-
-    let recording = start_platform_recording(input).await.map_err(RecorderError::into_string)?;
-    let snapshot = recording.snapshot();
+    .await;
 
     let mut guard = state.inner.lock().await;
-    *guard = NativeRecorderSlot::Active(recording);
+    match start_result {
+        Ok(recording) => {
+            let snapshot = recording.snapshot();
+            *guard = NativeRecorderSlot::Active(recording);
+            Ok(snapshot)
+        }
+        Err(error) => {
+            if matches!(&*guard, NativeRecorderSlot::Starting) {
+                *guard = NativeRecorderSlot::Idle;
+            }
 
-    Ok(snapshot)
+            Err(error.into_string())
+        }
+    }
 }
 
 #[tauri::command(async)]
@@ -166,6 +182,9 @@ pub async fn pause_recording(
     let mut guard = state.inner.lock().await;
     let recording = match &mut *guard {
         NativeRecorderSlot::Active(recording) => recording,
+        NativeRecorderSlot::Starting => {
+            return Err(RecorderError::RecordingAlreadyInProgress.into_string());
+        }
         NativeRecorderSlot::Idle => return Err(RecorderError::RecordingNotInProgress.into_string()),
         NativeRecorderSlot::Stopping => return Err(RecorderError::RecorderIsStopping.into_string()),
     };
@@ -190,6 +209,9 @@ pub async fn resume_recording(
     let mut guard = state.inner.lock().await;
     let recording = match &mut *guard {
         NativeRecorderSlot::Active(recording) => recording,
+        NativeRecorderSlot::Starting => {
+            return Err(RecorderError::RecordingAlreadyInProgress.into_string());
+        }
         NativeRecorderSlot::Idle => return Err(RecorderError::RecordingNotInProgress.into_string()),
         NativeRecorderSlot::Stopping => return Err(RecorderError::RecorderIsStopping.into_string()),
     };
@@ -221,6 +243,10 @@ pub async fn stop_recording(
         let mut guard = state.inner.lock().await;
         match std::mem::replace(&mut *guard, NativeRecorderSlot::Stopping) {
             NativeRecorderSlot::Active(recording) => recording,
+            NativeRecorderSlot::Starting => {
+                *guard = NativeRecorderSlot::Starting;
+                return Err(RecorderError::RecordingAlreadyInProgress.into_string());
+            }
             NativeRecorderSlot::Idle => {
                 *guard = NativeRecorderSlot::Idle;
                 return Err(RecorderError::RecordingNotInProgress.into_string());
@@ -246,6 +272,10 @@ pub async fn cancel_recording(state: State<'_, RecorderState>) -> Result<(), Str
         let mut guard = state.inner.lock().await;
         match std::mem::replace(&mut *guard, NativeRecorderSlot::Idle) {
             NativeRecorderSlot::Active(recording) => recording,
+            NativeRecorderSlot::Starting => {
+                *guard = NativeRecorderSlot::Starting;
+                return Err(RecorderError::RecordingAlreadyInProgress.into_string());
+            }
             NativeRecorderSlot::Idle => return Err(RecorderError::RecordingNotInProgress.into_string()),
             NativeRecorderSlot::Stopping => return Err(RecorderError::RecorderIsStopping.into_string()),
         }
@@ -264,6 +294,7 @@ pub async fn get_current_recording(
 
     Ok(match &*guard {
         NativeRecorderSlot::Idle => None,
+        NativeRecorderSlot::Starting => None,
         NativeRecorderSlot::Active(recording) => Some(recording.snapshot()),
         NativeRecorderSlot::Stopping => None,
     })

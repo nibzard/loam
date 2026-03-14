@@ -16,7 +16,3 @@ export function getDesktopClerkProviderProps() {
     afterSignOutUrl: "/",
   };
 }
-
-export function isDesktopAuthFallbackRequired() {
-  return false;
-}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { openExternalUrl } from "../lib/tauri";
 import type { CompleteUploadResult, UploadFlowSnapshot } from "../lib/uploadFlow";
 
 type CompleteRouteProps = {
@@ -20,6 +21,15 @@ export function CompleteRoute({
   const [browserState, setBrowserState] = useState<"idle" | "opened" | "blocked">("idle");
   const automatedActionsRun = useRef(false);
   const defaultBrowserDestination = getDefaultBrowserDestination(completion);
+  const [browserDestinationLabel, setBrowserDestinationLabel] = useState(
+    defaultBrowserDestination.label,
+  );
+
+  async function attemptBrowserOpen(url: string, destinationLabel: string) {
+    setBrowserDestinationLabel(destinationLabel);
+    const opened = await openInBrowser(url);
+    setBrowserState(opened ? "opened" : "blocked");
+  }
 
   useEffect(() => {
     if (automatedActionsRun.current) {
@@ -35,11 +45,19 @@ export function CompleteRoute({
       }
 
       if (openBrowserByDefault) {
-        const opened = openInBrowser(defaultBrowserDestination.url);
-        setBrowserState(opened ? "opened" : "blocked");
+        await attemptBrowserOpen(
+          defaultBrowserDestination.url,
+          defaultBrowserDestination.label,
+        );
       }
     })();
-  }, [copyShareLinkByDefault, completion.shareUrl, defaultBrowserDestination.url, openBrowserByDefault]);
+  }, [
+    copyShareLinkByDefault,
+    completion.shareUrl,
+    defaultBrowserDestination.label,
+    defaultBrowserDestination.url,
+    openBrowserByDefault,
+  ]);
 
   const readiness = describeCompletionStatus(completion.status);
 
@@ -102,25 +120,31 @@ export function CompleteRoute({
             >
               Copy share link
             </button>
-            <a
+            <button
               className="button-link button button-secondary"
-              href={completion.shareUrl}
-              rel="noreferrer"
-              target="_blank"
+              type="button"
               onClick={() => {
-                setBrowserState("opened");
+                void (async () => {
+                  await attemptBrowserOpen(completion.shareUrl, "share page");
+                })();
               }}
             >
               Open in Browser
-            </a>
-            <a
+            </button>
+            <button
               className="button-link button"
-              href={completion.canonicalDashboardUrl}
-              rel="noreferrer"
-              target="_blank"
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  await attemptBrowserOpen(
+                    completion.canonicalDashboardUrl,
+                    "dashboard",
+                  );
+                })();
+              }}
             >
               Open Dashboard
-            </a>
+            </button>
             <button className="button" type="button" onClick={onReturnToRecorder}>
               Record another
             </button>
@@ -130,7 +154,7 @@ export function CompleteRoute({
             {formatCopyState(copyState, copyShareLinkByDefault)}
           </p>
           <p className="support-copy">
-            {formatBrowserState(browserState, openBrowserByDefault, defaultBrowserDestination.label)}
+            {formatBrowserState(browserState, openBrowserByDefault, browserDestinationLabel)}
           </p>
           {snapshot?.videoPath ? (
             <p className="support-copy">
@@ -214,13 +238,8 @@ async function copyToClipboard(value: string) {
   }
 }
 
-function openInBrowser(url: string) {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
-  return openedWindow !== null;
+async function openInBrowser(url: string) {
+  return openExternalUrl(url);
 }
 
 function formatCopyState(
@@ -254,7 +273,7 @@ function formatBrowserState(
   }
 
   if (state === "blocked") {
-    return `The browser blocked the automatic open. Use the buttons to launch the ${destinationLabel} or the other completion destination manually.`;
+    return `Loam could not open the ${destinationLabel}. Use the completion buttons to retry or open the other completion destination manually.`;
   }
 
   return openBrowserByDefault

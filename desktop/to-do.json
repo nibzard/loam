@@ -8,7 +8,8 @@
     "README.md",
     "ARCHITECTURE.md",
     "IMPLEMENTATION-PLAN.md",
-    "BACKLOG.md"
+    "BACKLOG.md",
+    "MACOS-FINISH-PLAN.md"
   ],
   "tasks": [
     {
@@ -16,7 +17,7 @@
       "title": "Prove native macOS recording feasibility with a short local capture spike",
       "priority": 1,
       "status": "blocked",
-      "details": "Validate that the project can reliably record a short display capture to a local mp4 before broader app scaffolding begins.",
+      "details": "Phase 0 remains blocked as of 2026-03-11T22:21:47Z: the macOS smoke harness and recorder validation path are already implemented, but this March 11, 2026 run executed on Linux and cannot produce the two required ScreenCaptureKit smoke captures on real macOS hardware. No implementation files changed in this iteration because the documented exit criteria require direct macOS execution evidence, so there is nothing task-scoped to commit.",
       "steps": [
         "Create a temporary Rust or Tauri spike that records the primary display for about 5 seconds",
         "Confirm local file output, duration metadata, and repeat-run stability",
@@ -29,22 +30,26 @@
       ],
       "files": [
         "ARCHITECTURE.md",
+        "BACKLOG.md",
         "IMPLEMENTATION-PLAN.md",
-        "to-do.json",
         "README.md",
-        "BACKLOG.md"
+        "src-tauri/examples/recording-smoke.rs",
+        "src-tauri/src/recorder.rs",
+        "to-do.json"
       ],
-      "updated_at": "2026-03-11T20:27:00Z",
+      "updated_at": "2026-03-11T22:22:10Z",
       "blockers": [
-        "This Codex run is on Linux (uname: Linux claude-code-vm 6.8.0-101-generic x86_64), but the validated capture path depends on macOS ScreenCaptureKit APIs and Cap's macOS-only shareable content bootstrap. No prior macOS spike output or validation artifact exists in the repo, so feasibility cannot be proven from this environment without fabricating evidence."
+        "Phase 0 in IMPLEMENTATION-PLAN.md requires one successful macOS local MP4 capture and a second successful rerun before T001 can be marked done. This run executed on Linux (`uname -a`: `Linux claude-code-vm 6.8.0-101-generic #101-Ubuntu SMP PREEMPT_DYNAMIC Mon Feb 9 10:15:05 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux` on March 11, 2026), so ScreenCaptureKit recording cannot be exercised here.",
+        "The local Rust toolchain is unavailable in this environment. `cargo --version` failed on March 11, 2026 with `/bin/bash: line 1: cargo: command not found`, so the smoke example cannot be invoked from this run.",
+        "The spike is intentionally macOS-only: `src-tauri/examples/recording-smoke.rs` exits with `recording-smoke is macOS-only` on non-macOS targets, and `src-tauri/src/recorder.rs` gates the recording path behind `#[cfg(target_os = \"macos\")]`. Without two real macOS smoke runs producing output-path, duration, and file-size evidence, marking feasibility as proven would fabricate the documented exit criteria."
       ]
     },
     {
       "id": "T002",
       "title": "Implement the Convex desktop recorder backend contract",
       "priority": 1,
-      "status": "blocked",
-      "details": "Add a small desktop-focused Convex surface so the renderer can prepare, complete, and fail uploads with single-purpose calls.",
+      "status": "done",
+      "details": "The desktop-focused Convex surface is implemented in ../convex/desktopRecorder.ts and the renderer now routes upload preparation, completion, failure handling, and upload-target listing through that module. Refreshing convex/_generated so api.desktopRecorder.* can replace manual function references is tracked separately.",
       "steps": [
         "Create convex/desktopRecorder.ts",
         "Add listUploadTargets wrapper around the existing project upload target query",
@@ -74,10 +79,7 @@
         "convex/desktopRecorder.ts",
         "desktop/to-do.json"
       ],
-      "updated_at": "2026-03-11T20:34:26Z",
-      "blockers": [
-        "Convex codegen/typecheck is blocked in this checkout because CONVEX_DEPLOYMENT is not configured, so convex/_generated cannot be refreshed for desktopRecorder."
-      ]
+      "updated_at": "2026-03-14T00:00:00Z"
     },
     {
       "id": "T003",
@@ -227,7 +229,7 @@
       "title": "Implement the pre-recording setup flow for permissions, target selection, and project selection",
       "priority": 2,
       "status": "done",
-      "details": "Built a dedicated pre-recording setup route with permission gating, capture target and microphone pickers, project selection, route helpers, and persisted defaults. The renderer currently uses projects.listUploadTargets as the upload-target source while the desktopRecorder backend surface remains blocked.",
+      "details": "Built a dedicated pre-recording setup route with permission gating, capture target and microphone pickers, project selection, route helpers, and persisted defaults. The renderer now queries desktopRecorder.listUploadTargets; generated api.desktopRecorder references still depend on a future Convex codegen refresh.",
       "steps": [
         "Build the permission gate UI with direct actions to request access or open settings",
         "Build capture target selection for displays and windows",
@@ -257,7 +259,7 @@
         "src/routes/recorder.tsx",
         "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:24:00Z"
+      "updated_at": "2026-03-14T00:00:00Z"
     },
     {
       "id": "T008",
@@ -535,8 +537,7 @@
       "blockers": [
         "Manual end-to-end validation for this task requires a real macOS machine running the desktop app, but this Codex run is on Linux, so ScreenCaptureKit permissions, native recording, upload, clipboard, and browser-open behavior cannot be exercised here.",
         "Manual end-to-end validation for this task requires a real macOS machine running the desktop app. This Codex run is on Linux (`uname -a`: Linux claude-code-vm 6.8.0-101-generic x86_64), so ScreenCaptureKit permissions, native recording, upload, clipboard, and browser-open behavior cannot be exercised without fabricating results.",
-        "Task dependencies are not satisfied in the current backlog state: `T013` (backend tests for the desktop recorder contract) and `T014` (native smoke coverage for recording output and stop metadata) are still `todo`, so the full record-to-share flow is not yet ready for a meaningful sign-off pass.",
-        "Task dependencies are not satisfied: T013 (backend tests for the desktop recorder contract) and T014 (native smoke coverage for recording output and stop metadata) are still todo, so the full record-to-share flow is not ready for a meaningful sign-off pass."
+        "Use MACOS-FINISH-PLAN.md as the execution checklist so the macOS handoff captures smoke results, manual QA outcomes, and any remaining packaging blockers in one place."
       ]
     },
     {
@@ -566,9 +567,85 @@
         "README.md",
         "package.json",
         "src-tauri/tauri.conf.json",
-        "src/routes/complete.tsx"
+        "src/routes/complete.tsx",
+        "to-do.json"
       ],
-      "updated_at": "2026-03-11T21:43:44Z"
+      "updated_at": "2026-03-11T21:44:16Z"
+    },
+    {
+      "id": "T017",
+      "title": "Serialize native recording start so countdown cannot launch overlapping sessions",
+      "priority": 1,
+      "status": "done",
+      "details": "Added a `Starting` reservation state in the native recorder so `start_recording` claims the single-recorder slot before countdown and platform startup work begin, keeps that reservation through preflight and native start, and reliably restores `Idle` on failure. Overlapping start attempts now fail immediately instead of racing into a second native session.",
+      "tags": [
+        "native",
+        "recording",
+        "race-condition"
+      ],
+      "files": [
+        "src-tauri/src/recorder.rs",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-14T00:00:00Z"
+    },
+    {
+      "id": "T018",
+      "title": "Use a desktop-native external-open path for completion browser launches",
+      "priority": 2,
+      "status": "done",
+      "details": "Added a native `open_external_url` Tauri command that validates `http` and `https` URLs before handing them to the platform opener, exposed it through the renderer bridge, and switched the completion route’s automatic and manual browser launches to use that desktop-backed path instead of raw `window.open` or `_blank` anchors.",
+      "tags": [
+        "desktop",
+        "ux",
+        "release"
+      ],
+      "files": [
+        "src/lib/tauri.ts",
+        "src-tauri/src/browser.rs",
+        "src-tauri/src/errors.rs",
+        "src-tauri/src/lib.rs",
+        "src-tauri/src/main.rs",
+        "src-tauri/Cargo.toml",
+        "src/routes/complete.tsx",
+        "README.md",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-14T00:00:00Z"
+    },
+    {
+      "id": "T019",
+      "title": "Refresh Convex generated API and remove manual desktopRecorder function references",
+      "priority": 1,
+      "status": "blocked",
+      "details": "desktopRecorder is implemented, but convex/_generated has not been refreshed in this checkout, so the renderer still uses manual makeFunctionReference bindings for desktopRecorder.listUploadTargets, prepareUpload, completeUpload, and failUpload.",
+      "steps": [
+        "Configure CONVEX_DEPLOYMENT and run the normal Convex codegen flow from the loam repo",
+        "Confirm convex/_generated/api.d.ts exposes api.desktopRecorder.*",
+        "Replace manual desktopRecorder makeFunctionReference bindings in src/App.tsx and src/lib/uploadFlow.ts with generated api.desktopRecorder references",
+        "Run bun test /home/agent/loam/convex/desktopRecorder.test.ts",
+        "Run bun run build"
+      ],
+      "tags": [
+        "backend",
+        "convex",
+        "types"
+      ],
+      "depends_on": [
+        "T002"
+      ],
+      "files": [
+        "../convex/_generated/api.d.ts",
+        "../convex/desktopRecorder.ts",
+        "MACOS-FINISH-PLAN.md",
+        "src/App.tsx",
+        "src/lib/uploadFlow.ts",
+        "to-do.json"
+      ],
+      "updated_at": "2026-03-14T00:00:00Z",
+      "blockers": [
+        "Convex codegen cannot be refreshed in this checkout until CONVEX_DEPLOYMENT is configured against the target loam backend."
+      ]
     }
   ]
 }

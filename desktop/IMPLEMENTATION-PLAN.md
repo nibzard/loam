@@ -2,7 +2,16 @@
 
 ## Status
 
-Planning complete. Native recording and native upload streaming are in progress.
+Core renderer, native recording lifecycle, native upload streaming, and the desktop Convex upload contract are implemented.
+
+Remaining work is now concentrated in:
+
+- refreshing Convex codegen on a configured deployment so `api.desktopRecorder.*` is available
+- running the macOS smoke example twice on real hardware
+- running the manual macOS record-to-share validation checklist
+- building and validating the internal macOS `.app` and `.dmg`
+
+See [MACOS-FINISH-PLAN.md](./MACOS-FINISH-PLAN.md) for the exact macOS handoff checklist.
 
 ## Delivery Principle
 

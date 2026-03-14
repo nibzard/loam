@@ -105,6 +105,7 @@ export type DesktopErrorDetails = {
 
 type CommandMap = {
   get_shell_status: DesktopShellStatus;
+  open_external_url: void;
   check_permissions: PermissionSnapshot;
   request_permission: PermissionStatus;
   open_permission_settings: void;
@@ -173,6 +174,8 @@ function getBrowserFallback<K extends keyof CommandMap>(
       return "notNeeded" as CommandMap[K];
     case "open_permission_settings":
       return undefined as CommandMap[K];
+    case "open_external_url":
+      return undefined as CommandMap[K];
     case "list_capture_displays":
     case "list_capture_windows":
     case "list_microphones":
@@ -209,6 +212,24 @@ export function requestPermission(permission: PermissionKind) {
 
 export function openPermissionSettings(permission: PermissionKind) {
   return invokeDesktop("open_permission_settings", { permission });
+}
+
+export async function openExternalUrl(url: string): Promise<boolean> {
+  if (!isTauriDesktop()) {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    const openedWindow = window.open(url, "_blank", "noopener,noreferrer");
+    return openedWindow !== null;
+  }
+
+  try {
+    await invokeDesktop("open_external_url", { url });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function listCaptureDisplays() {
@@ -408,6 +429,16 @@ export function describeDesktopError(error: unknown): DesktopErrorDetails {
       return {
         code,
         message: detail ? `Upload failed: ${detail}` : "Upload failed.",
+      };
+    case "InvalidExternalUrl":
+      return {
+        code,
+        message: "Loam rejected the browser destination because it was not a valid http(s) URL.",
+      };
+    case "ExternalOpenFailed":
+      return {
+        code,
+        message: detail ? `Loam could not open the browser: ${detail}` : "Loam could not open the browser.",
       };
     default:
       return {

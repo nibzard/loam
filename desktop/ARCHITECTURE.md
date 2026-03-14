@@ -65,14 +65,15 @@ Cap is much stronger on native capture and lifecycle management:
 
 The correct split is to let each codebase keep the area it already owns well.
 
-## Proposed Repo Shape
+## Current Repo Shape
 
 ```text
-desktop/
+.
   README.md
   ARCHITECTURE.md
   IMPLEMENTATION-PLAN.md
   BACKLOG.md
+  MACOS-FINISH-PLAN.md
   package.json
   tsconfig.json
   vite.config.ts
@@ -80,7 +81,6 @@ desktop/
     main.tsx
     App.tsx
     routes/
-      index.tsx
       login.tsx
       recorder.tsx
       uploading.tsx
@@ -106,7 +106,10 @@ desktop/
   src-tauri/
     Cargo.toml
     tauri.conf.json
+    examples/
+      recording-smoke.rs
     src/
+      browser.rs
       main.rs
       permissions.rs
       devices.rs
@@ -204,15 +207,16 @@ Source references:
 
 ## Backend Contract
 
-Add a small desktop-specific Convex surface instead of spreading recorder logic across multiple UI calls.
+Keep the desktop-specific Convex surface small instead of spreading recorder logic across multiple UI calls.
 
-Proposed `convex/desktopRecorder.ts`:
+Current `../convex/desktopRecorder.ts` public surface:
 
 - `listUploadTargets`
 - `prepareUpload`
 - `completeUpload`
 - `failUpload`
-- `getVideoShareUrl`
+
+The renderer should prefer these entrypoints over reaching into `projects` and `videoActions` directly. Until Convex codegen is refreshed on a configured deployment, the desktop app may need manual function references for this module.
 
 ### `prepareUpload`
 

@@ -24,6 +24,10 @@ pub enum RecorderError {
     MissingMicrophonePermission,
     #[error("InvalidCaptureTarget")]
     InvalidCaptureTarget,
+    #[error("InvalidExternalUrl")]
+    InvalidExternalUrl,
+    #[error("ExternalOpenFailed/{0}")]
+    ExternalOpenFailed(String),
     #[error("UploadAlreadyInProgress")]
     UploadAlreadyInProgress,
     #[error("UploadNotInProgress")]

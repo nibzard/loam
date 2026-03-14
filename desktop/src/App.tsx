@@ -1,7 +1,7 @@
 import { useAuth, useUser } from "@clerk/clerk-react";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
 import { useEffect, useRef, useState } from "react";
-import { api } from "../../convex/_generated/api";
 import {
   completeUploadAction,
   failUploadAction,
@@ -50,6 +50,12 @@ const RUNNING_UPLOAD_STEPS = new Set([
   "cancelling",
   "finalizing",
 ]);
+
+const listUploadTargetsQuery = makeFunctionReference<
+  "query",
+  { teamSlug?: string },
+  UploadProject[]
+>("desktopRecorder:listUploadTargets");
 
 export function App() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -106,7 +112,7 @@ function RecorderShell({
   const { isLoading, isAuthenticated } = useConvexAuth();
   const userDefaults = usePersistentUserDefaults();
   const uploadTargets = useQuery(
-    api.projects.listUploadTargets,
+    listUploadTargetsQuery,
     isAuthenticated ? {} : "skip",
   );
   const prepareUpload = useAction(prepareUploadAction);

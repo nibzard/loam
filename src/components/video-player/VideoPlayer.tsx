@@ -132,6 +132,10 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const resumePlaybackOnSourceChangeRef = useRef(false);
   const reportedPlaybackAccessErrorRef = useRef(false);
   const playbackStartedRef = useRef(false);
+  const initialTimeRef = useRef<number | undefined>(initialTime);
+  const onTimeUpdateRef = useRef<typeof onTimeUpdate>(onTimeUpdate);
+  const onPlaybackStartedRef = useRef<typeof onPlaybackStarted>(onPlaybackStarted);
+  const onPlaybackAccessErrorRef = useRef<typeof onPlaybackAccessError>(onPlaybackAccessError);
 
   const groupedMarkers = useMemo(() => {
     if (!duration || comments.length === 0) return [] as { position: number; comment: Comment }[];
@@ -175,9 +179,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       const next = actualDuration > 0 ? clamp(time, 0, actualDuration) : Math.max(time, 0);
       video.currentTime = next;
       setCurrentTime(next);
-      onTimeUpdate?.(next);
+      onTimeUpdateRef.current?.(next);
     },
-    [duration, onTimeUpdate]
+    [duration]
   );
 
   const seekTo = useCallback(
@@ -368,9 +372,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       scrubTimeRef.current = nextTime;
       setScrubTime(nextTime);
       setCurrentTime(nextTime);
-      onTimeUpdate?.(nextTime);
+      onTimeUpdateRef.current?.(nextTime);
     },
-    [duration, getTimeFromClientX, onTimeUpdate]
+    [duration, getTimeFromClientX]
   );
 
   const updateScrub = useCallback(
@@ -380,9 +384,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       scrubTimeRef.current = nextTime;
       setScrubTime(nextTime);
       setCurrentTime(nextTime);
-      onTimeUpdate?.(nextTime);
+      onTimeUpdateRef.current?.(nextTime);
     },
-    [getTimeFromClientX, onTimeUpdate]
+    [getTimeFromClientX]
   );
 
   const endScrub = useCallback(() => {
@@ -409,6 +413,22 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   }, [isPlaying]);
 
   useEffect(() => {
+    initialTimeRef.current = initialTime;
+  }, [initialTime]);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+  }, [onTimeUpdate]);
+
+  useEffect(() => {
+    onPlaybackStartedRef.current = onPlaybackStarted;
+  }, [onPlaybackStarted]);
+
+  useEffect(() => {
+    onPlaybackAccessErrorRef.current = onPlaybackAccessError;
+  }, [onPlaybackAccessError]);
+
+  useEffect(() => {
     isScrubbingRef.current = isScrubbing;
   }, [isScrubbing]);
 
@@ -431,7 +451,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (cancelled) return;
       setDuration(video.duration || 0);
       updateBuffered();
-      const resumeTime = initialTime ?? resumeTimeOnSourceChangeRef.current ?? undefined;
+      const resumeTime = initialTimeRef.current ?? resumeTimeOnSourceChangeRef.current ?? undefined;
       if (resumeTime && resumeTime > 0) {
         video.currentTime = clamp(resumeTime, 0, video.duration || resumeTime);
       }
@@ -463,7 +483,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (cancelled || isScrubbingRef.current) return;
       const time = video.currentTime || 0;
       setCurrentTime(time);
-      onTimeUpdate?.(time);
+      onTimeUpdateRef.current?.(time);
     };
 
     const handlePlay = () => {
@@ -472,7 +492,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       setIsBuffering(false);
       if (!playbackStartedRef.current) {
         playbackStartedRef.current = true;
-        onPlaybackStarted?.();
+        onPlaybackStartedRef.current?.();
       }
       showControls();
     };
@@ -598,7 +618,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             }
 
             reportedPlaybackAccessErrorRef.current = true;
-            onPlaybackAccessError?.();
+            onPlaybackAccessErrorRef.current?.();
           });
         } else {
           video.src = src;
@@ -662,7 +682,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       video.removeAttribute("src");
       video.load();
     };
-  }, [initialTime, onPlaybackAccessError, onPlaybackStarted, onTimeUpdate, showControls, src, updateBuffered]);
+  }, [showControls, src, updateBuffered]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

@@ -95,10 +95,10 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <HeadContent />
       </head>
       <body className="h-full antialiased" suppressHydrationWarning>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </ThemeProvider>

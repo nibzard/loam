@@ -28,6 +28,7 @@ import {
   SIGNED_PLAYBACK_SESSION_TTL,
   type PlaybackSession,
 } from "./playbackSessions";
+import { buildMuxThumbnailUrl } from "./muxPlayback";
 import {
   planPublicPlaybackAccess,
   planSignedPlaybackAccess,
@@ -38,6 +39,7 @@ import { buildMuxUploadPassthrough } from "./uploadSessions";
 
 const GIBIBYTE = 1024 ** 3;
 const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 5 * GIBIBYTE;
+const PROJECT_VIDEO_POSTER_TTL = "1h";
 const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
   "video/mp4",
   "video/quicktime",
@@ -113,6 +115,10 @@ const sharePlaybackBootstrapValidator = v.union(
     videoData: shareVideoDataValidator,
   }),
 );
+const videoPosterValidator = v.object({
+  posterUrl: v.string(),
+  videoId: v.id("videos"),
+});
 
 type PlaybackTarget = {
   _id: Id<"videos">;
@@ -835,6 +841,60 @@ export const getPlaybackSession = action({
 
     const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
     return await buildSignedMuxPlaybackSession(playbackId);
+  },
+});
+
+export const getProjectVideoPosters = action({
+  args: {
+    projectId: v.id("projects"),
+    videoIds: v.array(v.id("videos")),
+  },
+  returns: v.array(videoPosterValidator),
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ posterUrl: string; videoId: Id<"videos"> }>> => {
+    if (args.videoIds.length === 0) {
+      return [];
+    }
+
+    const targets = await ctx.runQuery(api.videos.listPlaybackTargetsForProject, {
+      projectId: args.projectId,
+      videoIds: args.videoIds,
+    }) as PlaybackTarget[];
+    const targetsById = new Map(targets.map((target) => [target._id, target]));
+    const seen = new Set<string>();
+    const posters: Array<{ posterUrl: string; videoId: Id<"videos"> }> = [];
+
+    for (const videoId of args.videoIds) {
+      if (seen.has(videoId)) {
+        continue;
+      }
+      seen.add(videoId);
+
+      const target = targetsById.get(videoId);
+      if (!target || target.status !== "ready") {
+        continue;
+      }
+
+      if (target.visibility === "public") {
+        const playbackId = await ensurePublicPlaybackIdForTarget(ctx, target);
+        posters.push({
+          posterUrl: buildPublicPlaybackSession(playbackId).posterUrl,
+          videoId,
+        });
+        continue;
+      }
+
+      const playbackId = await ensureSignedPlaybackIdForTarget(ctx, target);
+      const thumbnailToken = await signThumbnailToken(playbackId, PROJECT_VIDEO_POSTER_TTL);
+      posters.push({
+        posterUrl: buildMuxThumbnailUrl(playbackId, thumbnailToken),
+        videoId,
+      });
+    }
+
+    return posters;
   },
 });
 

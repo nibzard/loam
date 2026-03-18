@@ -703,6 +703,40 @@ export const getPlaybackTargetById = internalQuery({
   },
 });
 
+export const listPlaybackTargetsForProject = query({
+  args: {
+    projectId: v.id("projects"),
+    videoIds: v.optional(v.array(v.id("videos"))),
+  },
+  handler: async (ctx, args) => {
+    await requireProjectAccess(ctx, args.projectId, "viewer");
+
+    const requestedIds = args.videoIds ? new Set(args.videoIds) : null;
+    const requestOrder = args.videoIds
+      ? new Map(args.videoIds.map((videoId, index) => [videoId, index]))
+      : null;
+
+    const videos = await ctx.db
+      .query("videos")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    const targets = videos
+      .filter((video) => !requestedIds || requestedIds.has(video._id))
+      .map((video) => buildPlaybackTarget(video));
+
+    if (!requestOrder) {
+      return targets;
+    }
+
+    return targets.sort(
+      (left, right) =>
+        (requestOrder.get(left._id) ?? Number.MAX_SAFE_INTEGER) -
+        (requestOrder.get(right._id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  },
+});
+
 export const getPublicPlaybackTarget = internalQuery({
   args: { publicId: v.string() },
   handler: async (ctx, args) => {

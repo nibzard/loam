@@ -496,13 +496,11 @@ export default function SharePage() {
   }
 
   const video = videoData.video;
-  const fallbackPosterUrl =
-    playbackSession?.posterUrl ?? (video.thumbnailUrl?.startsWith("http") ? video.thumbnailUrl : undefined);
   const playerFallback = (
     <div className="relative aspect-video overflow-hidden rounded-xl border border-[var(--media-border)] bg-[var(--media-background)] shadow-[0_10px_40px_var(--media-shadow)]">
-      {fallbackPosterUrl ? (
+      {playbackSession?.posterUrl ? (
         <img
-          src={fallbackPosterUrl}
+          src={playbackSession.posterUrl}
           alt={`${video.title} thumbnail`}
           className="h-full w-full object-cover blur-[4px]"
         />

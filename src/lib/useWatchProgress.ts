@@ -3,7 +3,6 @@ import { Id } from "@convex/_generated/dataModel";
 
 type RecordWatchTarget = {
   videoId?: Id<"videos">;
-  publicId?: string;
   grantToken?: string;
 };
 
@@ -121,7 +120,7 @@ export function createWatchProgressMachine() {
     }: FlushStartArgs): FlushStartResult {
       if (!enabled || state.isCapReached || state.isFlushing) return null;
 
-      if (!target.videoId && !target.publicId && !target.grantToken) {
+      if (!target.videoId && !target.grantToken) {
         state.pendingWatchSeconds = 0;
         state.lastTime = null;
         return null;

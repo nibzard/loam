@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 import { QueryCtx, MutationCtx, ActionCtx } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 
 type ClerkIdentity = NonNullable<
   Awaited<ReturnType<QueryCtx["auth"]["getUserIdentity"]>>
@@ -77,6 +77,61 @@ const ROLE_HIERARCHY = {
 
 type Role = keyof typeof ROLE_HIERARCHY;
 
+export function hasRequiredRole(role: Role, requiredRole?: Role) {
+  if (!requiredRole) {
+    return true;
+  }
+
+  return ROLE_HIERARCHY[role] >= ROLE_HIERARCHY[requiredRole];
+}
+
+export function resolveVideoAccessMode(
+  video: Pick<Doc<"videos">, "accessMode">,
+): "team" | "restricted" {
+  return video.accessMode ?? "team";
+}
+
+export async function getTeamMembership(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    teamId: Id<"teams">;
+    userClerkId: string;
+  },
+) {
+  return await ctx.db
+    .query("teamMembers")
+    .withIndex("by_team_and_user", (q) =>
+      q.eq("teamId", args.teamId).eq("userClerkId", args.userClerkId)
+    )
+    .unique();
+}
+
+export async function canTeamMemberAccessVideo(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    membership: Doc<"teamMembers">;
+    video: Pick<Doc<"videos">, "_id" | "accessMode" | "uploadedByClerkId">;
+  },
+) {
+  const accessMode = resolveVideoAccessMode(args.video);
+  if (accessMode === "team") {
+    return true;
+  }
+
+  if (args.video.uploadedByClerkId === args.membership.userClerkId) {
+    return true;
+  }
+
+  const grant = await ctx.db
+    .query("videoMemberGrants")
+    .withIndex("by_video_and_user", (q) =>
+      q.eq("videoId", args.video._id).eq("userClerkId", args.membership.userClerkId)
+    )
+    .unique();
+
+  return grant !== null;
+}
+
 export async function requireTeamAccess(
   ctx: QueryCtx | MutationCtx,
   teamId: Id<"teams">,
@@ -84,12 +139,10 @@ export async function requireTeamAccess(
 ) {
   const user = await requireUser(ctx);
 
-  const membership = await ctx.db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userClerkId", user.subject)
-    )
-    .unique();
+  const membership = await getTeamMembership(ctx, {
+    teamId,
+    userClerkId: user.subject,
+  });
 
   if (!membership) {
     throw new ConvexError({
@@ -98,7 +151,7 @@ export async function requireTeamAccess(
     });
   }
 
-  if (requiredRole && ROLE_HIERARCHY[membership.role] < ROLE_HIERARCHY[requiredRole]) {
+  if (!hasRequiredRole(membership.role, requiredRole)) {
     throw new ConvexError({
       code: "FORBIDDEN",
       message: `Requires ${requiredRole} role or higher.`,
@@ -143,7 +196,32 @@ export async function requireVideoAccess(
     });
   }
 
-  const { membership, project } = await requireProjectAccess(ctx, video.projectId, requiredRole);
+  const project = await ctx.db.get(video.projectId);
+  if (!project) {
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Project not found.",
+    });
+  }
+
+  const { membership } = await requireTeamAccess(ctx, project.teamId);
+  const canAccess = await canTeamMemberAccessVideo(ctx, {
+    membership,
+    video,
+  });
+  if (!canAccess) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have access to this video.",
+    });
+  }
+
+  if (!hasRequiredRole(membership.role, requiredRole)) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: `Requires ${requiredRole} role or higher.`,
+    });
+  }
 
   return { user, membership, project, video };
 }

@@ -6,7 +6,7 @@ import { action, ActionCtx } from "./_generated/server";
 import { api, components, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 
-type WatchSource = "dashboard" | "public" | "share";
+type WatchSource = "dashboard" | "share";
 type WatchEventActionResult = {
   recorded: boolean;
   firstWatch: boolean;
@@ -25,7 +25,7 @@ type WatchMutationResult = {
   watchedAt: number;
   viewerLabel: string;
   videoTitle: string;
-  videoPublicId: string;
+  dashboardPath: string;
   uploaderClerkId: string;
   uploaderEmail: string | null;
 };
@@ -83,17 +83,15 @@ function deriveGuestLabel(clientId: string) {
 
 function resolveSource(args: {
   videoId?: Id<"videos">;
-  publicId?: string;
   grantToken?: string;
 }): WatchSource {
   const provided = [
     args.videoId ? "dashboard" : null,
-    args.publicId ? "public" : null,
     args.grantToken ? "share" : null,
   ].filter((value): value is WatchSource => value !== null);
 
   if (provided.length !== 1) {
-    throw new Error("Provide exactly one of videoId, publicId, or grantToken");
+    throw new Error("Provide exactly one of videoId or grantToken");
   }
 
   return provided[0];
@@ -131,7 +129,7 @@ async function sendWatchNotificationEmail(input: {
   source: WatchSource;
   watchedAt: number;
   videoTitle: string;
-  videoPublicId: string;
+  dashboardPath: string;
 }) {
   const resendApiKey = process.env.RESEND_API_KEY;
   const fromEmail = process.env.NOTIFICATION_FROM_EMAIL;
@@ -140,7 +138,7 @@ async function sendWatchNotificationEmail(input: {
   }
 
   const siteUrl = resolveSiteUrl();
-  const watchPath = `/watch/${input.videoPublicId}`;
+  const watchPath = input.dashboardPath;
   const watchUrl = siteUrl ? `${siteUrl}${watchPath}` : watchPath;
   const watchedAtIso = new Date(input.watchedAt).toISOString();
   const escapedViewerLabel = escapeHtml(input.viewerLabel);
@@ -197,15 +195,6 @@ async function shouldSendGuestNotification(ctx: ActionCtx, input: {
   source: WatchSource;
   videoId: Id<"videos">;
 }) {
-  if (input.source === "public") {
-    const status = await watchEventRateLimiter.limit(
-      ctx,
-      "guestPublicNotificationsByVideo",
-      { key: `${input.videoId}` },
-    );
-    return status.ok;
-  }
-
   if (input.source === "share") {
     const status = await watchEventRateLimiter.limit(
       ctx,
@@ -221,7 +210,6 @@ async function shouldSendGuestNotification(ctx: ActionCtx, input: {
 export const recordWatch = action({
   args: {
     videoId: v.optional(v.id("videos")),
-    publicId: v.optional(v.string()),
     grantToken: v.optional(v.string()),
     clientId: v.optional(v.string()),
     watchedSeconds: v.optional(v.number()),
@@ -243,7 +231,6 @@ export const recordWatch = action({
 
     const source = resolveSource({
       videoId: args.videoId,
-      publicId: args.publicId,
       grantToken: args.grantToken,
     });
 
@@ -264,22 +251,6 @@ export const recordWatch = action({
         };
       }
       resolvedVideoId = args.videoId as Id<"videos">;
-    } else if (source === "public") {
-      const result = await ctx.runQuery(api.videos.getByPublicId, {
-        publicId: args.publicId as string,
-      });
-      if (!result?.video?._id) {
-        return {
-          recorded: false,
-          firstWatch: false,
-          notificationSent: false,
-          capReached: false,
-          usageKind: null,
-          consumedWatchSeconds: 0,
-          requestedWatchSeconds,
-        };
-      }
-      resolvedVideoId = result.video._id;
     } else {
       const result = await ctx.runQuery(api.videos.getByShareGrant, {
         grantToken: args.grantToken as string,
@@ -447,7 +418,7 @@ export const recordWatch = action({
       source,
       watchedAt: watchEvent.watchedAt,
       videoTitle: watchEvent.videoTitle,
-      videoPublicId: watchEvent.videoPublicId,
+      dashboardPath: watchEvent.dashboardPath,
     });
 
     return {

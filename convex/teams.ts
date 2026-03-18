@@ -2,7 +2,15 @@ import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { components, internal } from "./_generated/api";
-import { getUser, identityAvatarUrl, identityEmail, identityName, requireUser, requireTeamAccess } from "./auth";
+import {
+  canTeamMemberAccessVideo,
+  getUser,
+  identityAvatarUrl,
+  identityEmail,
+  identityName,
+  requireUser,
+  requireTeamAccess,
+} from "./auth";
 import {
   getCurrentBillingMonthKey,
   getTeamSubscriptionState,
@@ -133,7 +141,16 @@ export const listWithProjects = query({
               .collect();
             return {
               ...project,
-              videoCount: videos.length,
+              videoCount: (
+                await Promise.all(
+                  videos.map((video) =>
+                    canTeamMemberAccessVideo(ctx, {
+                      membership,
+                      video,
+                    }),
+                  ),
+                )
+              ).filter(Boolean).length,
             };
           })
         );

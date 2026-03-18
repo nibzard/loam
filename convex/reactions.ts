@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import {
   identityAvatarUrl,
   identityName,
@@ -23,22 +23,6 @@ function normalizeReaction(emoji: string) {
     throw new Error("Unsupported reaction");
   }
   return normalized;
-}
-
-async function getPublicVideoByPublicId(
-  ctx: QueryCtx | MutationCtx,
-  publicId: string,
-) {
-  const video = await ctx.db
-    .query("videos")
-    .withIndex("by_public_id", (q) => q.eq("publicId", publicId))
-    .unique();
-
-  if (!video || video.visibility !== "public" || video.status !== "ready") {
-    return null;
-  }
-
-  return video;
 }
 
 export const list = query({
@@ -78,16 +62,8 @@ export const create = mutation({
 
 export const listForPublic = query({
   args: { publicId: v.string() },
-  handler: async (ctx, args) => {
-    const video = await getPublicVideoByPublicId(ctx, args.publicId);
-    if (!video) return [];
-
-    const reactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_video", (q) => q.eq("videoId", video._id))
-      .collect();
-
-    return reactions.sort((a, b) => b._creationTime - a._creationTime);
+  handler: async () => {
+    return [];
   },
 });
 
@@ -97,20 +73,8 @@ export const createForPublic = mutation({
     emoji: v.string(),
     timestampSeconds: v.number(),
   },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const video = await getPublicVideoByPublicId(ctx, args.publicId);
-    if (!video) throw new Error("Video not found");
-
-    const emoji = normalizeReaction(args.emoji);
-    return await ctx.db.insert("reactions", {
-      videoId: video._id,
-      userClerkId: user.subject,
-      userName: identityName(user),
-      userAvatarUrl: identityAvatarUrl(user),
-      emoji,
-      timestampSeconds: Math.max(0, args.timestampSeconds),
-    });
+  handler: async () => {
+    throw new Error("Public reactions have been removed.");
   },
 });
 

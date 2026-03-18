@@ -4,11 +4,6 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@convex/_generated/api";
 
 import { prewarmShare } from "./-share.data";
-import { prewarmWatch } from "./-watch.data";
-
-export type WatchRouteBootstrap = FunctionReturnType<
-  typeof api.videoActions.getPublicWatchBootstrap
->;
 
 export type ShareRouteBootstrap = FunctionReturnType<
   typeof api.videoActions.getSharePlaybackBootstrap
@@ -18,17 +13,6 @@ export function isReadyShareBootstrap(
   bootstrap: ShareRouteBootstrap,
 ): bootstrap is Extract<ShareRouteBootstrap, { state: "ready" }> {
   return bootstrap.state === "ready";
-}
-
-export async function loadWatchRouteBootstrap(
-  convex: ConvexReactClient,
-  params: { publicId: string },
-) {
-  prewarmWatch(convex, params);
-
-  return await convex.action(api.videoActions.getPublicWatchBootstrap, {
-    publicId: params.publicId,
-  });
 }
 
 export async function loadShareRouteBootstrap(

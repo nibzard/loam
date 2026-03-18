@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import {
   identityAvatarUrl,
   identityName,
@@ -43,22 +43,6 @@ function toPublicCommentPayload(comment: {
     userName: comment.userName,
     userAvatarUrl: comment.userAvatarUrl,
   };
-}
-
-async function getPublicVideoByPublicId(
-  ctx: QueryCtx | MutationCtx,
-  publicId: string,
-) {
-  const video = await ctx.db
-    .query("videos")
-    .withIndex("by_public_id", (q) => q.eq("publicId", publicId))
-    .unique();
-
-  if (!video || video.visibility !== "public" || video.status !== "ready") {
-    return null;
-  }
-
-  return video;
 }
 
 export const list = query({
@@ -112,31 +96,8 @@ export const createForPublic = mutation({
     timestampSeconds: v.number(),
     parentId: v.optional(v.id("comments")),
   },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const video = await getPublicVideoByPublicId(ctx, args.publicId);
-
-    if (!video) {
-      throw new Error("Video not found");
-    }
-
-    if (args.parentId) {
-      const parent = await ctx.db.get(args.parentId);
-      if (!parent || parent.videoId !== video._id) {
-        throw new Error("Invalid parent comment");
-      }
-    }
-
-    return await ctx.db.insert("comments", {
-      videoId: video._id,
-      userClerkId: user.subject,
-      userName: identityName(user),
-      userAvatarUrl: identityAvatarUrl(user),
-      text: args.text,
-      timestampSeconds: args.timestampSeconds,
-      parentId: args.parentId,
-      resolved: false,
-    });
+  handler: async () => {
+    throw new Error("Public commenting has been removed.");
   },
 });
 
@@ -252,18 +213,8 @@ export const getThreaded = query({
 
 export const getThreadedForPublic = query({
   args: { publicId: v.string() },
-  handler: async (ctx, args) => {
-    const video = await getPublicVideoByPublicId(ctx, args.publicId);
-    if (!video) {
-      return [];
-    }
-
-    const comments = await ctx.db
-      .query("comments")
-      .withIndex("by_video", (q) => q.eq("videoId", video._id))
-      .collect();
-
-    return toThreadedComments(comments.map(toPublicCommentPayload));
+  handler: async () => {
+    return [];
   },
 });
 

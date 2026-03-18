@@ -6,10 +6,7 @@ import { getFunctionName } from "convex/server";
 import { api } from "@convex/_generated/api";
 import { resetPrewarmDedupeForTests } from "@/lib/convexRouteData";
 
-import {
-  loadShareRouteBootstrap,
-  loadWatchRouteBootstrap,
-} from "./-publicPlaybackLoaders";
+import { loadShareRouteBootstrap } from "./-publicPlaybackLoaders";
 
 function createMockClient({
   queryImpl,
@@ -51,51 +48,6 @@ function createMockClient({
 
   return { calls, client };
 }
-
-test("watch route loader prewarms public queries and fetches a single bootstrap action", async () => {
-  resetPrewarmDedupeForTests();
-
-  const expectedBootstrap = {
-    state: "ready" as const,
-    playbackSession: {
-      accessMode: "public" as const,
-      expiresAt: null,
-      posterUrl: "https://image.mux.com/poster.jpg",
-      url: "https://stream.mux.com/video.m3u8",
-    },
-    videoData: {
-      video: {
-        _id: "video_123" as never,
-        title: "Public video",
-      },
-    },
-  };
-
-  const { calls, client } = createMockClient({
-    actionImpl: async (name) => {
-      assert.equal(name, getFunctionName(api.videoActions.getPublicWatchBootstrap));
-      return expectedBootstrap;
-    },
-  });
-
-  const result = await loadWatchRouteBootstrap(client, { publicId: "public_123" });
-
-  assert.deepEqual(result, expectedBootstrap);
-  assert.deepEqual(calls.action, [
-    {
-      args: { publicId: "public_123" },
-      name: getFunctionName(api.videoActions.getPublicWatchBootstrap),
-    },
-  ]);
-  assert.deepEqual(
-    calls.prewarm.map((call) => call.name).sort(),
-    [
-      "comments:getThreadedForPublic",
-      "reactions:listForPublic",
-      "videos:getByPublicId",
-    ],
-  );
-});
 
 test("share route preload resolves password state without issuing a grant action", async () => {
   resetPrewarmDedupeForTests();

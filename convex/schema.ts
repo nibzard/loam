@@ -74,6 +74,7 @@ export default defineSchema({
     uploaderEmail: v.optional(v.string()),
     title: v.string(),
     description: v.optional(v.string()),
+    accessMode: v.optional(v.union(v.literal("team"), v.literal("restricted"))),
     visibility: v.union(v.literal("public"), v.literal("private")),
     publicId: v.string(),
     // Mux video references
@@ -191,4 +192,14 @@ export default defineSchema({
   })
     .index("by_token", ["token"])
     .index("by_share_link", ["shareLinkId"]),
+
+  videoMemberGrants: defineTable({
+    videoId: v.id("videos"),
+    teamId: v.id("teams"),
+    userClerkId: v.string(),
+    grantedByClerkId: v.string(),
+  })
+    .index("by_video", ["videoId"])
+    .index("by_video_and_user", ["videoId", "userClerkId"])
+    .index("by_team_and_user", ["teamId", "userClerkId"]),
 });

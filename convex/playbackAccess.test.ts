@@ -1,55 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  planPublicPlaybackAccess,
-  planSignedPlaybackAccess,
-} from "./playbackAccess";
+import { planSignedPlaybackAccess } from "./playbackAccess";
 
-test("planPublicPlaybackAccess syncs the poster thumbnail only for public videos", () => {
-  assert.deepEqual(
-    planPublicPlaybackAccess({
-      publicPlaybackId: "playback_public_123",
-      target: {
-        thumbnailUrl: null,
-        visibility: "public",
-      },
-    }),
-    {
-      thumbnailUrl:
-        "https://image.mux.com/playback_public_123/thumbnail.jpg?time=0",
-    },
-  );
-
-  assert.deepEqual(
-    planPublicPlaybackAccess({
-      publicPlaybackId: "playback_public_123",
-      target: {
-        thumbnailUrl:
-          "https://image.mux.com/playback_public_123/thumbnail.jpg?time=0",
-        visibility: "public",
-      },
-    }),
-    {
-      thumbnailUrl: undefined,
-    },
-  );
-
-  assert.deepEqual(
-    planPublicPlaybackAccess({
-      publicPlaybackId: "playback_public_123",
-      target: {
-        thumbnailUrl: "https://cdn.example.com/custom.jpg",
-        visibility: "private",
-      },
-    }),
-    {
-      thumbnailUrl: undefined,
-    },
-  );
-});
-
-test("planSignedPlaybackAccess removes public playback for private videos and patches stale signed ids", () => {
+test("planSignedPlaybackAccess removes stale public playback and clears cached thumbnails", () => {
   assert.deepEqual(
     planSignedPlaybackAccess({
       publicPlaybackIds: ["public_a", "public_b"],
@@ -57,7 +11,6 @@ test("planSignedPlaybackAccess removes public playback for private videos and pa
       target: {
         muxPlaybackId: "signed_old",
         thumbnailUrl: "https://image.mux.com/public_a/thumbnail.jpg?time=0",
-        visibility: "private",
       },
     }),
     {
@@ -68,15 +21,13 @@ test("planSignedPlaybackAccess removes public playback for private videos and pa
   );
 });
 
-test("planSignedPlaybackAccess preserves public playback state for public videos", () => {
+test("planSignedPlaybackAccess keeps signed playback when nothing changed", () => {
   assert.deepEqual(
     planSignedPlaybackAccess({
-      publicPlaybackIds: ["public_a"],
+      publicPlaybackIds: [],
       signedPlaybackId: "signed_current",
       target: {
         muxPlaybackId: "signed_current",
-        thumbnailUrl: "https://image.mux.com/public_a/thumbnail.jpg?time=0",
-        visibility: "public",
       },
     }),
     {
@@ -93,9 +44,7 @@ test("planSignedPlaybackAccess requires a signed playback id", () => {
       planSignedPlaybackAccess({
         publicPlaybackIds: [],
         signedPlaybackId: null,
-        target: {
-          visibility: "private",
-        },
+        target: {},
       }),
     /Signed playback is not configured/,
   );

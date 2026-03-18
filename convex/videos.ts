@@ -1,7 +1,14 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { identityEmail, identityName, requireProjectAccess, requireVideoAccess } from "./auth";
+import {
+  canTeamMemberAccessVideo,
+  identityEmail,
+  identityName,
+  requireProjectAccess,
+  requireVideoAccess,
+  resolveVideoAccessMode,
+} from "./auth";
 import { Doc, Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
@@ -16,6 +23,7 @@ import {
 } from "./uploadSessions";
 
 const visibilityValidator = v.union(v.literal("public"), v.literal("private"));
+const accessModeValidator = v.union(v.literal("team"), v.literal("restricted"));
 
 async function generatePublicId(ctx: MutationCtx) {
   return await generateUniqueToken(
@@ -46,11 +54,12 @@ async function deleteShareAccessGrantsForLink(
 function buildClientVideoSummary(
   video: Pick<
     Doc<"videos">,
-    "_id" | "title" | "description" | "duration" | "thumbnailUrl"
+    "_id" | "title" | "description" | "duration" | "thumbnailUrl" | "accessMode"
   >,
 ) {
   return {
     _id: video._id,
+    accessMode: resolveVideoAccessMode(video),
     title: video.title,
     description: video.description,
     duration: video.duration,
@@ -61,7 +70,7 @@ function buildClientVideoSummary(
 function buildPlaybackTarget(
   video: Pick<
     Doc<"videos">,
-    "_id" | "muxAssetId" | "muxPlaybackId" | "status" | "thumbnailUrl" | "visibility"
+    "_id" | "muxAssetId" | "muxPlaybackId" | "status" | "thumbnailUrl"
   >,
 ) {
   return {
@@ -70,8 +79,21 @@ function buildPlaybackTarget(
     muxPlaybackId: video.muxPlaybackId,
     status: video.status,
     thumbnailUrl: video.thumbnailUrl,
-    visibility: video.visibility,
   };
+}
+
+async function deleteVideoMemberGrants(
+  ctx: MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const grants = await ctx.db
+    .query("videoMemberGrants")
+    .withIndex("by_video", (q) => q.eq("videoId", videoId))
+    .collect();
+
+  for (const grant of grants) {
+    await ctx.db.delete(grant._id);
+  }
 }
 
 async function scheduleUploadCleanup(
@@ -148,6 +170,7 @@ export const create = mutation({
       description: args.description,
       fileSize: args.fileSize,
       contentType: args.contentType,
+      accessMode: "team",
       status: "uploading",
       muxAssetStatus: "preparing",
       // Legacy field kept only for schema compatibility while the feature is retired.
@@ -164,7 +187,7 @@ export const create = mutation({
 export const list = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    await requireProjectAccess(ctx, args.projectId);
+    const { membership } = await requireProjectAccess(ctx, args.projectId);
 
     const videos = await ctx.db
       .query("videos")
@@ -174,6 +197,14 @@ export const list = query({
 
     return await Promise.all(
       videos.map(async (video) => {
+        const canAccess = await canTeamMemberAccessVideo(ctx, {
+          membership,
+          video,
+        });
+        if (!canAccess) {
+          return null;
+        }
+
         const comments = await ctx.db
           .query("comments")
           .withIndex("by_video", (q) => q.eq("videoId", video._id))
@@ -181,11 +212,12 @@ export const list = query({
 
         return {
           ...video,
+          accessMode: resolveVideoAccessMode(video),
           uploaderName: video.uploaderName ?? "Unknown",
           commentCount: comments.length,
         };
       }),
-    );
+    ).then((items) => items.filter((item): item is NonNullable<typeof item> => item !== null));
   },
 });
 
@@ -195,6 +227,7 @@ export const get = query({
     const { video, membership } = await requireVideoAccess(ctx, args.videoId);
     return {
       ...video,
+      accessMode: resolveVideoAccessMode(video),
       uploaderName: video.uploaderName ?? "Unknown",
       role: membership.role,
     };
@@ -203,37 +236,16 @@ export const get = query({
 
 export const getByPublicId = query({
   args: { publicId: v.string() },
-  handler: async (ctx, args) => {
-    const video = await ctx.db
-      .query("videos")
-      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
-      .unique();
-
-    if (!video || video.visibility !== "public" || video.status !== "ready") {
-      return null;
-    }
-
-    return {
-      video: buildClientVideoSummary(video),
-    };
+  handler: async () => {
+    return null;
   },
 });
 
 export const getPublicIdByVideoId = query({
   args: { videoId: v.string() },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args) => {
-    const normalizedVideoId = ctx.db.normalizeId("videos", args.videoId);
-    if (!normalizedVideoId) {
-      return null;
-    }
-
-    const video = await ctx.db.get(normalizedVideoId);
-    if (!video || video.visibility !== "public" || video.status !== "ready" || !video.publicId) {
-      return null;
-    }
-
-    return video.publicId;
+  handler: async () => {
+    return null;
   },
 });
 
@@ -284,7 +296,109 @@ export const setVisibility = mutation({
     await requireVideoAccess(ctx, args.videoId, "member");
 
     await ctx.db.patch(args.videoId, {
-      visibility: args.visibility,
+      visibility: "private",
+    });
+
+    await ctx.scheduler.runAfter(0, internal.videoActions.syncPlaybackAccessForVideo, {
+      videoId: args.videoId,
+    });
+  },
+});
+
+export const getAccessSettings = query({
+  args: { videoId: v.id("videos") },
+  returns: v.union(
+    v.object({
+      accessMode: accessModeValidator,
+      grantedUserClerkIds: v.array(v.string()),
+      teamMembers: v.array(
+        v.object({
+          role: v.union(
+            v.literal("owner"),
+            v.literal("admin"),
+            v.literal("member"),
+            v.literal("viewer"),
+          ),
+          userClerkId: v.string(),
+          userName: v.string(),
+        }),
+      ),
+      uploaderClerkId: v.string(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const { video, project } = await requireVideoAccess(ctx, args.videoId, "member");
+
+    const [teamMembers, grants] = await Promise.all([
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_team", (q) => q.eq("teamId", project.teamId))
+        .collect(),
+      ctx.db
+        .query("videoMemberGrants")
+        .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
+        .collect(),
+    ]);
+
+    return {
+      accessMode: resolveVideoAccessMode(video),
+      grantedUserClerkIds: grants.map((grant) => grant.userClerkId),
+      teamMembers: teamMembers
+        .map((member) => ({
+          role: member.role,
+          userClerkId: member.userClerkId,
+          userName: member.userName,
+        }))
+        .sort((left, right) => left.userName.localeCompare(right.userName)),
+      uploaderClerkId: video.uploadedByClerkId,
+    };
+  },
+});
+
+export const updateAccessSettings = mutation({
+  args: {
+    accessMode: accessModeValidator,
+    grantedUserClerkIds: v.array(v.string()),
+    videoId: v.id("videos"),
+  },
+  handler: async (ctx, args) => {
+    const { user, project, video } = await requireVideoAccess(ctx, args.videoId, "member");
+
+    const uniqueGrantedUserIds = Array.from(
+      new Set(
+        args.grantedUserClerkIds
+          .map((userClerkId) => userClerkId.trim())
+          .filter((userClerkId) => userClerkId.length > 0 && userClerkId !== video.uploadedByClerkId),
+      ),
+    );
+
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_team", (q) => q.eq("teamId", project.teamId))
+      .collect();
+    const memberIds = new Set(memberships.map((membership) => membership.userClerkId));
+
+    for (const userClerkId of uniqueGrantedUserIds) {
+      if (!memberIds.has(userClerkId)) {
+        throw new Error("Restricted access can only be granted to existing team members.");
+      }
+    }
+
+    await deleteVideoMemberGrants(ctx, args.videoId);
+
+    for (const userClerkId of uniqueGrantedUserIds) {
+      await ctx.db.insert("videoMemberGrants", {
+        grantedByClerkId: user.subject,
+        teamId: project.teamId,
+        userClerkId,
+        videoId: args.videoId,
+      });
+    }
+
+    await ctx.db.patch(args.videoId, {
+      accessMode: args.accessMode,
+      visibility: "private",
     });
 
     await ctx.scheduler.runAfter(0, internal.videoActions.syncPlaybackAccessForVideo, {
@@ -338,6 +452,8 @@ export const remove = mutation({
       await deleteShareAccessGrantsForLink(ctx, link._id);
       await ctx.db.delete(link._id);
     }
+
+    await deleteVideoMemberGrants(ctx, args.videoId);
 
     await ctx.db.delete(args.videoId);
   },
@@ -709,7 +825,7 @@ export const listPlaybackTargetsForProject = query({
     videoIds: v.optional(v.array(v.id("videos"))),
   },
   handler: async (ctx, args) => {
-    await requireProjectAccess(ctx, args.projectId, "viewer");
+    const { membership } = await requireProjectAccess(ctx, args.projectId, "viewer");
 
     const requestedIds = args.videoIds ? new Set(args.videoIds) : null;
     const requestOrder = args.videoIds
@@ -721,9 +837,24 @@ export const listPlaybackTargetsForProject = query({
       .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
       .collect();
 
-    const targets = videos
-      .filter((video) => !requestedIds || requestedIds.has(video._id))
-      .map((video) => buildPlaybackTarget(video));
+    const accessibleVideos: Doc<"videos">[] = [];
+    for (const video of videos) {
+      if (requestedIds && !requestedIds.has(video._id)) {
+        continue;
+      }
+
+      const canAccess = await canTeamMemberAccessVideo(ctx, {
+        membership,
+        video,
+      });
+      if (!canAccess) {
+        continue;
+      }
+
+      accessibleVideos.push(video);
+    }
+
+    const targets = accessibleVideos.map((video) => buildPlaybackTarget(video));
 
     if (!requestOrder) {
       return targets;
@@ -739,17 +870,8 @@ export const listPlaybackTargetsForProject = query({
 
 export const getPublicPlaybackTarget = internalQuery({
   args: { publicId: v.string() },
-  handler: async (ctx, args) => {
-    const video = await ctx.db
-      .query("videos")
-      .withIndex("by_public_id", (q) => q.eq("publicId", args.publicId))
-      .unique();
-
-    if (!video || video.visibility !== "public" || video.status !== "ready") {
-      return null;
-    }
-
-    return buildPlaybackTarget(video);
+  handler: async () => {
+    return null;
   },
 });
 

@@ -24,7 +24,7 @@ test("watch progress machine stops tracking after a partial cap response", () =>
   const started = machine.startFlush({
     enabled: true,
     minReportSeconds: 1,
-    target: { publicId: "public_123" },
+    target: { videoId: "video_123" as never },
   });
 
   assert.ok(started);
@@ -79,7 +79,7 @@ test("watch progress machine drops stale failed flushes after reset", () => {
   const started = machine.startFlush({
     enabled: true,
     minReportSeconds: 1,
-    target: { publicId: "public_123" },
+    target: { videoId: "video_123" as never },
   });
 
   assert.ok(started);

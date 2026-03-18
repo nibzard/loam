@@ -50,10 +50,6 @@ export default function DashboardLayout() {
       : undefined;
   const routeVideoId =
     typeof params.videoId === "string" ? params.videoId : undefined;
-  const publicPlaybackId = useQuery(
-    api.videos.getPublicIdByVideoId,
-    routeVideoId ? { videoId: routeVideoId } : "skip",
-  );
   const uploadTargets = useQuery(
     api.projects.listUploadTargets,
     teamSlug ? { teamSlug } : {},
@@ -185,24 +181,13 @@ export default function DashboardLayout() {
     }),
     [requestUpload, uploads, cancelUpload],
   );
-  const isResolvingPublicPlaybackExemption =
-    Boolean(isLoaded && !userId && routeVideoId) && publicPlaybackId === undefined;
-
   useEffect(() => {
     if (!isLoaded || userId) return;
     if (typeof window === "undefined") return;
 
-    if (routeVideoId) {
-      if (publicPlaybackId === undefined) return;
-      if (publicPlaybackId) {
-        window.location.replace(`/watch/${publicPlaybackId}`);
-        return;
-      }
-    }
-
     const redirectUrl = `${pathname}${searchStr}`;
     window.location.replace(`/sign-in?redirect_url=${encodeURIComponent(redirectUrl)}`);
-  }, [isLoaded, userId, pathname, searchStr, routeVideoId, publicPlaybackId]);
+  }, [isLoaded, userId, pathname, searchStr, routeVideoId]);
 
   if (!isLoaded) {
     return (
@@ -215,11 +200,7 @@ export default function DashboardLayout() {
   if (!userId) {
     return (
       <div className="h-full flex items-center justify-center bg-[var(--background)]">
-        <div className="text-[var(--foreground-muted)]">
-          {isResolvingPublicPlaybackExemption
-            ? "Checking public playback access..."
-            : "Redirecting to sign in..."}
-        </div>
+        <div className="text-[var(--foreground-muted)]">Redirecting to sign in...</div>
       </div>
     );
   }

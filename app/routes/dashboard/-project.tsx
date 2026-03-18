@@ -35,12 +35,14 @@ import { prewarmVideo } from "./-video.data";
 import { useDashboardUploadContext } from "@/lib/dashboardUploadContext";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { prepareDefaultShareLink } from "@/lib/shareLinks";
+import { useProjectVideoPosterUrls } from "@/lib/useProjectVideoPosterUrls";
 
 type ViewMode = "grid" | "list";
 type ShareToastState = {
   tone: "success" | "error";
   message: string;
 };
+const EAGER_POSTER_COUNT = 4;
 
 type VideoIntentTargetProps = {
   className: string;
@@ -100,14 +102,15 @@ export default function ProjectPage({
   const { requestUpload } = useDashboardUploadContext();
   const deleteVideo = useMutation(api.videos.remove);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
-  const getProjectVideoPosters = useAction(api.videoActions.getProjectVideoPosters);
   const ensureDefaultShareLink = useMutation(api.shareLinks.ensureDefault);
 
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-  const [videoPosterUrls, setVideoPosterUrls] = useState<Record<string, string>>({});
   const [shareToast, setShareToast] = useState<ShareToastState | null>(null);
   const shareToastTimeoutRef = useRef<number | null>(null);
-  const posterRequestKeyRef = useRef(0);
+  const videoPosterUrls = useProjectVideoPosterUrls({
+    projectId: resolvedProjectId,
+    videos,
+  });
 
   const shouldCanonicalize =
     !!context && !context.isCanonical && pathname !== context.canonicalPath;
@@ -120,48 +123,6 @@ export default function ProjectPage({
       navigate({ to: context.canonicalPath, replace: true });
     }
   }, [shouldCanonicalize, context, navigate]);
-
-  useEffect(() => {
-    if (!resolvedProjectId || !videos) {
-      return;
-    }
-
-    const readyVideoIds = videos
-      .filter((video) => video.status === "ready")
-      .map((video) => video._id);
-
-    if (readyVideoIds.length === 0) {
-      setVideoPosterUrls({});
-      return;
-    }
-
-    const requestKey = ++posterRequestKeyRef.current;
-
-    void (async () => {
-      try {
-        const posters = await getProjectVideoPosters({
-          projectId: resolvedProjectId,
-          videoIds: readyVideoIds,
-        });
-
-        if (requestKey !== posterRequestKeyRef.current) {
-          return;
-        }
-
-        setVideoPosterUrls(
-          Object.fromEntries(
-            posters.map(({ videoId, posterUrl }) => [videoId, posterUrl]),
-          ),
-        );
-      } catch (error) {
-        if (requestKey !== posterRequestKeyRef.current) {
-          return;
-        }
-
-        console.error("Failed to load project video posters:", error);
-      }
-    })();
-  }, [getProjectVideoPosters, resolvedProjectId, videos]);
 
   useEffect(
     () => () => {
@@ -321,13 +282,14 @@ export default function ProjectPage({
             isLoadingData ? "opacity-0" : "opacity-100"
           )}>
             <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-              {videos?.map((video) => {
+              {videos?.map((video, index) => {
                 const thumbnailSrc =
                   videoPosterUrls[video._id] ??
                   (video.thumbnailUrl?.startsWith("http") ? video.thumbnailUrl : undefined);
                 const canDownload = Boolean(video.s3Key) && video.status !== "failed" && video.status !== "uploading";
                 const watchingCount =
                   projectPresenceCounts?.counts?.[video._id] ?? 0;
+                const shouldPrioritizePoster = index < EAGER_POSTER_COUNT;
 
                 return (
                   <VideoIntentTarget
@@ -348,6 +310,9 @@ export default function ProjectPage({
                           src={thumbnailSrc}
                           alt={video.title}
                           className="object-cover w-full h-full"
+                          decoding="async"
+                          fetchPriority={shouldPrioritizePoster ? "high" : "auto"}
+                          loading={shouldPrioritizePoster ? "eager" : "lazy"}
                         />
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -457,13 +422,14 @@ export default function ProjectPage({
             "divide-y-2 divide-[var(--border)] transition-opacity duration-300",
             isLoadingData ? "opacity-0" : "opacity-100"
           )}>
-            {videos?.map((video) => {
+            {videos?.map((video, index) => {
               const thumbnailSrc =
                 videoPosterUrls[video._id] ??
                 (video.thumbnailUrl?.startsWith("http") ? video.thumbnailUrl : undefined);
               const canDownload = Boolean(video.s3Key) && video.status !== "failed" && video.status !== "uploading";
               const watchingCount =
                 projectPresenceCounts?.counts?.[video._id] ?? 0;
+              const shouldPrioritizePoster = index < EAGER_POSTER_COUNT;
 
               return (
                 <VideoIntentTarget
@@ -485,6 +451,9 @@ export default function ProjectPage({
                         src={thumbnailSrc}
                         alt={video.title}
                         className="object-cover w-full h-full"
+                        decoding="async"
+                        fetchPriority={shouldPrioritizePoster ? "high" : "auto"}
+                        loading={shouldPrioritizePoster ? "eager" : "lazy"}
                       />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center">

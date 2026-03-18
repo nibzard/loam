@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { getUser, requireTeamAccess, requireProjectAccess } from "./auth";
+import {
+  canTeamMemberAccessVideo,
+  getUser,
+  requireTeamAccess,
+  requireProjectAccess,
+} from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
 
 export const create = mutation({
@@ -25,7 +30,7 @@ export const create = mutation({
 export const list = query({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
-    await requireTeamAccess(ctx, args.teamId);
+    const { membership } = await requireTeamAccess(ctx, args.teamId);
 
     const projects = await ctx.db
       .query("projects")
@@ -41,7 +46,16 @@ export const list = query({
           .collect();
         return {
           ...project,
-          videoCount: videos.length,
+          videoCount: (
+            await Promise.all(
+              videos.map((video) =>
+                canTeamMemberAccessVideo(ctx, {
+                  membership,
+                  video,
+                }),
+              ),
+            )
+          ).filter(Boolean).length,
         };
       })
     );

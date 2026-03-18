@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query } from "./_generated/server";
-import { getUser } from "./auth";
+import { canTeamMemberAccessVideo, getTeamMembership, getUser } from "./auth";
 import { Doc } from "./_generated/dataModel";
 
 function buildCanonicalPath(input: {
@@ -59,14 +59,22 @@ export const resolveContext = query({
       return null;
     }
 
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", team._id).eq("userClerkId", user.subject),
-      )
-      .unique();
+    const membership = await getTeamMembership(ctx, {
+      teamId: team._id,
+      userClerkId: user.subject,
+    });
 
     if (!membership) return null;
+
+    if (video) {
+      const canAccessVideo = await canTeamMemberAccessVideo(ctx, {
+        membership,
+        video,
+      });
+      if (!canAccessVideo) {
+        return null;
+      }
+    }
 
     const canonicalProjectId = project?._id;
     const canonicalVideoId = video?._id;

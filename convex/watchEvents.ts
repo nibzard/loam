@@ -15,7 +15,6 @@ const viewerKindValidator = v.union(
 
 const watchSourceValidator = v.union(
   v.literal("dashboard"),
-  v.literal("public"),
   v.literal("share"),
 );
 
@@ -28,7 +27,7 @@ type RecordWatchEventResult = {
   watchedAt: number;
   viewerLabel: string;
   videoTitle: string;
-  videoPublicId: string;
+  dashboardPath: string;
   uploaderClerkId: string;
   uploaderEmail: string | null;
 };
@@ -253,7 +252,7 @@ export const recordWatchEvent = internalMutation({
     watchedAt: v.number(),
     viewerLabel: v.string(),
     videoTitle: v.string(),
-    videoPublicId: v.string(),
+    dashboardPath: v.string(),
     uploaderClerkId: v.string(),
     uploaderEmail: v.union(v.string(), v.null()),
   }),
@@ -265,6 +264,10 @@ export const recordWatchEvent = internalMutation({
     const project = await ctx.db.get(video.projectId);
     if (!project) {
       throw new Error("Project not found");
+    }
+    const team = await ctx.db.get(project.teamId);
+    if (!team) {
+      throw new Error("Team not found");
     }
 
     const fingerprint = normalizeString(args.fingerprint, 128);
@@ -397,7 +400,7 @@ export const recordWatchEvent = internalMutation({
         watchedAt: now,
         viewerLabel,
         videoTitle: video.title,
-        videoPublicId: video.publicId,
+        dashboardPath: `/dashboard/${team.slug}/${project._id}/${video._id}`,
         uploaderClerkId: video.uploadedByClerkId,
         uploaderEmail: null,
       };
@@ -458,7 +461,7 @@ export const recordWatchEvent = internalMutation({
       watchedAt: now,
       viewerLabel,
       videoTitle: video.title,
-      videoPublicId: video.publicId,
+      dashboardPath: `/dashboard/${team.slug}/${project._id}/${video._id}`,
       uploaderClerkId: video.uploadedByClerkId,
       uploaderEmail,
     };

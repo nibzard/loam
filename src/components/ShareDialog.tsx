@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import {
@@ -23,7 +23,7 @@ import {
   Eye,
   Lock,
   ExternalLink,
-  Globe,
+  Users,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -45,20 +45,31 @@ interface ShareDialogProps {
 }
 
 export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
-  const video = useQuery(api.videos.get, { videoId });
+  const accessSettings = useQuery(api.videos.getAccessSettings, { videoId });
   const shareLinks = useQuery(api.shareLinks.list, { videoId });
   const createShareLink = useMutation(api.shareLinks.create);
   const deleteShareLink = useMutation(api.shareLinks.remove);
-  const setVisibility = useMutation(api.videos.setVisibility);
+  const updateAccessSettings = useMutation(api.videos.updateAccessSettings);
 
   const [isCreating, setIsCreating] = useState(false);
-  const [isUpdatingVisibility, setIsUpdatingVisibility] = useState(false);
+  const [isSavingAccess, setIsSavingAccess] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [draftAccessMode, setDraftAccessMode] = useState<"team" | "restricted">("team");
+  const [grantedUserIds, setGrantedUserIds] = useState<string[]>([]);
   const [newLinkOptions, setNewLinkOptions] = useState({
     allowDownload: false,
     expiresInDays: undefined as number | undefined,
     password: undefined as string | undefined,
   });
+
+  useEffect(() => {
+    if (!accessSettings) {
+      return;
+    }
+
+    setDraftAccessMode(accessSettings.accessMode);
+    setGrantedUserIds(accessSettings.grantedUserClerkIds);
+  }, [accessSettings]);
 
   const handleCreateLink = async () => {
     setIsCreating(true);
@@ -81,15 +92,18 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     }
   };
 
-  const handleSetVisibility = async (visibility: "public" | "private") => {
-    if (!video || isUpdatingVisibility || video.visibility === visibility) return;
-    setIsUpdatingVisibility(true);
+  const handleSaveAccess = async () => {
+    setIsSavingAccess(true);
     try {
-      await setVisibility({ videoId, visibility });
+      await updateAccessSettings({
+        accessMode: draftAccessMode,
+        grantedUserClerkIds: grantedUserIds,
+        videoId,
+      });
     } catch (error) {
-      console.error("Failed to update visibility:", error);
+      console.error("Failed to update video access:", error);
     } finally {
-      setIsUpdatingVisibility(false);
+      setIsSavingAccess(false);
     }
   };
 
@@ -98,15 +112,6 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     const copied = await copyTextToClipboard(url);
     if (!copied) return;
     setCopiedId(token);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const handleCopyPublicLink = async () => {
-    if (!video?.publicId) return;
-    const url = `${window.location.origin}/watch/${video.publicId}`;
-    const copied = await copyTextToClipboard(url);
-    if (!copied) return;
-    setCopiedId("public");
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -126,7 +131,22 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
     }
   };
 
-  const publicWatchPath = video?.publicId ? `/watch/${video.publicId}` : null;
+  const toggleGrantedUser = (userClerkId: string) => {
+    setGrantedUserIds((current) =>
+      current.includes(userClerkId)
+        ? current.filter((id) => id !== userClerkId)
+        : [...current, userClerkId],
+    );
+  };
+
+  const teamMembers = accessSettings?.teamMembers.filter(
+    (member) => member.userClerkId !== accessSettings.uploaderClerkId,
+  ) ?? [];
+  const accessDirty =
+    accessSettings !== undefined &&
+    (draftAccessMode !== accessSettings?.accessMode ||
+      JSON.stringify([...grantedUserIds].sort()) !==
+        JSON.stringify([...(accessSettings?.grantedUserClerkIds ?? [])].sort()));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -134,76 +154,88 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
         <DialogHeader>
           <DialogTitle>Share video</DialogTitle>
           <DialogDescription>
-            Restricted share links are the default way to share externally. Enable a public URL only when you intentionally want anyone with the link to view it.
+            Team members can see team-visible videos. Restricted videos are only visible to selected teammates. External viewers always use tokenized share links, and they must sign in before they can comment or react.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
+        <div className="space-y-4 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-sm text-[var(--foreground)]">Public URL (advanced)</h3>
+              <h3 className="font-bold text-sm text-[var(--foreground)]">Internal access</h3>
               <p className="text-xs text-[var(--foreground-subtle)]">
-                Keep videos private by default. Restricted share links still work while the video stays private.
+                Pick whether this video is visible to the whole team or only selected teammates.
               </p>
             </div>
-            <Badge variant={video?.visibility === "public" ? "success" : "secondary"}>
-              {video?.visibility === "public" ? "Public" : "Private"}
+            <Badge variant={draftAccessMode === "team" ? "success" : "secondary"}>
+              {draftAccessMode === "team" ? "Team-visible" : "Restricted"}
             </Badge>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <Button
-              variant={video?.visibility === "public" ? "default" : "outline"}
-              disabled={isUpdatingVisibility || video === undefined}
-              onClick={() => void handleSetVisibility("public")}
+              variant={draftAccessMode === "team" ? "default" : "outline"}
+              onClick={() => setDraftAccessMode("team")}
             >
-              <Globe className="mr-2 h-4 w-4" />
-              Public
+              <Users className="mr-2 h-4 w-4" />
+              Team-visible
             </Button>
             <Button
-              variant={video?.visibility === "private" ? "default" : "outline"}
-              disabled={isUpdatingVisibility || video === undefined}
-              onClick={() => void handleSetVisibility("private")}
+              variant={draftAccessMode === "restricted" ? "default" : "outline"}
+              onClick={() => setDraftAccessMode("restricted")}
             >
               <Lock className="mr-2 h-4 w-4" />
-              Private
+              Restricted
             </Button>
           </div>
 
-          {publicWatchPath ? (
-            <div className="p-3 border-2 border-[var(--border)] bg-[var(--background)] space-y-2">
-              <div className="text-xs text-[var(--foreground-subtle)]">Public URL</div>
-              <code className="block text-sm bg-[var(--surface-alt)] px-2 py-1 font-mono truncate">
-                {publicWatchPath}
-              </code>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => void handleCopyPublicLink()}
-                  disabled={video?.visibility !== "public"}
-                >
-                  {copiedId === "public" ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                  Copy URL
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  disabled={video?.visibility !== "public"}
-                  onClick={() => openInNewTab(publicWatchPath)}
-                >
-                  <ExternalLink className="mr-2 h-4 w-4" />
-                  Open
-                </Button>
+          {draftAccessMode === "restricted" ? (
+            <div className="space-y-2">
+              <p className="text-xs text-[var(--foreground-subtle)]">
+                Selected teammates can view this video inside the workspace. The uploader always keeps access.
+              </p>
+              <div className="max-h-48 overflow-y-auto border-2 border-[var(--border)] divide-y-2 divide-[var(--border)]">
+                {accessSettings === undefined ? (
+                  <div className="p-3 text-sm text-[var(--foreground-muted)]">Loading teammates...</div>
+                ) : teamMembers.length === 0 ? (
+                  <div className="p-3 text-sm text-[var(--foreground-muted)]">No additional teammates to grant.</div>
+                ) : (
+                  teamMembers.map((member) => {
+                    const granted = grantedUserIds.includes(member.userClerkId);
+                    return (
+                      <button
+                        key={member.userClerkId}
+                        type="button"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[var(--background)] transition-colors"
+                        onClick={() => toggleGrantedUser(member.userClerkId)}
+                      >
+                        <div>
+                          <p className="font-medium text-sm text-[var(--foreground)]">{member.userName}</p>
+                          <p className="text-xs text-[var(--foreground-muted)]">{member.role}</p>
+                        </div>
+                        <Badge variant={granted ? "success" : "secondary"}>
+                          {granted ? "Allowed" : "No access"}
+                        </Badge>
+                      </button>
+                    );
+                  })
+                )}
               </div>
             </div>
           ) : null}
+
+          <Button
+            onClick={() => void handleSaveAccess()}
+            disabled={isSavingAccess || !accessDirty}
+            className="w-full"
+          >
+            {isSavingAccess ? "Saving access..." : "Save internal access"}
+          </Button>
         </div>
 
         <div className="space-y-4 border-2 border-[var(--border)] p-4 bg-[var(--surface-alt)]">
-          <h3 className="font-bold text-sm text-[var(--foreground)]">Restricted sharing (default)</h3>
+          <h3 className="font-bold text-sm text-[var(--foreground)]">External share links</h3>
           <p className="text-xs text-[var(--foreground-subtle)]">
-            Dashboard sharing creates or reuses a default restricted link automatically. Use this panel when you need extra links with expiration, password protection, or download permission.
+            These links are for outside viewers. They can watch with the link, but they must sign in before they can comment or react.
           </p>
 
           <div>
@@ -285,14 +317,14 @@ export function ShareDialog({ videoId, open, onOpenChange }: ShareDialogProps) {
 
           <Button onClick={() => void handleCreateLink()} disabled={isCreating} className="w-full">
             <Plus className="mr-2 h-4 w-4" />
-            {isCreating ? "Creating..." : "Create extra restricted link"}
+            {isCreating ? "Creating..." : "Create external share link"}
           </Button>
         </div>
 
         <Separator />
 
         <div className="space-y-2">
-          <h3 className="font-bold text-sm text-[var(--foreground)]">Restricted links</h3>
+          <h3 className="font-bold text-sm text-[var(--foreground)]">External links</h3>
           {shareLinks === undefined ? (
             <p className="text-sm text-[var(--foreground-muted)]">Loading...</p>
           ) : shareLinks.length === 0 ? (

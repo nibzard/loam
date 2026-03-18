@@ -1,6 +1,15 @@
 import { SignUp } from "@clerk/tanstack-react-start";
 import { useRouterState } from "@tanstack/react-router";
+import { useSyncExternalStore } from "react";
+
+import { Card, CardContent } from "@/components/ui/card";
 import { sanitizeRedirectPath } from "@/lib/redirect";
+
+const emptySubscribe = () => () => {};
+
+function useMounted() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
 
 export default function SignUpPage() {
   const search = useRouterState({
@@ -10,9 +19,22 @@ export default function SignUpPage() {
     new URLSearchParams(search).get("redirect_url"),
     "/dashboard",
   );
+  const mounted = useMounted();
+
+  if (!mounted) {
+    return (
+      <Card>
+        <CardContent className="p-6 font-mono text-sm text-[var(--foreground-muted)]">
+          Loading sign-up…
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <SignUp
+      routing="path"
+      path="/sign-up"
       fallbackRedirectUrl={redirectUrl || "/dashboard"}
       appearance={{
         elements: {

@@ -115,7 +115,13 @@ export const prepareUpload = action({
     uploadSessionToken: v.string(),
     uploadUrl: v.string(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    videoId: Id<"videos">;
+    publicId: string;
+    uploadKey: string;
+    uploadSessionToken: string;
+    uploadUrl: string;
+  }> => {
     const created = await ctx.runMutation(api.videos.create, {
       projectId: args.projectId,
       title: args.title,
@@ -156,7 +162,12 @@ export const completeUpload = action({
     shareUrl: v.string(),
     canonicalDashboardUrl: v.string(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    videoId: Id<"videos">;
+    status: "uploading" | "processing" | "ready" | "failed";
+    shareUrl: string;
+    canonicalDashboardUrl: string;
+  }> => {
     let uploadSessionToken = args.uploadSessionToken;
 
     if (!uploadSessionToken) {
@@ -217,7 +228,11 @@ export const failUpload = action({
     ),
     success: v.boolean(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    cleanupScheduled: boolean;
+    outcome: "already_failed" | "applied" | "ignored" | "stale";
+    success: boolean;
+  }> => {
     const failure = await ctx.runAction(api.videoActions.markUploadFailed, {
       videoId: args.videoId,
       uploadSessionToken: args.uploadSessionToken,

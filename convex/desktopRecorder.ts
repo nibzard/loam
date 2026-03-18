@@ -30,7 +30,7 @@ function buildAbsoluteUrl(path: string) {
 async function getReusableShareToken(
   ctx: ActionCtx,
   videoId: Id<"videos">,
-) {
+): Promise<string> {
   const links = await ctx.runQuery(api.shareLinks.list, { videoId }) as Array<{
     token: string;
     hasPassword: boolean;
@@ -49,7 +49,7 @@ async function getReusableShareToken(
   const created = await ctx.runMutation(api.shareLinks.create, {
     videoId,
     allowDownload: false,
-  });
+  }) as { token: string };
   return created.token;
 }
 
@@ -121,14 +121,14 @@ export const prepareUpload = action({
       title: args.title,
       fileSize: args.fileSize,
       contentType: args.contentType,
-    });
+    }) as { videoId: Id<"videos">; publicId: string };
 
     const upload = await ctx.runAction(api.videoActions.getUploadUrl, {
       videoId: created.videoId,
       filename: `${args.title}.mp4`,
       fileSize: args.fileSize,
       contentType: args.contentType,
-    });
+    }) as { uploadId: string; uploadSessionToken: string; url: string };
 
     return {
       videoId: created.videoId,
@@ -178,7 +178,9 @@ export const completeUpload = action({
       ctx.runQuery(api.videos.get, { videoId: args.videoId }) as Promise<
         (Doc<"videos"> & { role: string }) | null
       >,
-      ctx.runQuery(api.workspace.resolveContext, { videoId: args.videoId }),
+      ctx.runQuery(api.workspace.resolveContext, { videoId: args.videoId }) as Promise<{
+        canonicalPath: string;
+      } | null>,
       getReusableShareToken(ctx, args.videoId),
     ]);
 
@@ -219,7 +221,11 @@ export const failUpload = action({
     const failure = await ctx.runAction(api.videoActions.markUploadFailed, {
       videoId: args.videoId,
       uploadSessionToken: args.uploadSessionToken,
-    });
+    }) as {
+      cleanupScheduled: boolean;
+      outcome: "already_failed" | "applied" | "ignored" | "stale";
+      success: boolean;
+    };
 
     if (args.message && failure.outcome === "applied") {
       console.error("Desktop upload failed", {

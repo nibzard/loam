@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { getFunctionName } from "convex/server";
@@ -74,6 +75,7 @@ test("prepareUpload creates the video and maps the upload contract fields", asyn
     },
   });
 
+  // @ts-expect-error Accessing internal handler for unit testing
   const result = await prepareUpload._handler(ctx as never, {
     projectId: "project_123" as never,
     title: "Quarterly demo",
@@ -153,6 +155,7 @@ test("completeUpload reuses the newest active share link and returns relative UR
     },
   });
 
+  // @ts-expect-error Accessing internal handler for unit testing
   const result = await completeUpload._handler(ctx as never, {
     videoId: "video_123" as never,
     uploadSessionToken: "session_456",
@@ -223,7 +226,8 @@ test("completeUpload falls back to the stored upload session and creates absolut
       },
     });
 
-    const result = await completeUpload._handler(ctx as never, {
+    // @ts-expect-error Accessing internal handler for unit testing
+  const result = await completeUpload._handler(ctx as never, {
       videoId: "video_456" as never,
     });
 
@@ -283,11 +287,13 @@ test("failUpload forwards the backend outcome and logs only applied failures wit
       },
     });
 
+    // @ts-expect-error Accessing internal handler for unit testing
     const applied = await failUpload._handler(ctx as never, {
       videoId: "video_789" as never,
       uploadSessionToken: "session_applied",
       message: "socket closed",
     });
+    // @ts-expect-error Accessing internal handler for unit testing
     const ignored = await failUpload._handler(ctx as never, {
       videoId: "video_789" as never,
       uploadSessionToken: "session_ignored",

@@ -364,6 +364,11 @@ export default function VideoPage() {
   }
 
   const canEdit = video.role !== "viewer";
+  const canManageSharing =
+    Boolean(userId) &&
+    (video.uploadedByClerkId === userId ||
+      video.role === "admin" ||
+      video.role === "owner");
   const canComment = true;
   const playerFallback = (
     <div className="flex-1 flex items-center justify-center">
@@ -476,10 +481,10 @@ export default function VideoPage() {
           <VideoWatchers watchers={watchers} />
         </div>
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[var(--border)]/20 pl-3 ml-1">
-          {canEdit ? (
-            <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
-              <LinkIcon className="mr-1.5 h-4 w-4" />
-              Share
+              {canManageSharing ? (
+                <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
+                  <LinkIcon className="mr-1.5 h-4 w-4" />
+                  Share
             </Button>
           ) : null}
           <Button
@@ -503,7 +508,7 @@ export default function VideoPage() {
               </Button>
             </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {canEdit ? (
+            {canManageSharing ? (
               <DropdownMenuItem onSelect={() => setShareDialogOpen(true)}>
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Share

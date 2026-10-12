@@ -1,3 +1,5 @@
+import { ConvexError } from "convex/values";
+
 export const MAX_SHARE_PASSWORD_LENGTH = 256;
 export const PASSWORD_MAX_FAILED_ATTEMPTS = 5;
 export const PASSWORD_LOCKOUT_MS = 10 * 60 * 1000;
@@ -34,7 +36,7 @@ export function normalizeProvidedPassword(password: string | null | undefined) {
   }
 
   if (password.length > MAX_SHARE_PASSWORD_LENGTH) {
-    throw new Error("Password is too long");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Password is too long" });
   }
 
   return password;

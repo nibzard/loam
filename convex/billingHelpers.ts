@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { components } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { MutationCtx, QueryCtx } from "./_generated/server";
@@ -87,7 +88,7 @@ export async function getTeamSubscriptionState(
 ) {
   const team = await ctx.db.get(teamId);
   if (!team) {
-    throw new Error("Team not found");
+    throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
   }
 
   const subscription = await getTeamSubscriptionByOrgId(ctx, teamId);
@@ -137,7 +138,7 @@ export async function assertTeamHasActiveSubscription(
 ) {
   const state = await getTeamSubscriptionState(ctx, teamId);
   if (!state.hasActiveSubscription) {
-    throw new Error("An active Starter or Pro subscription is required.");
+    throw new ConvexError({ code: "FORBIDDEN", message: "An active Starter or Pro subscription is required." });
   }
   return state;
 }
@@ -153,9 +154,7 @@ export async function assertTeamCanStoreBytes(
   const requestedBytes = Number.isFinite(incomingBytes) ? Math.max(0, incomingBytes) : 0;
 
   if (storageUsedBytes + requestedBytes > storageLimitBytes) {
-    throw new Error(
-      `Storage limit reached for the ${state.plan} plan. Upgrade to continue uploading.`,
-    );
+    throw new ConvexError({ code: "FORBIDDEN", message: `Storage limit reached for the ${state.plan} plan. Upgrade to continue uploading.` });
   }
 
   return {

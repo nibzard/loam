@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { canTeamMemberAccessVideo, getTeamMembership, getUser } from "./auth";
 import { Doc } from "./_generated/dataModel";
+import { getGrantedVideoIdsForTeamUser } from "./videoMemberGrantHelpers";
 
 function buildCanonicalPath(input: {
   teamSlug: string;
@@ -67,7 +68,12 @@ export const resolveContext = query({
     if (!membership) return null;
 
     if (video) {
+      const grantedVideoIds = await getGrantedVideoIdsForTeamUser(ctx, {
+        teamId: team._id,
+        userClerkId: membership.userClerkId,
+      });
       const canAccessVideo = await canTeamMemberAccessVideo(ctx, {
+        grantedVideoIds,
         membership,
         video,
       });

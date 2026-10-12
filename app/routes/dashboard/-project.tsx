@@ -1,4 +1,5 @@
 
+import { useAuth } from "@clerk/tanstack-react-start";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -92,6 +93,7 @@ export default function ProjectPage({
   const navigate = useNavigate({});
   const pathname = useLocation().pathname;
   const convex = useConvex();
+  const { userId } = useAuth();
 
   const { context, resolvedProjectId, resolvedTeamSlug, project, videos } =
     useProjectData({ teamSlug, projectId });
@@ -290,6 +292,11 @@ export default function ProjectPage({
                 const watchingCount =
                   projectPresenceCounts?.counts?.[video._id] ?? 0;
                 const shouldPrioritizePoster = index < EAGER_POSTER_COUNT;
+                const canManageSharing =
+                  Boolean(userId) &&
+                  (video.uploadedByClerkId === userId ||
+                    project.role === "admin" ||
+                    project.role === "owner");
 
                 return (
                   <VideoIntentTarget
@@ -362,7 +369,7 @@ export default function ProjectPage({
                               Download
                             </DropdownMenuItem>
                           )}
-                          {canEditProject ? (
+                          {canManageSharing ? (
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();

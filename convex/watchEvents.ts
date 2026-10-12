@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import {
   getCurrentBillingMonthKey,
   getTeamSubscriptionState,
@@ -259,15 +259,15 @@ export const recordWatchEvent = internalMutation({
   handler: async (ctx, args) => {
     const video = await ctx.db.get(args.videoId);
     if (!video) {
-      throw new Error("Video not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found" });
     }
     const project = await ctx.db.get(video.projectId);
     if (!project) {
-      throw new Error("Project not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Project not found" });
     }
     const team = await ctx.db.get(project.teamId);
     if (!team) {
-      throw new Error("Team not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
 
     const fingerprint = normalizeString(args.fingerprint, 128);

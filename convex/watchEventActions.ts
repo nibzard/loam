@@ -1,7 +1,7 @@
 "use node";
 
 import { HOUR, MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { action, ActionCtx } from "./_generated/server";
 import { api, components, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -91,7 +91,7 @@ function resolveSource(args: {
   ].filter((value): value is WatchSource => value !== null);
 
   if (provided.length !== 1) {
-    throw new Error("Provide exactly one of videoId or grantToken");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Provide exactly one of videoId or grantToken" });
   }
 
   return provided[0];

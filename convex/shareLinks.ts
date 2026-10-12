@@ -1,9 +1,9 @@
 import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { components } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, MutationCtx } from "./_generated/server";
-import { identityName, requireVideoAccess } from "./auth";
+import { identityName, requireVideoManagementAccess } from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
 import {
@@ -118,7 +118,7 @@ export const create = mutation({
     password: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireVideoAccess(ctx, args.videoId, "member");
+    const { user } = await requireVideoManagementAccess(ctx, args.videoId);
 
     const expiresAt = args.expiresInDays
       ? Date.now() + args.expiresInDays * 24 * 60 * 60 * 1000
@@ -148,7 +148,7 @@ export const ensureDefault = mutation({
     token: v.string(),
   }),
   handler: async (ctx, args) => {
-    const { user } = await requireVideoAccess(ctx, args.videoId, "member");
+    const { user } = await requireVideoManagementAccess(ctx, args.videoId);
 
     const links = await ctx.db
       .query("shareLinks")
@@ -180,7 +180,7 @@ export const ensureDefault = mutation({
 export const list = query({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId);
+    await requireVideoManagementAccess(ctx, args.videoId);
 
     const links = await ctx.db
       .query("shareLinks")
@@ -210,9 +210,9 @@ export const remove = mutation({
   args: { linkId: v.id("shareLinks") },
   handler: async (ctx, args) => {
     const link = await ctx.db.get(args.linkId);
-    if (!link) throw new Error("Share link not found");
+    if (!link) throw new ConvexError({ code: "NOT_FOUND", message: "Share link not found" });
 
-    await requireVideoAccess(ctx, link.videoId, "member");
+    await requireVideoManagementAccess(ctx, link.videoId);
 
     await deleteShareAccessGrantsForLink(ctx, args.linkId);
     await ctx.db.delete(args.linkId);
@@ -228,9 +228,9 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const link = await ctx.db.get(args.linkId);
-    if (!link) throw new Error("Share link not found");
+    if (!link) throw new ConvexError({ code: "NOT_FOUND", message: "Share link not found" });
 
-    await requireVideoAccess(ctx, link.videoId, "member");
+    await requireVideoManagementAccess(ctx, link.videoId);
 
     const updates: Partial<Doc<"shareLinks">> = {};
 

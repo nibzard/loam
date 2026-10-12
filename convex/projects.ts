@@ -8,6 +8,7 @@ import {
   requireProjectAccess,
 } from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
+import { getGrantedVideoIdsForTeamUser } from "./videoMemberGrantHelpers";
 
 export const create = mutation({
   args: {
@@ -31,6 +32,10 @@ export const list = query({
   args: { teamId: v.id("teams") },
   handler: async (ctx, args) => {
     const { membership } = await requireTeamAccess(ctx, args.teamId);
+    const grantedVideoIds = await getGrantedVideoIdsForTeamUser(ctx, {
+      teamId: args.teamId,
+      userClerkId: membership.userClerkId,
+    });
 
     const projects = await ctx.db
       .query("projects")
@@ -50,6 +55,7 @@ export const list = query({
             await Promise.all(
               videos.map((video) =>
                 canTeamMemberAccessVideo(ctx, {
+                  grantedVideoIds,
                   membership,
                   video,
                 }),

@@ -7,7 +7,7 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { action, internalAction, ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
@@ -28,7 +28,7 @@ import {
 } from "./playbackSessions";
 import { buildMuxThumbnailUrl } from "./muxPlayback";
 import { planSignedPlaybackAccess } from "./playbackAccess";
-import { BUCKET_NAME, getS3Client } from "./s3";
+import { getBucketName, getS3Client } from "./s3";
 import { generateOpaqueToken } from "./security";
 import { buildMuxUploadPassthrough } from "./uploadSessions";
 
@@ -264,7 +264,7 @@ function normalizeBucketKey(key: string): string {
   if (key.startsWith("http://") || key.startsWith("https://")) {
     try {
       const pathname = new URL(key).pathname.replace(/^\/+/, "");
-      const bucketPrefix = `${BUCKET_NAME}/`;
+      const bucketPrefix = `${getBucketName()}/`;
       return pathname.startsWith(bucketPrefix)
         ? pathname.slice(bucketPrefix.length)
         : pathname;
@@ -287,7 +287,7 @@ async function buildSignedBucketObjectUrl(
   const s3 = getS3Client();
   const filename = options?.filename;
   const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
+    Bucket: getBucketName(),
     Key: normalizedKey,
     ResponseContentDisposition: filename
       ? `attachment; filename="${filename}"`
@@ -316,16 +316,16 @@ function isAllowedUploadContentType(contentType: string): boolean {
 
 function validateUploadRequestOrThrow(args: { fileSize: number; contentType: string }) {
   if (!Number.isFinite(args.fileSize) || args.fileSize <= 0) {
-    throw new Error("Video file size must be greater than zero.");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Video file size must be greater than zero." });
   }
 
   if (args.fileSize > MAX_PRESIGNED_PUT_FILE_SIZE_BYTES) {
-    throw new Error("Video file is too large for direct upload.");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Video file is too large for direct upload." });
   }
 
   const normalizedContentType = normalizeContentType(args.contentType);
   if (!isAllowedUploadContentType(normalizedContentType)) {
-    throw new Error("Unsupported video format. Allowed: mp4, mov, webm, mkv.");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Unsupported video format. Allowed: mp4, mov, webm, mkv." });
   }
 
   return normalizedContentType;
@@ -352,13 +352,13 @@ async function requireVideoMemberAccess(
     | { role?: string }
     | null;
   if (!video || video.role === "viewer") {
-    throw new Error("Requires member role or higher");
+    throw new ConvexError({ code: "FORBIDDEN", message: "Requires member role or higher" });
   }
 }
 
 function requireReadyPlaybackTarget(target: PlaybackTarget | null): PlaybackTarget {
   if (!target || target.status !== "ready") {
-    throw new Error("Video not found or not ready");
+    throw new ConvexError({ code: "NOT_FOUND", message: "Video not found or not ready" });
   }
 
   return target;
@@ -459,12 +459,12 @@ async function buildDownloadResponse(target: DownloadTarget): Promise<{
   url: string;
 }> {
   if (target.status !== "ready") {
-    throw new Error("Video not found or not ready");
+    throw new ConvexError({ code: "NOT_FOUND", message: "Video not found or not ready" });
   }
 
   const key = getValueString(target, "s3Key");
   if (!key) {
-    throw new Error("Original bucket file not found for this video");
+    throw new ConvexError({ code: "NOT_FOUND", message: "Original bucket file not found for this video" });
   }
 
   const filename = buildDownloadFilename(target.title ?? undefined, key);
@@ -493,7 +493,7 @@ export const cleanupDeletedVideoAssets = internalAction({
         const s3 = getS3Client();
         await s3.send(
           new DeleteObjectCommand({
-            Bucket: BUCKET_NAME,
+            Bucket: getBucketName(),
             Key: args.s3Key,
           }),
         );
@@ -570,7 +570,7 @@ export const getUploadUrl = action({
     const key = `videos/${args.videoId}/${Date.now()}-${generateOpaqueToken(16)}.${ext}`;
     const uploadSessionToken = generateOpaqueToken(24);
     const command = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
+      Bucket: getBucketName(),
       Key: key,
       ContentType: normalizedContentType,
     });
@@ -642,10 +642,10 @@ export const markUploadComplete = action({
       return { outcome: "already_ready", success: true };
     }
     if (processing.outcome === "retry_required") {
-      throw new Error("Upload session is no longer pending. Request a new upload URL.");
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Upload session is no longer pending. Request a new upload URL." });
     }
     if (processing.outcome === "missing_object") {
-      throw new Error("Original bucket file not found for this video");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Original bucket file not found for this video" });
     }
     const activeProcessing = processing as {
       contentType?: string;
@@ -658,7 +658,7 @@ export const markUploadComplete = action({
       const s3 = getS3Client();
       const head = await s3.send(
         new HeadObjectCommand({
-          Bucket: BUCKET_NAME,
+          Bucket: getBucketName(),
           Key: activeProcessing.s3Key,
         }),
       );
@@ -718,7 +718,11 @@ export const markUploadComplete = action({
       const shouldDeleteObject = shouldDeleteUploadedObjectOnFailure(error);
       const uploadError =
         shouldDeleteObject && error instanceof Error
-          ? error.message
+          ? error instanceof ConvexError &&
+            error.data &&
+            typeof error.data.message === "string"
+            ? error.data.message
+            : error.message
           : "Mux ingest failed after upload.";
       const failed = await ctx.runMutation(internal.videos.markAsFailed, {
         videoId: args.videoId,
@@ -871,7 +875,7 @@ export const getOriginalPlaybackUrl = action({
     });
 
     if (!video || !video.s3Key) {
-      throw new Error("Original bucket file not found for this video");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Original bucket file not found for this video" });
     }
 
     const contentType = video.contentType ?? "video/mp4";
@@ -889,7 +893,7 @@ export const getPublicPlaybackSession = action({
   args: { publicId: v.string() },
   returns: playbackSessionValidator,
   handler: async (): Promise<PlaybackSession> => {
-    throw new Error("Public playback has been removed.");
+    throw new ConvexError({ code: "FORBIDDEN", message: "Public playback has been removed." });
   },
 });
 
@@ -995,11 +999,11 @@ export const getSharedDownloadUrl = action({
     });
 
     if (!target) {
-      throw new Error("Video not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found" });
     }
 
     if (!target.allowDownload) {
-      throw new Error("Downloads are disabled for this share link");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Downloads are disabled for this share link" });
     }
 
     return await buildDownloadResponse(target);
@@ -1018,7 +1022,7 @@ export const getDownloadUrl = action({
     });
 
     if (!video) {
-      throw new Error("Video not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found" });
     }
 
     return await buildDownloadResponse(video);

@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
   identityAvatarUrl,
@@ -6,6 +6,10 @@ import {
   requireVideoAccess,
   requireUser,
 } from "./auth";
+import {
+  isVisibleToShareDiscussion,
+  resolveDiscussionAudience,
+} from "./discussionAudience";
 import { resolveActiveShareGrant } from "./shareAccess";
 
 function toThreadedComments<T extends { _id: string; parentId?: string; timestampSeconds: number; _creationTime: number }>(
@@ -72,7 +76,7 @@ export const create = mutation({
     if (args.parentId) {
       const parent = await ctx.db.get(args.parentId);
       if (!parent || parent.videoId !== args.videoId) {
-        throw new Error("Invalid parent comment");
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Invalid parent comment" });
       }
     }
 
@@ -81,6 +85,7 @@ export const create = mutation({
       userClerkId: user.subject,
       userName: identityName(user),
       userAvatarUrl: identityAvatarUrl(user),
+      audience: "team",
       text: args.text,
       timestampSeconds: args.timestampSeconds,
       parentId: args.parentId,
@@ -97,7 +102,7 @@ export const createForPublic = mutation({
     parentId: v.optional(v.id("comments")),
   },
   handler: async () => {
-    throw new Error("Public commenting has been removed.");
+    throw new ConvexError({ code: "FORBIDDEN", message: "Public commenting has been removed." });
   },
 });
 
@@ -113,18 +118,22 @@ export const createForShareGrant = mutation({
     const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
 
     if (!resolved) {
-      throw new Error("Invalid share grant");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Invalid share grant" });
     }
 
     const video = await ctx.db.get(resolved.shareLink.videoId);
     if (!video || video.status !== "ready") {
-      throw new Error("Video not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found" });
     }
 
     if (args.parentId) {
       const parent = await ctx.db.get(args.parentId);
-      if (!parent || parent.videoId !== video._id) {
-        throw new Error("Invalid parent comment");
+      if (
+        !parent ||
+        parent.videoId !== video._id ||
+        resolveDiscussionAudience(parent) !== "share"
+      ) {
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Invalid parent comment" });
       }
     }
 
@@ -133,6 +142,7 @@ export const createForShareGrant = mutation({
       userClerkId: user.subject,
       userName: identityName(user),
       userAvatarUrl: identityAvatarUrl(user),
+      audience: "share",
       text: args.text,
       timestampSeconds: args.timestampSeconds,
       parentId: args.parentId,
@@ -150,10 +160,10 @@ export const update = mutation({
     const user = await requireUser(ctx);
 
     const comment = await ctx.db.get(args.commentId);
-    if (!comment) throw new Error("Comment not found");
+    if (!comment) throw new ConvexError({ code: "NOT_FOUND", message: "Comment not found" });
 
     if (comment.userClerkId !== user.subject) {
-      throw new Error("You can only edit your own comments");
+      throw new ConvexError({ code: "FORBIDDEN", message: "You can only edit your own comments" });
     }
 
     await ctx.db.patch(args.commentId, { text: args.text });
@@ -166,7 +176,7 @@ export const remove = mutation({
     const user = await requireUser(ctx);
 
     const comment = await ctx.db.get(args.commentId);
-    if (!comment) throw new Error("Comment not found");
+    if (!comment) throw new ConvexError({ code: "NOT_FOUND", message: "Comment not found" });
 
     if (comment.userClerkId !== user.subject) {
       await requireVideoAccess(ctx, comment.videoId, "admin");
@@ -189,7 +199,7 @@ export const toggleResolved = mutation({
   args: { commentId: v.id("comments") },
   handler: async (ctx, args) => {
     const comment = await ctx.db.get(args.commentId);
-    if (!comment) throw new Error("Comment not found");
+    if (!comment) throw new ConvexError({ code: "NOT_FOUND", message: "Comment not found" });
 
     await requireVideoAccess(ctx, comment.videoId, "member");
 
@@ -236,6 +246,10 @@ export const getThreadedForShareGrant = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
-    return toThreadedComments(comments.map(toPublicCommentPayload));
+    return toThreadedComments(
+      comments
+        .filter(isVisibleToShareDiscussion)
+        .map(toPublicCommentPayload),
+    );
   },
 });

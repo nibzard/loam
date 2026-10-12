@@ -1,5 +1,5 @@
 import { StripeSubscriptions } from "@convex-dev/stripe";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import Stripe from "stripe";
 import { api, components, internal } from "./_generated/api";
 import { action, internalMutation, query } from "./_generated/server";
@@ -90,23 +90,23 @@ function getAllowedRedirectOrigins() {
 function assertAllowedRedirectUrl(value: string, fieldName: string) {
   const normalized = value.trim();
   if (!normalized) {
-    throw new Error(`${fieldName} must be a non-empty absolute URL.`);
+    throw new ConvexError({ code: "BAD_REQUEST", message: `${fieldName} must be a non-empty absolute URL.` });
   }
 
   let parsed: URL;
   try {
     parsed = new URL(normalized);
   } catch {
-    throw new Error(`${fieldName} must be a valid absolute URL.`);
+    throw new ConvexError({ code: "BAD_REQUEST", message: `${fieldName} must be a valid absolute URL.` });
   }
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error(`${fieldName} must use http or https.`);
+    throw new ConvexError({ code: "BAD_REQUEST", message: `${fieldName} must use http or https.` });
   }
 
   const allowedOrigins = getAllowedRedirectOrigins();
   if (!allowedOrigins.has(parsed.origin)) {
-    throw new Error(`${fieldName} origin is not allowed.`);
+    throw new ConvexError({ code: "BAD_REQUEST", message: `${fieldName} origin is not allowed.` });
   }
 
   return parsed.toString();
@@ -131,11 +131,11 @@ export const createSubscriptionCheckout = action({
     const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
 
     if (!team) {
-      throw new Error("Team not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
 
     if (team.role !== "owner") {
-      throw new Error("Only team owners can manage billing.");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Only team owners can manage billing." });
     }
 
     const existingSubscription = await ctx.runQuery(
@@ -144,9 +144,7 @@ export const createSubscriptionCheckout = action({
     );
 
     if (existingSubscription && hasActiveTeamSubscriptionStatus(existingSubscription.status)) {
-      throw new Error(
-        "This team already has an active subscription. Use the billing portal to manage it.",
-      );
+      throw new ConvexError({ code: "FORBIDDEN", message: "This team already has an active subscription. Use the billing portal to manage it." });
     }
 
     let stripeCustomerId: string | undefined =
@@ -226,11 +224,11 @@ export const createCustomerPortalSession = action({
     const team = await ctx.runQuery(api.teams.get, { teamId: args.teamId });
 
     if (!team) {
-      throw new Error("Team not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Team not found" });
     }
 
     if (team.role !== "owner") {
-      throw new Error("Only team owners can manage billing.");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Only team owners can manage billing." });
     }
 
     const existingSubscription = await ctx.runQuery(
@@ -242,7 +240,7 @@ export const createCustomerPortalSession = action({
       team.stripeCustomerId ?? existingSubscription?.stripeCustomerId;
 
     if (!stripeCustomerId) {
-      throw new Error("No Stripe customer found for this team yet.");
+      throw new ConvexError({ code: "NOT_FOUND", message: "No Stripe customer found for this team yet." });
     }
 
     return await stripeClient.createCustomerPortalSession(ctx, {

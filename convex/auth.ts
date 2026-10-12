@@ -109,17 +109,17 @@ export async function getTeamMembership(
 export async function canTeamMemberAccessVideo(
   ctx: QueryCtx | MutationCtx,
   args: {
+    grantedVideoIds?: ReadonlySet<Id<"videos">>;
     membership: Doc<"teamMembers">;
     video: Pick<Doc<"videos">, "_id" | "accessMode" | "uploadedByClerkId">;
   },
 ) {
-  const accessMode = resolveVideoAccessMode(args.video);
-  if (accessMode === "team") {
+  if (canTeamMemberAccessVideoWithGrantSet(args)) {
     return true;
   }
 
-  if (args.video.uploadedByClerkId === args.membership.userClerkId) {
-    return true;
+  if (args.grantedVideoIds) {
+    return false;
   }
 
   const grant = await ctx.db
@@ -130,6 +130,34 @@ export async function canTeamMemberAccessVideo(
     .unique();
 
   return grant !== null;
+}
+
+export function canTeamMemberAccessVideoWithGrantSet(args: {
+  grantedVideoIds?: ReadonlySet<Id<"videos">>;
+  membership: Pick<Doc<"teamMembers">, "userClerkId">;
+  video: Pick<Doc<"videos">, "_id" | "accessMode" | "uploadedByClerkId">;
+}) {
+  const accessMode = resolveVideoAccessMode(args.video);
+  if (accessMode === "team") {
+    return true;
+  }
+
+  if (args.video.uploadedByClerkId === args.membership.userClerkId) {
+    return true;
+  }
+
+  return args.grantedVideoIds?.has(args.video._id) ?? false;
+}
+
+export function canManageVideoSharing(args: {
+  membership: Pick<Doc<"teamMembers">, "role" | "userClerkId">;
+  video: Pick<Doc<"videos">, "uploadedByClerkId">;
+}) {
+  if (args.video.uploadedByClerkId === args.membership.userClerkId) {
+    return true;
+  }
+
+  return args.membership.role === "admin" || args.membership.role === "owner";
 }
 
 export async function requireTeamAccess(
@@ -220,6 +248,45 @@ export async function requireVideoAccess(
     throw new ConvexError({
       code: "FORBIDDEN",
       message: `Requires ${requiredRole} role or higher.`,
+    });
+  }
+
+  return { user, membership, project, video };
+}
+
+export async function requireVideoManagementAccess(
+  ctx: QueryCtx | MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const user = await requireUser(ctx);
+
+  const video = await ctx.db.get(videoId);
+  if (!video) {
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Video not found.",
+    });
+  }
+
+  const project = await ctx.db.get(video.projectId);
+  if (!project) {
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Project not found.",
+    });
+  }
+
+  const { membership } = await requireTeamAccess(ctx, project.teamId);
+  if (
+    membership.role === "viewer" ||
+    !canManageVideoSharing({
+      membership,
+      video,
+    })
+  ) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have permission to manage sharing for this video.",
     });
   }
 

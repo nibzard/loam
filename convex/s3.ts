@@ -1,6 +1,10 @@
 import { S3Client } from "@aws-sdk/client-s3";
 
-export const BUCKET_NAME = process.env.RAILWAY_BUCKET_NAME || "videos";
+// Read at call time, not module load: Convex evaluates module-level code once
+// per warm isolate, so a const here would stay stale after an env change.
+export function getBucketName(): string {
+  return process.env.RAILWAY_BUCKET_NAME || "videos";
+}
 
 function getBasePublicUrl(): string {
   const baseUrl = process.env.RAILWAY_PUBLIC_URL || process.env.RAILWAY_ENDPOINT;
@@ -16,7 +20,7 @@ export function buildPublicUrl(key: string): string {
   const basePath = url.pathname.endsWith("/")
     ? url.pathname.slice(0, -1)
     : url.pathname;
-  const objectPath = includeBucket ? `${BUCKET_NAME}/${key}` : key;
+  const objectPath = includeBucket ? `${getBucketName()}/${key}` : key;
   url.pathname = `${basePath}/${objectPath}`;
   return url.toString();
 }

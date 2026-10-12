@@ -120,6 +120,7 @@ export default defineSchema({
     userClerkId: v.string(),
     userName: v.string(),
     userAvatarUrl: v.optional(v.string()),
+    audience: v.optional(v.union(v.literal("team"), v.literal("share"))),
     text: v.string(),
     timestampSeconds: v.number(),
     parentId: v.optional(v.id("comments")),
@@ -134,6 +135,7 @@ export default defineSchema({
     userClerkId: v.string(),
     userName: v.string(),
     userAvatarUrl: v.optional(v.string()),
+    audience: v.optional(v.union(v.literal("team"), v.literal("share"))),
     emoji: v.string(),
     timestampSeconds: v.number(),
   })
@@ -199,6 +201,7 @@ export default defineSchema({
     userClerkId: v.string(),
     grantedByClerkId: v.string(),
   })
+    .index("by_team", ["teamId"])
     .index("by_video", ["videoId"])
     .index("by_video_and_user", ["videoId", "userClerkId"])
     .index("by_team_and_user", ["teamId", "userClerkId"]),

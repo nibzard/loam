@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
@@ -6,6 +6,7 @@ import {
   identityEmail,
   identityName,
   requireProjectAccess,
+  requireVideoManagementAccess,
   requireVideoAccess,
   resolveVideoAccessMode,
 } from "./auth";
@@ -13,6 +14,10 @@ import { Doc, Id } from "./_generated/dataModel";
 import { generateUniqueToken } from "./security";
 import { resolveActiveShareGrant } from "./shareAccess";
 import { assertTeamCanStoreBytes } from "./billingHelpers";
+import {
+  deleteVideoMemberGrantsForVideo,
+  getGrantedVideoIdsForTeamUser,
+} from "./videoMemberGrantHelpers";
 import {
   classifyUploadCompletionAttempt,
   classifyUploadFailureAttempt,
@@ -80,20 +85,6 @@ function buildPlaybackTarget(
     status: video.status,
     thumbnailUrl: video.thumbnailUrl,
   };
-}
-
-async function deleteVideoMemberGrants(
-  ctx: MutationCtx,
-  videoId: Id<"videos">,
-) {
-  const grants = await ctx.db
-    .query("videoMemberGrants")
-    .withIndex("by_video", (q) => q.eq("videoId", videoId))
-    .collect();
-
-  for (const grant of grants) {
-    await ctx.db.delete(grant._id);
-  }
 }
 
 async function scheduleUploadCleanup(
@@ -187,7 +178,11 @@ export const create = mutation({
 export const list = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, args) => {
-    const { membership } = await requireProjectAccess(ctx, args.projectId);
+    const { membership, project } = await requireProjectAccess(ctx, args.projectId);
+    const grantedVideoIds = await getGrantedVideoIdsForTeamUser(ctx, {
+      teamId: project.teamId,
+      userClerkId: membership.userClerkId,
+    });
 
     const videos = await ctx.db
       .query("videos")
@@ -198,6 +193,7 @@ export const list = query({
     return await Promise.all(
       videos.map(async (video) => {
         const canAccess = await canTeamMemberAccessVideo(ctx, {
+          grantedVideoIds,
           membership,
           video,
         });
@@ -293,7 +289,7 @@ export const setVisibility = mutation({
     visibility: visibilityValidator,
   },
   handler: async (ctx, args) => {
-    await requireVideoAccess(ctx, args.videoId, "member");
+    await requireVideoManagementAccess(ctx, args.videoId);
 
     await ctx.db.patch(args.videoId, {
       visibility: "private",
@@ -328,7 +324,7 @@ export const getAccessSettings = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const { video, project } = await requireVideoAccess(ctx, args.videoId, "member");
+    const { video, project } = await requireVideoManagementAccess(ctx, args.videoId);
 
     const [teamMembers, grants] = await Promise.all([
       ctx.db
@@ -363,7 +359,7 @@ export const updateAccessSettings = mutation({
     videoId: v.id("videos"),
   },
   handler: async (ctx, args) => {
-    const { user, project, video } = await requireVideoAccess(ctx, args.videoId, "member");
+    const { user, project, video } = await requireVideoManagementAccess(ctx, args.videoId);
 
     const uniqueGrantedUserIds = Array.from(
       new Set(
@@ -381,11 +377,11 @@ export const updateAccessSettings = mutation({
 
     for (const userClerkId of uniqueGrantedUserIds) {
       if (!memberIds.has(userClerkId)) {
-        throw new Error("Restricted access can only be granted to existing team members.");
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Restricted access can only be granted to existing team members." });
       }
     }
 
-    await deleteVideoMemberGrants(ctx, args.videoId);
+    await deleteVideoMemberGrantsForVideo(ctx, args.videoId);
 
     for (const userClerkId of uniqueGrantedUserIds) {
       await ctx.db.insert("videoMemberGrants", {
@@ -453,7 +449,7 @@ export const remove = mutation({
       await ctx.db.delete(link._id);
     }
 
-    await deleteVideoMemberGrants(ctx, args.videoId);
+    await deleteVideoMemberGrantsForVideo(ctx, args.videoId);
 
     await ctx.db.delete(args.videoId);
   },
@@ -477,7 +473,7 @@ export const setUploadInfo = internalMutation({
     }
 
     if (video.status === "ready") {
-      throw new Error("Ready videos cannot be replaced through the upload pipeline.");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Ready videos cannot be replaced through the upload pipeline." });
     }
 
     const cleanup = getUploadCleanupTargets(video);
@@ -825,7 +821,11 @@ export const listPlaybackTargetsForProject = query({
     videoIds: v.optional(v.array(v.id("videos"))),
   },
   handler: async (ctx, args) => {
-    const { membership } = await requireProjectAccess(ctx, args.projectId, "viewer");
+    const { membership, project } = await requireProjectAccess(ctx, args.projectId, "viewer");
+    const grantedVideoIds = await getGrantedVideoIdsForTeamUser(ctx, {
+      teamId: project.teamId,
+      userClerkId: membership.userClerkId,
+    });
 
     const requestedIds = args.videoIds ? new Set(args.videoIds) : null;
     const requestOrder = args.videoIds
@@ -844,6 +844,7 @@ export const listPlaybackTargetsForProject = query({
       }
 
       const canAccess = await canTeamMemberAccessVideo(ctx, {
+        grantedVideoIds,
         membership,
         video,
       });

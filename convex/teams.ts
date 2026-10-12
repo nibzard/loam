@@ -1,5 +1,5 @@
 import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import {
@@ -16,6 +16,11 @@ import {
   getTeamSubscriptionState,
 } from "./billingHelpers";
 import { generateUniqueToken } from "./security";
+import {
+  deleteVideoMemberGrantsForTeam,
+  deleteVideoMemberGrantsForTeamUser,
+  getGrantedVideoIdsForTeamUser,
+} from "./videoMemberGrantHelpers";
 
 function normalizedEmail(value: string) {
   return value.trim().toLowerCase();
@@ -126,6 +131,10 @@ export const listWithProjects = query({
       memberships.map(async (membership) => {
         const team = await ctx.db.get(membership.teamId);
         if (!team) return null;
+        const grantedVideoIds = await getGrantedVideoIdsForTeamUser(ctx, {
+          teamId: team._id,
+          userClerkId: membership.userClerkId,
+        });
         
         const projects = await ctx.db
           .query("projects")
@@ -145,6 +154,7 @@ export const listWithProjects = query({
                 await Promise.all(
                   videos.map((video) =>
                     canTeamMemberAccessVideo(ctx, {
+                      grantedVideoIds,
                       membership,
                       video,
                     }),
@@ -218,7 +228,7 @@ export const inviteMember = mutation({
       key: `${args.teamId}`,
     });
     if (!inviteLimit.ok) {
-      throw new Error("Too many invite requests. Please wait and try again.");
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Too many invite requests. Please wait and try again." });
     }
 
     const inviteEmail = normalizedEmail(args.email);
@@ -231,7 +241,7 @@ export const inviteMember = mutation({
       .unique();
 
     if (existingMembership) {
-      throw new Error("User is already a member of this team");
+      throw new ConvexError({ code: "BAD_REQUEST", message: "User is already a member of this team" });
     }
 
     const existingInvite = await ctx.db
@@ -294,15 +304,15 @@ export const acceptInvite = mutation({
       .unique();
 
     if (!invite) {
-      throw new Error("Invalid invite");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Invalid invite" });
     }
 
     if (invite.expiresAt < Date.now()) {
-      throw new Error("Invite has expired");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Invite has expired" });
     }
 
     if (invite.email !== normalizedEmail(identityEmail(user))) {
-      throw new Error("Invite is for a different email address");
+      throw new ConvexError({ code: "UNAUTHORIZED", message: "Invite is for a different email address" });
     }
 
     const existingMembership = await ctx.db
@@ -313,7 +323,7 @@ export const acceptInvite = mutation({
       .unique();
 
     if (existingMembership) {
-      throw new Error("You are already a member of this team");
+      throw new ConvexError({ code: "BAD_REQUEST", message: "You are already a member of this team" });
     }
 
     await ctx.db.insert("teamMembers", {
@@ -367,21 +377,25 @@ export const removeMember = mutation({
     const membership = await ctx.db.get(args.membershipId);
 
     if (!team || !membership) {
-      throw new Error("User is not a member of this team");
+      throw new ConvexError({ code: "NOT_FOUND", message: "User is not a member of this team" });
     }
 
     if (membership.teamId !== team._id) {
-      throw new Error("User is not a member of this team");
+      throw new ConvexError({ code: "NOT_FOUND", message: "User is not a member of this team" });
     }
 
     if (team.ownerClerkId === membership.userClerkId) {
-      throw new Error("Cannot remove the team owner");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Cannot remove the team owner" });
     }
 
     if (membership.userClerkId === user.subject) {
-      throw new Error("Cannot remove yourself. Use leave instead.");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Cannot remove yourself. Use leave instead." });
     }
 
+    await deleteVideoMemberGrantsForTeamUser(ctx, {
+      teamId: args.teamId,
+      userClerkId: membership.userClerkId,
+    });
     await ctx.db.delete(membership._id);
   },
 });
@@ -399,11 +413,11 @@ export const updateMemberRole = mutation({
     const membership = await ctx.db.get(args.membershipId);
 
     if (!team || !membership || membership.teamId !== team._id) {
-      throw new Error("User is not a member of this team");
+      throw new ConvexError({ code: "NOT_FOUND", message: "User is not a member of this team" });
     }
 
     if (team.ownerClerkId === membership.userClerkId) {
-      throw new Error("Cannot change the team owner's role");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Cannot change the team owner's role" });
     }
 
     await ctx.db.patch(membership._id, { role: args.role });
@@ -419,9 +433,13 @@ export const leave = mutation({
     if (!team) return;
 
     if (team.ownerClerkId === user.subject) {
-      throw new Error("Team owner cannot leave. Transfer ownership first.");
+      throw new ConvexError({ code: "FORBIDDEN", message: "Team owner cannot leave. Transfer ownership first." });
     }
 
+    await deleteVideoMemberGrantsForTeamUser(ctx, {
+      teamId: args.teamId,
+      userClerkId: user.subject,
+    });
     await ctx.db.delete(membership._id);
   },
 });
@@ -432,9 +450,7 @@ export const deleteTeam = mutation({
     await requireTeamAccess(ctx, args.teamId, "owner");
     const subscriptionState = await getTeamSubscriptionState(ctx, args.teamId);
     if (subscriptionState.hasActiveSubscription) {
-      throw new Error(
-        "Cannot delete a team with an active subscription. Cancel billing first in team settings.",
-      );
+      throw new ConvexError({ code: "FORBIDDEN", message: "Cannot delete a team with an active subscription. Cancel billing first in team settings." });
     }
 
     // Delete all team members
@@ -445,6 +461,8 @@ export const deleteTeam = mutation({
     for (const member of members) {
       await ctx.db.delete(member._id);
     }
+
+    await deleteVideoMemberGrantsForTeam(ctx, args.teamId);
 
     // Delete all invites
     const invites = await ctx.db

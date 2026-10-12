@@ -7,6 +7,7 @@ import type { Id } from "@convex/_generated/dataModel";
 import {
   cacheVideoPosterUrls,
   getCachedVideoPosterUrls,
+  getVideoPosterFallbackUrl,
   type CacheableVideoPoster,
 } from "./videoPosterCache";
 
@@ -14,12 +15,85 @@ type ProjectPosterVideo = CacheableVideoPoster & {
   _id: Id<"videos">;
 };
 
+type FetchedPosterEntry = {
+  muxPlaybackId: string;
+  posterUrl: string;
+};
+
+type FetchedPosterEntries = Record<string, FetchedPosterEntry>;
+
+function fetchedPosterEntriesEqual(
+  left: FetchedPosterEntries,
+  right: FetchedPosterEntries,
+) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every((key) => {
+    const leftEntry = left[key];
+    const rightEntry = right[key];
+    return (
+      leftEntry?.muxPlaybackId === rightEntry?.muxPlaybackId &&
+      leftEntry?.posterUrl === rightEntry?.posterUrl
+    );
+  });
+}
+
+export function pruneFetchedPosterEntries(args: {
+  previous: FetchedPosterEntries;
+  videos: ProjectPosterVideo[] | undefined;
+}) {
+  const videosById = new Map<string, ProjectPosterVideo>(
+    (args.videos ?? []).map((video) => [video._id, video]),
+  );
+  const nextEntries: FetchedPosterEntries = {};
+
+  for (const [videoId, entry] of Object.entries(args.previous)) {
+    const video = videosById.get(videoId);
+    if (!video) {
+      continue;
+    }
+
+    if (
+      video.status !== "ready" ||
+      !video.muxPlaybackId ||
+      getVideoPosterFallbackUrl(video) ||
+      entry.muxPlaybackId !== video.muxPlaybackId
+    ) {
+      continue;
+    }
+
+    nextEntries[videoId] = entry;
+  }
+
+  return nextEntries;
+}
+
+export function getMissingPosterVideoIds(args: {
+  cachedPosterUrls: Record<string, string>;
+  fetchedPosterEntries: FetchedPosterEntries;
+  videos: ProjectPosterVideo[] | undefined;
+}) {
+  return (args.videos ?? [])
+    .filter((video) =>
+      video.status === "ready" &&
+      Boolean(video.muxPlaybackId) &&
+      !getVideoPosterFallbackUrl(video) &&
+      !args.cachedPosterUrls[video._id] &&
+      args.fetchedPosterEntries[video._id]?.muxPlaybackId !== video.muxPlaybackId,
+    )
+    .map((video) => video._id);
+}
+
 export function useProjectVideoPosterUrls(args: {
   projectId: Id<"projects"> | undefined;
   videos: ProjectPosterVideo[] | undefined;
 }) {
   const getProjectVideoPosters = useAction(api.videoActions.getProjectVideoPosters);
-  const [fetchedPosterUrls, setFetchedPosterUrls] = useState<Record<string, string>>({});
+  const [fetchedPosterEntries, setFetchedPosterEntries] = useState<FetchedPosterEntries>({});
   const posterRequestKeyRef = useRef(0);
 
   const cachedPosterUrls = useMemo(
@@ -28,17 +102,17 @@ export function useProjectVideoPosterUrls(args: {
   );
 
   useEffect(() => {
-    const validVideoIds = new Set((args.videos ?? []).map((video) => video._id));
-    setFetchedPosterUrls((previous) => {
-      const nextEntries = Object.entries(previous).filter(([videoId]) =>
-        validVideoIds.has(videoId as Id<"videos">),
-      );
+    setFetchedPosterEntries((previous) => {
+      const nextEntries = pruneFetchedPosterEntries({
+        previous,
+        videos: args.videos,
+      });
 
-      if (nextEntries.length === Object.keys(previous).length) {
+      if (fetchedPosterEntriesEqual(previous, nextEntries)) {
         return previous;
       }
 
-      return Object.fromEntries(nextEntries);
+      return nextEntries;
     });
   }, [args.videos]);
 
@@ -52,14 +126,11 @@ export function useProjectVideoPosterUrls(args: {
     const videosById = new Map<string, ProjectPosterVideo>(
       args.videos.map((video) => [video._id, video]),
     );
-    const missingPosterVideoIds = args.videos
-      .filter((video) =>
-        video.status === "ready" &&
-        Boolean(video.muxPlaybackId) &&
-        !cachedPosterUrls[video._id] &&
-        !fetchedPosterUrls[video._id],
-      )
-      .map((video) => video._id);
+    const missingPosterVideoIds = getMissingPosterVideoIds({
+      cachedPosterUrls,
+      fetchedPosterEntries,
+      videos: args.videos,
+    });
 
     if (missingPosterVideoIds.length === 0) {
       return;
@@ -81,10 +152,17 @@ export function useProjectVideoPosterUrls(args: {
           posters,
           videosById,
         });
-        setFetchedPosterUrls((previous) => ({
+        setFetchedPosterEntries((previous) => ({
           ...previous,
           ...Object.fromEntries(
-            posters.map(({ videoId, posterUrl }) => [videoId, posterUrl]),
+            posters.flatMap(({ videoId, posterUrl }) => {
+              const video = videosById.get(videoId);
+              if (!video?.muxPlaybackId) {
+                return [];
+              }
+
+              return [[videoId, { muxPlaybackId: video.muxPlaybackId, posterUrl }]];
+            }),
           ),
         }));
       } catch (error) {
@@ -99,9 +177,20 @@ export function useProjectVideoPosterUrls(args: {
     args.projectId,
     args.videos,
     cachedPosterUrls,
-    fetchedPosterUrls,
+    fetchedPosterEntries,
     getProjectVideoPosters,
   ]);
+
+  const fetchedPosterUrls = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(fetchedPosterEntries).map(([videoId, entry]) => [
+          videoId,
+          entry.posterUrl,
+        ]),
+      ),
+    [fetchedPosterEntries],
+  );
 
   return useMemo(
     () => ({

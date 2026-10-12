@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { api } from "./_generated/api";
 import { action, query, ActionCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
@@ -175,7 +175,7 @@ export const completeUpload = action({
         | (Doc<"videos"> & { role: string })
         | null;
       if (!video?.uploadSessionToken) {
-        throw new Error("Upload session is missing for this video.");
+        throw new ConvexError({ code: "NOT_FOUND", message: "Upload session is missing for this video." });
       }
       uploadSessionToken = video.uploadSessionToken;
     }
@@ -196,11 +196,11 @@ export const completeUpload = action({
     ]);
 
     if (!video) {
-      throw new Error("Video not found after upload completion.");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found after upload completion." });
     }
 
     if (!context) {
-      throw new Error("Workspace context is unavailable for this video.");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Workspace context is unavailable for this video." });
     }
 
     return {

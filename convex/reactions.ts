@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import {
   identityAvatarUrl,
@@ -6,6 +6,7 @@ import {
   requireUser,
   requireVideoAccess,
 } from "./auth";
+import { isVisibleToShareDiscussion } from "./discussionAudience";
 import { resolveActiveShareGrant } from "./shareAccess";
 
 const ALLOWED_REACTIONS = new Set([
@@ -20,7 +21,7 @@ const ALLOWED_REACTIONS = new Set([
 function normalizeReaction(emoji: string) {
   const normalized = emoji.trim();
   if (!ALLOWED_REACTIONS.has(normalized)) {
-    throw new Error("Unsupported reaction");
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Unsupported reaction" });
   }
   return normalized;
 }
@@ -54,6 +55,7 @@ export const create = mutation({
       userClerkId: user.subject,
       userName: identityName(user),
       userAvatarUrl: identityAvatarUrl(user),
+      audience: "team",
       emoji,
       timestampSeconds: Math.max(0, args.timestampSeconds),
     });
@@ -74,7 +76,7 @@ export const createForPublic = mutation({
     timestampSeconds: v.number(),
   },
   handler: async () => {
-    throw new Error("Public reactions have been removed.");
+    throw new ConvexError({ code: "FORBIDDEN", message: "Public reactions have been removed." });
   },
 });
 
@@ -92,7 +94,9 @@ export const listForShareGrant = query({
       .withIndex("by_video", (q) => q.eq("videoId", video._id))
       .collect();
 
-    return reactions.sort((a, b) => b._creationTime - a._creationTime);
+    return reactions
+      .filter(isVisibleToShareDiscussion)
+      .sort((a, b) => b._creationTime - a._creationTime);
   },
 });
 
@@ -105,11 +109,11 @@ export const createForShareGrant = mutation({
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
     const resolved = await resolveActiveShareGrant(ctx, args.grantToken);
-    if (!resolved) throw new Error("Invalid share grant");
+    if (!resolved) throw new ConvexError({ code: "NOT_FOUND", message: "Invalid share grant" });
 
     const video = await ctx.db.get(resolved.shareLink.videoId);
     if (!video || video.status !== "ready") {
-      throw new Error("Video not found");
+      throw new ConvexError({ code: "NOT_FOUND", message: "Video not found" });
     }
 
     const emoji = normalizeReaction(args.emoji);
@@ -118,6 +122,7 @@ export const createForShareGrant = mutation({
       userClerkId: user.subject,
       userName: identityName(user),
       userAvatarUrl: identityAvatarUrl(user),
+      audience: "share",
       emoji,
       timestampSeconds: Math.max(0, args.timestampSeconds),
     });

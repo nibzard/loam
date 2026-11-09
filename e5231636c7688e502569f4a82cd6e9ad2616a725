@@ -1,0 +1,42 @@
+# Design: Flatten auth chain for video-scoped guards
+
+## Problem
+requireProjectAccess, requireVideoAccess, and
+requireVideoManagementAccess each delegated to requireTeamAccess,
+which called requireUser again. Every project- and video-scoped
+Convex call paid a second getUserIdentity round-trip plus the
+same teamMembers lookup that the caller could have done itself.
+
+## Approach
+Ported the guard-flattening technique from upstream lawn commit
+62c0463 onto the fork guards. Each guard now does one
+getUserIdentity read, its own entity gets, and one direct
+teamMembers by_team_and_user .unique() lookup via the existing
+getTeamMembership helper. The membership and role decisions moved
+into shared module-private helpers
+(requireTeamMembershipOrThrow, requireRoleOrThrow) so the logic
+stays single-sourced across the four guards.
+
+## Key Trade-offs
+- Authorization is NOT flattened: check order is preserved
+  exactly (membership denial, then video grant denial via
+  canTeamMemberAccessVideo, then role denial in requireVideoAccess)
+  so denial codes and messages stay byte-identical for clients.
+- Slight duplication of the lookup wiring across guards is
+  accepted, mirroring upstream, to remove the extra round-trip.
+- requireVideoMemberAccess in convex/videoActions.ts keeps its
+  ctx.runQuery(api.videos.get) shape (actions cannot use ctx.db,
+  and adding a query is blocked: no Convex credentials to
+  regenerate _generated). It inherits the flattening because
+  videos.get calls the flattened requireVideoAccess.
+
+## Verification
+convex/auth.test.ts gained guard-level tests over a fake ctx:
+role decisions (viewer/member/admin/owner/non-member), grant-based
+access on restricted videos, unchanged ConvexError codes and
+messages, and assertions that each guard call performs exactly
+one getUserIdentity read and one teamMembers lookup.
+
+## References
+- Upstream lawn 62c0463 (perf: audit-driven Convex backend
+  optimizations), convex/auth.ts hunk only.

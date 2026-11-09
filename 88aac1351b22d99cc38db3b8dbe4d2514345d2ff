@@ -1,0 +1,35 @@
+# Context
+
+## Background
+This implements Workstream 0 of plans/2026-11-09-upstream-alignment.md,
+born from a 145-commit survey of upstream pingdotgg/lawn (fork is 60
+ahead / 145 behind, merge-base 046c2b2). Full merge is not viable: 88
+conflicts plus three architectural deadlocks (public vs signed playback,
+public watch vs team access, version stacks vs per-video grants).
+
+## Why This Way
+- Exact pins, not carets: react-start 1.168.60 + react-router 1.170.41
+  are upstream's proven pairing. A caret on react-router resolves a
+  newer version that nests a second router-core copy into the client
+  bundle (caught in adversarial review; verified via sourcemaps).
+- @convex-dev/stripe 0.1.4 exact: a caret drifts to 0.1.7 which pulls
+  stripe ^22 alongside our direct stripe ^20 - two SDK copies.
+- CVE-2026-102989 (GHSA-qx66-fv34-fjm8) is an app-wide server-function
+  transport XSS, not a public-route issue; Vercel already refuses
+  builds resolving react-start 1.160.2.
+- Presence hardening (upstream 8d641f9) was NOT ported: our query
+  derives videos server-side, so the crash class never existed. The
+  new comment on listProjectOnlineCounts guards the invariant.
+
+## Gotchas
+- No code may construct stream.mux.com URLs: client never does; server
+  builders require a token at compile time. seo.ts preconnects and test
+  fixtures are the only permitted references.
+- Local `bun run build` fails at prerender on clean HEAD too
+  (environmental; needs deploy env). Validate locally with typecheck,
+  lint, and tests; bundle compilation succeeds before prerender.
+
+## Related
+- plans/2026-11-09-upstream-alignment.md (scoreboard for all 145
+  upstream commits, merge policy, sequenced workstreams)
+- docs/upstream.md (older merge-first guidance, superseded by the plan)

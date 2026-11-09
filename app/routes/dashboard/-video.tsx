@@ -51,7 +51,8 @@ import {
 } from "@/lib/dashboardPlaybackSource";
 import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
-  PLAYBACK_SESSION_REFRESH_LEAD_MS,
+  playbackSessionRefreshDelayMs,
+  playbackSessionRetryDelayMs,
   type PlaybackSession,
 } from "@/lib/playbackSession";
 import { useWatchProgress } from "@/lib/useWatchProgress";
@@ -101,6 +102,10 @@ export default function VideoPage() {
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
   const [discussionSidebarOpen, toggleDiscussionSidebar] = useSidebarOpen();
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
+  const [refreshFailure, setRefreshFailure] = useState<{
+    count: number;
+    attempt: number;
+  } | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [originalPlaybackUrl, setOriginalPlaybackUrl] = useState<string | null>(null);
   const [isLoadingOriginalPlayback, setIsLoadingOriginalPlayback] = useState(false);
@@ -165,6 +170,7 @@ export default function VideoPage() {
     playbackSessionKeyRef.current += 1;
     lastPlaybackAccessErrorAtRef.current = 0;
     setPlaybackSessionFailed(false);
+    setRefreshFailure(null);
   }, [resolvedVideoId, video?.muxPlaybackId]);
 
   const refreshPlaybackSession = useCallback(
@@ -189,6 +195,7 @@ export default function VideoPage() {
         }
 
         setPlaybackSession(session);
+        setRefreshFailure(null);
       } catch {
         if (requestKey !== playbackSessionKeyRef.current) {
           return;
@@ -197,6 +204,13 @@ export default function VideoPage() {
         setPlaybackSessionFailed(true);
         if (!options?.preserveExisting) {
           setPlaybackSession(null);
+        } else {
+          // The kept session may already be expired and the player reports an
+          // access error only once per source, so schedule our own retry.
+          setRefreshFailure((previous) => ({
+            count: (previous?.count ?? 0) + 1,
+            attempt: 0,
+          }));
         }
       } finally {
         if (requestKey === playbackSessionKeyRef.current) {
@@ -254,18 +268,18 @@ export default function VideoPage() {
   }, [activePlaybackUrl, playbackUrl]);
 
   useEffect(() => {
-    if (
-      !resolvedVideoId ||
-      playbackSession?.accessMode !== "signed" ||
-      playbackSession.expiresAt === null
-    ) {
+    if (!resolvedVideoId) {
       return;
     }
 
-    const refreshDelay = Math.max(
-      0,
-      playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
+    const refreshDelay = playbackSessionRefreshDelayMs(
+      playbackSession,
+      Date.now(),
     );
+
+    if (refreshDelay === null) {
+      return;
+    }
 
     const timeout = window.setTimeout(() => {
       void refreshPlaybackSession({ preserveExisting: true });
@@ -275,6 +289,25 @@ export default function VideoPage() {
       window.clearTimeout(timeout);
     };
   }, [playbackSession, refreshPlaybackSession, resolvedVideoId]);
+
+  useEffect(() => {
+    if (!refreshFailure) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      // Bump the attempt so a refresh skipped because another one is in
+      // flight still schedules the next retry.
+      setRefreshFailure((previous) =>
+        previous ? { count: previous.count, attempt: previous.attempt + 1 } : previous,
+      );
+      void refreshPlaybackSession({ preserveExisting: true });
+    }, playbackSessionRetryDelayMs(refreshFailure.count));
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [refreshFailure, refreshPlaybackSession]);
 
   const handlePlaybackAccessError = useCallback(() => {
     if (!resolvedVideoId || playbackSession?.accessMode !== "signed") {

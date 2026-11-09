@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
 import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
-  PLAYBACK_SESSION_REFRESH_LEAD_MS,
+  playbackSessionRefreshDelayMs,
+  playbackSessionRetryDelayMs,
   type PlaybackSession,
 } from "@/lib/playbackSession";
 import { usePublicViewerAuth } from "@/lib/publicViewerAuth";
@@ -55,12 +56,25 @@ export default function SharePage() {
   const getPlaybackSession = useAction(api.videoActions.getSharedPlaybackSession);
   const recordWatch = useAction(api.watchEventActions.recordWatch);
 
-  const [bootstrap, setBootstrap] = useState(loaderBootstrap);
+  const [bootstrapRecord, setBootstrapRecord] = useState({
+    token,
+    bootstrap: loaderBootstrap,
+  });
   const [passwordInput, setPasswordInput] = useState("");
   const [isRequestingGrant, setIsRequestingGrant] = useState(false);
+  // Keyed by share token so a failed grant attempt never leaks across a
+  // token change (upstream 4c6ed8d).
+  const [grantError, setGrantError] = useState<{
+    token: string;
+    message: string;
+  } | null>(null);
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(
     isReadyShareBootstrap(loaderBootstrap) ? loaderBootstrap.playbackSession : null,
   );
+  const [refreshFailure, setRefreshFailure] = useState<{
+    count: number;
+    attempt: number;
+  } | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -73,9 +87,21 @@ export default function SharePage() {
   const { user, isLoaded: isPublicViewerLoaded } = usePublicViewerAuth();
 
   useEffect(() => {
-    setBootstrap(loaderBootstrap);
-  }, [loaderBootstrap]);
+    setBootstrapRecord({ token, bootstrap: loaderBootstrap });
+  }, [loaderBootstrap, token]);
 
+  useEffect(() => {
+    setGrantError(null);
+  }, [token]);
+
+  // Guard against rendering stale data for the wrong context: while the
+  // loader replays a new token, the stored bootstrap still belongs to the
+  // previous share. Treat it as bootstrapping until it catches up.
+  const bootstrap =
+    bootstrapRecord.token === token
+      ? bootstrapRecord.bootstrap
+      : ({ state: "bootstrapping" } as const);
+  const activeGrantError = grantError?.token === token ? grantError.message : null;
   const readyBootstrap = isReadyShareBootstrap(bootstrap) ? bootstrap : null;
   const grantToken = readyBootstrap?.grantToken ?? null;
 
@@ -99,6 +125,7 @@ export default function SharePage() {
   useEffect(() => {
     setPlaybackSession(readyBootstrap?.playbackSession ?? null);
     setPlaybackError(null);
+    setRefreshFailure(null);
     setIsLoadingPlayback(false);
     playbackRefreshInFlightRef.current = false;
     playbackSessionKeyRef.current += 1;
@@ -149,6 +176,7 @@ export default function SharePage() {
         }
 
         setPlaybackSession(session);
+        setRefreshFailure(null);
       } catch {
         if (requestKey !== playbackSessionKeyRef.current) {
           return;
@@ -156,6 +184,13 @@ export default function SharePage() {
 
         if (!options?.preserveExisting) {
           setPlaybackSession(null);
+        } else {
+          // The kept session may already be expired and the player reports an
+          // access error only once per source, so schedule our own retry.
+          setRefreshFailure((previous) => ({
+            count: (previous?.count ?? 0) + 1,
+            attempt: 0,
+          }));
         }
 
         setPlaybackError(options?.failureMessage ?? "Unable to refresh playback session.");
@@ -170,18 +205,18 @@ export default function SharePage() {
   );
 
   useEffect(() => {
-    if (
-      !grantToken ||
-      playbackSession?.accessMode !== "signed" ||
-      playbackSession.expiresAt === null
-    ) {
+    if (!grantToken) {
       return;
     }
 
-    const refreshDelay = Math.max(
-      0,
-      playbackSession.expiresAt - Date.now() - PLAYBACK_SESSION_REFRESH_LEAD_MS,
+    const refreshDelay = playbackSessionRefreshDelayMs(
+      playbackSession,
+      Date.now(),
     );
+
+    if (refreshDelay === null) {
+      return;
+    }
 
     const timeout = window.setTimeout(() => {
       void refreshPlaybackSession({
@@ -194,6 +229,28 @@ export default function SharePage() {
       window.clearTimeout(timeout);
     };
   }, [grantToken, playbackSession, refreshPlaybackSession]);
+
+  useEffect(() => {
+    if (!refreshFailure) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      // Bump the attempt so a refresh skipped because another one is in
+      // flight still schedules the next retry.
+      setRefreshFailure((previous) =>
+        previous ? { count: previous.count, attempt: previous.attempt + 1 } : previous,
+      );
+      void refreshPlaybackSession({
+        failureMessage: "Unable to refresh playback session.",
+        preserveExisting: true,
+      });
+    }, playbackSessionRetryDelayMs(refreshFailure.count));
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [refreshFailure, refreshPlaybackSession]);
 
   const handlePlaybackAccessError = useCallback(() => {
     if (!grantToken || playbackSession?.accessMode !== "signed") {
@@ -314,9 +371,10 @@ export default function SharePage() {
       if (isRequestingGrant) return;
 
       setIsRequestingGrant(true);
+      setGrantError(null);
       try {
         const nextBootstrap = await requestPlaybackBootstrap({ token, password });
-        setBootstrap(nextBootstrap);
+        setBootstrapRecord({ token, bootstrap: nextBootstrap });
 
         if (isReadyShareBootstrap(nextBootstrap)) {
           setPasswordInput("");
@@ -327,12 +385,46 @@ export default function SharePage() {
           prefetchHlsRuntime(nextBootstrap.playbackSession.url);
           prefetchPlaybackSource(nextBootstrap.playbackSession.url);
         }
+      } catch {
+        // Keep the previous bootstrap state; without this the page can sit on
+        // the opening spinner forever with no way to retry (upstream 4c6ed8d).
+        setGrantError({
+          token,
+          message: "Unable to open this shared video. Please try again.",
+        });
       } finally {
         setIsRequestingGrant(false);
       }
     },
     [convex, isRequestingGrant, requestPlaybackBootstrap, token],
   );
+
+  if (bootstrap.state === "bootstrapping" && activeGrantError && !grantToken) {
+    return (
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-[var(--destructive)]/10 flex items-center justify-center mb-4 border-2 border-[var(--destructive)]">
+              <AlertCircle className="h-6 w-6 text-[var(--destructive)]" />
+            </div>
+            <CardTitle>Couldn&apos;t open shared video</CardTitle>
+            <CardDescription>{activeGrantError}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              className="w-full"
+              disabled={isRequestingGrant}
+              onClick={() => {
+                void handleAcquireGrant();
+              }}
+            >
+              {isRequestingGrant ? "Retrying..." : "Try again"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (bootstrap.state === "bootstrapping") {
     return (

@@ -6,6 +6,7 @@ import React from "react";
 import { useConvex } from "convex/react";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmDashboardIndex } from "../../app/routes/dashboard/-index.data";
+import { TeamSwitcher } from "@/components/teams/TeamSwitcher";
 
 function ThemeToggleButton() {
   const { theme, toggleTheme, mounted } = useTheme();
@@ -100,7 +101,8 @@ export function DashboardHeader({
       </div>
 
       {/* User controls — pinned top-right */}
-        <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-4 pl-4 border-l-2 border-[var(--border)]/10 h-8">
+        <div className="row-start-1 col-start-2 sm:col-start-3 flex items-center gap-2 sm:gap-4 pl-4 border-l-2 border-[var(--border)]/10 h-8">
+        <TeamSwitcher />
         <ThemeToggleButton />
         <ThemeLookButton />
         <UserButton

@@ -127,6 +127,14 @@ export default function TeamSettingsPage() {
   const storageLimit = planConfig.storageLimitBytes;
   const storagePct =
     storageLimit > 0 ? Math.min((storageUsed / storageLimit) * 100, 100) : 0;
+  // Warning-state treatment: the bar shifts toward destructive as the team
+  // approaches its storage cap — warning at 90%, destructive at 100%.
+  const storageBarColor =
+    storagePct >= 100
+      ? "bg-[var(--destructive)]"
+      : storagePct >= 90
+        ? "bg-[var(--warning)]"
+        : "bg-[var(--accent)]";
 
   const handleSaveName = async () => {
     if (!editedName.trim()) return;
@@ -321,7 +329,7 @@ export default function TeamSettingsPage() {
               </p>
               <div className="h-1.5 bg-[var(--surface-muted)] mt-2">
                 <div
-                  className="h-full bg-[var(--accent)] transition-all duration-500"
+                  className={`h-full transition-all duration-500 ${storageBarColor}`}
                   style={{ width: `${storagePct}%` }}
                 />
               </div>

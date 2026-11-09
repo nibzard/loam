@@ -102,10 +102,47 @@ export async function collectAcceptedUpToCap<T>(
 }
 
 /**
- * Bounded scan of a project's videos, capped AFTER the restricted-access ACL
- * filter. `accepted` holds at most `LIST_ITEM_CAP` + 1 videos, in index order.
- * The grant set makes each ACL check a pure set lookup, so the scan adds no
- * per-video queries.
+ * Sort orders `videos.list` accepts (upstream 0c2a980's simplified
+ * title-based model, as three states). Keep in sync with
+ * PROJECT_VIDEO_SORTS in app/routes/dashboard/-project.data.ts.
+ */
+export type VideoListSort = "recent" | "title-asc" | "title-desc";
+
+export type ProjectVideoListScan =
+  | { index: "by_project_and_superseded_by_video_id"; order: "desc" }
+  | {
+      index: "by_project_id_and_superseded_by_video_id_and_title";
+      order: "asc" | "desc";
+    };
+
+/**
+ * Pure. Maps a list sort to the index and index order that produce it. Both
+ * indexes start with `projectId` and pin `supersededByVideoId` to undefined,
+ * so every scan yields stack heads only (upstream 9e85de3): superseded
+ * versions never consume the ACL filter or the cap.
+ */
+export function resolveProjectVideoListScan(
+  sort: VideoListSort = "recent",
+): ProjectVideoListScan {
+  if (sort === "title-asc" || sort === "title-desc") {
+    return {
+      index: "by_project_id_and_superseded_by_video_id_and_title",
+      order: sort === "title-asc" ? "asc" : "desc",
+    };
+  }
+  // Recency: within one projectId the remaining index fields tie, so the
+  // scan falls back to creation order; "desc" makes newest first.
+  return {
+    index: "by_project_and_superseded_by_video_id",
+    order: "desc",
+  };
+}
+
+/**
+ * Bounded scan of a project's video stack heads, capped AFTER the
+ * restricted-access ACL filter. `accepted` holds at most `LIST_ITEM_CAP` + 1
+ * videos, in index order. The grant set makes each ACL check a pure set
+ * lookup, so the scan adds no per-video queries.
  */
 export async function collectAccessibleVideosForProjectUpToCap(
   ctx: QueryCtx,
@@ -113,7 +150,7 @@ export async function collectAccessibleVideosForProjectUpToCap(
     projectId: Id<"projects">;
     grantedVideoIds: ReadonlySet<Id<"videos">>;
     membership: Doc<"teamMembers">;
-    order?: "asc" | "desc";
+    sort?: VideoListSort;
     cap?: number;
   },
 ): Promise<{
@@ -121,10 +158,21 @@ export async function collectAccessibleVideosForProjectUpToCap(
   moreRemain: boolean;
   skippedCount: number;
 }> {
-  const query = ctx.db
-    .query("videos")
-    .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-    .order(args.order ?? "asc");
+  const scan = resolveProjectVideoListScan(args.sort);
+  const query =
+    scan.index === "by_project_id_and_superseded_by_video_id_and_title"
+      ? ctx.db
+          .query("videos")
+          .withIndex(scan.index, (q) =>
+            q.eq("projectId", args.projectId).eq("supersededByVideoId", undefined),
+          )
+          .order(scan.order)
+      : ctx.db
+          .query("videos")
+          .withIndex(scan.index, (q) =>
+            q.eq("projectId", args.projectId).eq("supersededByVideoId", undefined),
+          )
+          .order(scan.order);
 
   return await collectAcceptedUpToCap(query, {
     cap: args.cap,

@@ -1,7 +1,14 @@
-import { Id } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { MutationCtx, QueryCtx } from "./_generated/server";
 
 type ReadCtx = QueryCtx | MutationCtx;
+
+/** A grant row's ACL-relevant fields, without the per-video key. */
+export type VideoMemberGrantRow = {
+  teamId: Id<"teams">;
+  userClerkId: string;
+  grantedByClerkId: string;
+};
 
 export async function getGrantedVideoIdsForTeamUser(
   ctx: ReadCtx,
@@ -18,6 +25,39 @@ export async function getGrantedVideoIdsForTeamUser(
     .collect();
 
   return new Set(grants.map((grant) => grant.videoId));
+}
+
+export async function getVideoMemberGrantsForVideo(
+  ctx: ReadCtx,
+  videoId: Id<"videos">,
+): Promise<Array<Doc<"videoMemberGrants">>> {
+  return await ctx.db
+    .query("videoMemberGrants")
+    .withIndex("by_video", (q) => q.eq("videoId", videoId))
+    .collect();
+}
+
+/**
+ * Insert prepared grant rows for one video. Callers derive the rows with the
+ * pure planner in videos.ts (`planInheritedVersionGrants` — it plans the new
+ * version's copied grants plus reciprocal creator grants on older versions)
+ * so the set transformation stays unit-testable without a database.
+ */
+export async function insertVideoMemberGrantRows(
+  ctx: MutationCtx,
+  args: {
+    videoId: Id<"videos">;
+    rows: ReadonlyArray<VideoMemberGrantRow>;
+  },
+) {
+  for (const row of args.rows) {
+    await ctx.db.insert("videoMemberGrants", {
+      videoId: args.videoId,
+      teamId: row.teamId,
+      userClerkId: row.userClerkId,
+      grantedByClerkId: row.grantedByClerkId,
+    });
+  }
 }
 
 export async function deleteVideoMemberGrantsForVideo(

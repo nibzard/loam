@@ -6,6 +6,17 @@ import {
   prewarmSpecs,
 } from "@/lib/convexRouteData";
 
+export type VideoVersionItem = {
+  _id: Id<"videos">;
+  projectId: Id<"projects">;
+  title: string;
+  status: string;
+  thumbnailUrl?: string;
+  versionNumber: number;
+  isLatestVersion: boolean;
+  createdAt: number;
+};
+
 export function getVideoEssentialSpecs(params: {
   teamSlug: string;
   projectId: Id<"projects">;
@@ -62,6 +73,13 @@ export function useVideoData(params: {
     api.reactions.list,
     resolvedVideoId ? { videoId: resolvedVideoId } : "skip",
   );
+  // Newest-first stack listing. Not part of getVideoEssentialSpecs on
+  // purpose: the route-data contract test freezes the prewarmed query set,
+  // so version data streams in on visit instead of on prewarm.
+  const versions = useQuery(
+    api.videos.listVersions,
+    resolvedVideoId ? { videoId: resolvedVideoId } : "skip",
+  );
 
   return {
     context,
@@ -69,6 +87,7 @@ export function useVideoData(params: {
     resolvedProjectId,
     resolvedVideoId,
     video,
+    versions,
     comments,
     commentsThreaded,
     reactions,

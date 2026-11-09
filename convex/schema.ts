@@ -108,8 +108,35 @@ export default defineSchema({
       v.literal("rework"),
       v.literal("done"),
     ),
+    // Version stacks (upstream 9e85de3/0dfb0d1). Existing rows are implicit
+    // v1 videos; these fields materialize when the first additional version
+    // is created, so no backfill is required. versionStackId is an opaque
+    // stable identity and can keep referencing a deleted original v1 row.
+    versionStackId: v.optional(v.id("videos")),
+    versionNumber: v.optional(v.number()),
+    supersededByVideoId: v.optional(v.id("videos")),
   })
     .index("by_project", ["projectId"])
+    // Listings show stack heads only: supersededByVideoId is undefined
+    // exactly on the current head of each stack (and on standalone videos).
+    // shareLinks.videoId tracks the current READY head — it moves to a new
+    // version only when that version turns ready, so share viewers keep the
+    // previous version during an upload (see planShareLinkRepointOnReady).
+    .index("by_project_and_superseded_by_video_id", [
+      "projectId",
+      "supersededByVideoId",
+    ])
+    // Alphabetical sort of the heads of a project (upstream 0c2a980).
+    .index("by_project_id_and_superseded_by_video_id_and_title", [
+      "projectId",
+      "supersededByVideoId",
+      "title",
+    ])
+    .index("by_version_stack_id_and_version_number", [
+      "versionStackId",
+      "versionNumber",
+    ])
+    .index("by_superseded_by_video_id", ["supersededByVideoId"])
     .index("by_public_id", ["publicId"])
     .index("by_mux_upload_id", ["muxUploadId"])
     .index("by_mux_asset_id", ["muxAssetId"])

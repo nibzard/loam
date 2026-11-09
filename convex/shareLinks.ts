@@ -2,9 +2,15 @@ import { MINUTE, RateLimiter } from "@convex-dev/rate-limiter";
 import { v, ConvexError } from "convex/values";
 import { components } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, MutationCtx } from "./_generated/server";
-import { identityName, requireVideoManagementAccess } from "./auth";
+import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import {
+  canManageVideoSharing,
+  getTeamMembership,
+  identityName,
+  requireUser,
+} from "./auth";
 import { generateUniqueToken, hashPassword, verifyPassword } from "./security";
+import { resolveStackVersions } from "./videos";
 import { findShareLinkByToken, issueShareAccessGrant } from "./shareAccess";
 import {
   hasPasswordProtection,
@@ -80,6 +86,86 @@ async function deleteShareAccessGrantsForLink(
   }
 }
 
+/**
+ * Every version of the requested video's stack, oldest to newest. Throws
+ * NOT_FOUND when the stack vanished mid-request.
+ */
+async function requireStackVersions(
+  ctx: QueryCtx | MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const versions = await resolveStackVersions(ctx, videoId);
+  if (!versions) {
+    throw new ConvexError({ code: "NOT_FOUND", message: "Video not found." });
+  }
+  return versions;
+}
+
+/**
+ * Share-link management is stack-wide, mirroring the reciprocal grant model:
+ * the uploader of any version of the stack, or a team admin or owner, may
+ * manage the stack's links. create, list, ensureDefault, remove, and update
+ * all guard through this one helper, so a link is manageable no matter which
+ * version it sits on — including the previous ready head that keeps serving
+ * a stack while a new head uploads.
+ */
+async function requireStackManagementAccess(
+  ctx: QueryCtx | MutationCtx,
+  videoId: Id<"videos">,
+) {
+  const user = await requireUser(ctx);
+  const versions = await requireStackVersions(ctx, videoId);
+
+  const project = await ctx.db.get(versions[0].projectId);
+  if (!project) {
+    throw new ConvexError({ code: "NOT_FOUND", message: "Project not found." });
+  }
+
+  const membership = await getTeamMembership(ctx, {
+    teamId: project.teamId,
+    userClerkId: user.subject,
+  });
+  if (!membership) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have access to this team.",
+    });
+  }
+
+  if (
+    membership.role === "viewer" ||
+    !versions.some((video) => canManageVideoSharing({ membership, video }))
+  ) {
+    throw new ConvexError({
+      code: "FORBIDDEN",
+      message: "You do not have permission to manage sharing for this video.",
+    });
+  }
+
+  return { user, versions };
+}
+
+/**
+ * Collect the share links of a whole stack. Links live on the head, but while
+ * a new head uploads they keep serving the previous ready version, so a
+ * stack-wide read is the only complete one.
+ */
+async function collectStackShareLinks(
+  ctx: QueryCtx | MutationCtx,
+  versions: Doc<"videos">[],
+) {
+  const links: Doc<"shareLinks">[] = [];
+  for (const version of versions) {
+    links.push(
+      ...(await ctx.db
+        .query("shareLinks")
+        .withIndex("by_video", (q) => q.eq("videoId", version._id))
+        .collect()),
+    );
+  }
+  return links;
+}
+
 async function insertShareLink(
   ctx: MutationCtx,
   args: {
@@ -118,7 +204,14 @@ export const create = mutation({
     password: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { user } = await requireVideoManagementAccess(ctx, args.videoId);
+    // Guard stack-wide (any version's manager may manage the stack's links),
+    // then attach the link to the current stack head so it survives later
+    // version cuts.
+    const { user, versions } = await requireStackManagementAccess(
+      ctx,
+      args.videoId,
+    );
+    const head = versions[versions.length - 1];
 
     const expiresAt = args.expiresInDays
       ? Date.now() + args.expiresInDays * 24 * 60 * 60 * 1000
@@ -129,7 +222,7 @@ export const create = mutation({
       : undefined;
 
     return await insertShareLink(ctx, {
-      videoId: args.videoId,
+      videoId: head._id,
       createdByClerkId: user.subject,
       createdByName: identityName(user),
       expiresAt,
@@ -148,12 +241,15 @@ export const ensureDefault = mutation({
     token: v.string(),
   }),
   handler: async (ctx, args) => {
-    const { user } = await requireVideoManagementAccess(ctx, args.videoId);
+    const { user, versions } = await requireStackManagementAccess(
+      ctx,
+      args.videoId,
+    );
+    const head = versions[versions.length - 1];
 
-    const links = await ctx.db
-      .query("shareLinks")
-      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
-      .collect();
+    // Reuse is checked across the stack: the default link may still sit on
+    // the previous ready head while a new head uploads.
+    const links = await collectStackShareLinks(ctx, versions);
 
     const reusableLink = pickReusableDefaultShareLink(links);
     if (reusableLink) {
@@ -164,7 +260,7 @@ export const ensureDefault = mutation({
     }
 
     const created = await insertShareLink(ctx, {
-      videoId: args.videoId,
+      videoId: head._id,
       createdByClerkId: user.subject,
       createdByName: identityName(user),
       allowDownload: false,
@@ -180,12 +276,11 @@ export const ensureDefault = mutation({
 export const list = query({
   args: { videoId: v.id("videos") },
   handler: async (ctx, args) => {
-    await requireVideoManagementAccess(ctx, args.videoId);
-
-    const links = await ctx.db
-      .query("shareLinks")
-      .withIndex("by_video", (q) => q.eq("videoId", args.videoId))
-      .collect();
+    const { versions } = await requireStackManagementAccess(ctx, args.videoId);
+    // Links live on the stack's versions (the head, or the previous ready
+    // head while a new version uploads); listing from any version shows the
+    // same set.
+    const links = await collectStackShareLinks(ctx, versions);
 
     const linksWithCreator = links.map((link) => ({
       _id: link._id,
@@ -212,7 +307,9 @@ export const remove = mutation({
     const link = await ctx.db.get(args.linkId);
     if (!link) throw new ConvexError({ code: "NOT_FOUND", message: "Share link not found" });
 
-    await requireVideoManagementAccess(ctx, link.videoId);
+    // Stack-wide guard: the link may sit on any version of its stack, and
+    // any version's manager may manage the stack's links.
+    await requireStackManagementAccess(ctx, link.videoId);
 
     await deleteShareAccessGrantsForLink(ctx, args.linkId);
     await ctx.db.delete(args.linkId);
@@ -230,7 +327,9 @@ export const update = mutation({
     const link = await ctx.db.get(args.linkId);
     if (!link) throw new ConvexError({ code: "NOT_FOUND", message: "Share link not found" });
 
-    await requireVideoManagementAccess(ctx, link.videoId);
+    // Stack-wide guard: the link may sit on any version of its stack, and
+    // any version's manager may manage the stack's links.
+    await requireStackManagementAccess(ctx, link.videoId);
 
     const updates: Partial<Doc<"shareLinks">> = {};
 

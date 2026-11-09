@@ -49,15 +49,17 @@ Guard for every PORT: new playback paths must sit behind signed sessions and wat
 | PR #67 frontend perf (`4c6ed8d`, `8f98027`) | PORT selectively; SKIP route restructuring (`2bffb78`) | P2 done 2026-11-09, including the adaptive-bitrate half (720p cap kept, floor dropped) |
 | Collapsible discussion sidebar | PORT | P2 done 2026-11-09 (dashboard; share page is a stacked layout, not a side panel) |
 | Frozen-playback 720p recovery, default 720p | default 720p PORTED (`dashboardPlaybackSource.ts`); recovery (`bf041bd`) deferred | P1 done 2026-11-09 |
-| Dashboard sorting + expandable titles | PORT | P3 |
-| Bulk multi-select (move/status/delete) | PORT after sorting | P3 |
-| Video version stacks | PORT as a designed project | P3, highest product value |
+| Dashboard sorting + expandable titles | PORT | P3 done 2026-11-09 (three-state segmented control, persisted, byte-order title indexes) |
+| Bulk multi-select (move/status/delete) | PORT after sorting | P3 done 2026-11-09 (per-item authorization, chunked, budget-capped; workflow status now renders as a badge) |
+| Video version stacks | PORT as a designed project | Done 2026-11-09. Decisions as built: grants copy forward AND the creator gets reciprocal grants on older versions; share links track the current READY head (repoint at markAsReady, never during upload); discussion stays per-version; listVersions filters per-row ACL; delete is batched, stack-aware, budget-checked |
 | Multi-select `updateWorkflowStatusMany` | SKIP the workflow-status half (field still in schema; see Workstream 4) | — |
 | Nested folders | DECIDE (default: defer) | — |
 | Cmd+K palette + full-text search | DECIDE (default: later, after stacks) | — |
 | S3 multipart uploads, 75 GiB | DECIDE (default: keep 5 GiB until desktop goes wider) | — |
-| Team switcher dropdown | PORT (with held-team guard `6421066`) | P3 |
-| Storage-bar warning colors (`b21d25a`) | PORT the warning-state treatment; skip their plan copy | P3 |
+| Team switcher dropdown | PORT (with held-team guard `6421066`) | P3 done 2026-11-09 |
+| Storage-bar warning colors (`b21d25a`) | PORT the warning-state treatment; skip their plan copy | P3 done 2026-11-09 |
+
+Known follow-up from the Workstream 4 review (deferred deliberately): version-upload progress and error notices live on the video page, so navigating away hides them while the upload continues in the background. Fix by routing version-intent uploads through the dashboard layout's upload manager and keeping page rendering as a view over the same items.
 | Self-serve plan upgrades + Stripe reconciliation | DECIDE (default: adopt upgrades, skip auto-reconcile) | — |
 | Public watch enhancements, public downloads | SKIP | — |
 | `ensurePublicPlaybackId` / `createPublicPlaybackId` unsigned playback | SKIP — both functions, not just the first | — |

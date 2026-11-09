@@ -3,6 +3,7 @@ import { useConvex, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { Suspense, useState, useCallback, useEffect, useMemo, useRef } from "react";
+import type { DragEvent as ReactDragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
-import { formatDuration } from "@/lib/utils";
+import { cn, formatBytes, formatDuration } from "@/lib/utils";
 import { buildCommentsCsv, buildCommentsCsvFilename } from "@/lib/commentCsv";
 import { triggerTextDownload } from "@/lib/download";
 import { useVideoPresence } from "@/lib/useVideoPresence";
@@ -24,31 +25,50 @@ import {
   useSidebarOpen,
 } from "@/components/ui/CollapsibleSidebar";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import {
+  AlertCircle,
+  CheckCircle,
   Edit2,
   Check,
   X,
+  Layers3,
   Link as LinkIcon,
+  Loader2,
   MessageSquare,
   MoreVertical,
   Download,
   PanelRightClose,
   PanelRightOpen,
+  Trash2,
+  Upload,
 } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Id } from "@convex/_generated/dataModel";
-import { projectPath, teamHomePath } from "@/lib/routes";
+import { projectPath, teamHomePath, videoPath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
 import {
   selectDashboardPlaybackUrl,
   type DashboardPlaybackSource,
 } from "@/lib/dashboardPlaybackSource";
+import { useDashboardUploadContext } from "@/lib/dashboardUploadContext";
 import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
   playbackSessionRefreshDelayMs,
@@ -57,12 +77,396 @@ import {
   type PlaybackSession,
 } from "@/lib/playbackSession";
 import { useWatchProgress } from "@/lib/useWatchProgress";
+import { findPreferredReplacementVideoId } from "@/lib/videoVersionDeletion";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
-import { useVideoData } from "./-video.data";
+import { prewarmVideo, useVideoData, type VideoVersionItem } from "./-video.data";
+import {
+  useVideoUploadManager,
+  type ManagedUploadItem,
+} from "./-useVideoUploadManager";
 
 const DISCUSSION_SIDEBAR_ID = "video-discussion-sidebar";
 const DISCUSSION_SIDEBAR_LABEL = "discussion sidebar";
+
+const VIDEO_FILE_EXTENSIONS = /\.(mp4|mov|m4v|webm|mkv)$/i;
+
+function isVideoFile(file: File) {
+  return file.type.startsWith("video/") || VIDEO_FILE_EXTENSIONS.test(file.name);
+}
+
+function dragEventHasFiles(event: ReactDragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes("Files");
+}
+
+function versionStatusLabel(status: string) {
+  switch (status) {
+    case "uploading":
+      return "Uploading";
+    case "processing":
+      return "Processing";
+    case "failed":
+      return "Failed";
+    default:
+      return "Ready";
+  }
+}
+
+type VideoWorkflowStatus = "review" | "rework" | "done";
+
+// Mirrors VIDEO_WORKFLOW_STATUS_OPTIONS on the project page (not imported so
+// the two route views stay decoupled). Keep the values, labels, and swatches
+// in sync: the badge must read the same on both surfaces.
+const VIDEO_WORKFLOW_STATUS_OPTIONS: ReadonlyArray<{
+  value: VideoWorkflowStatus;
+  label: string;
+  swatch: string;
+}> = [
+  { value: "review", label: "Review", swatch: "bg-[var(--foreground-muted)]" },
+  { value: "rework", label: "Rework", swatch: "bg-[var(--warning)]" },
+  { value: "done", label: "Done", swatch: "bg-[var(--accent)]" },
+];
+
+/**
+ * Small workflow-status badge (Workstream 4): a square swatch plus a
+ * monospace label, so a status set from the project page's bulk bar is
+ * visible here too. Markup must stay identical to the project page's badge.
+ */
+function WorkflowStatusBadge({ status }: { status: VideoWorkflowStatus }) {
+  const option = VIDEO_WORKFLOW_STATUS_OPTIONS.find(
+    (item) => item.value === status,
+  );
+  if (!option) return null;
+  return (
+    <span
+      title={`Status: ${option.label}`}
+      className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] uppercase tracking-wide text-[var(--foreground-muted)]"
+    >
+      <span
+        className={cn("h-2 w-2 shrink-0", option.swatch)}
+        aria-hidden="true"
+      />
+      {option.label}
+    </span>
+  );
+}
+
+/** After a selector row collapses, move focus to the nearest surviving row. */
+function focusNearestSurvivingVersion(deleteItem: HTMLElement) {
+  const deletingRow = deleteItem.closest<HTMLElement>("[data-version-row]");
+  const rowContainer = deletingRow?.parentElement;
+  if (!deletingRow || !rowContainer) return;
+
+  const versionRows = Array.from(rowContainer.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement && child.dataset.versionRow !== undefined,
+  );
+  const deletingIndex = versionRows.indexOf(deletingRow);
+  if (deletingIndex === -1) return;
+
+  const nearestRow = versionRows[deletingIndex + 1] ?? versionRows[deletingIndex - 1];
+  nearestRow?.querySelector<HTMLElement>("[data-version-radio-item]")?.focus();
+}
+
+function VersionSelectorOption({
+  version,
+  teamSlug,
+  currentVideoId,
+  onSelect,
+  canDelete,
+  deletingVideoId,
+  onDelete,
+}: {
+  version: VideoVersionItem;
+  teamSlug: string;
+  currentVideoId: Id<"videos">;
+  onSelect: (videoId: Id<"videos">) => void;
+  canDelete: boolean;
+  deletingVideoId: Id<"videos"> | null;
+  onDelete: (version: VideoVersionItem, beforeDelete: () => void) => void;
+}) {
+  const convex = useConvex();
+  const isDeleting = deletingVideoId === version._id;
+  const deletionPending = deletingVideoId !== null;
+  const selectionDisabled = isDeleting || deletingVideoId === currentVideoId;
+  const prewarmIntentHandlers = useRoutePrewarmIntent(() =>
+    prewarmVideo(convex, {
+      teamSlug,
+      projectId: version.projectId,
+      videoId: version._id,
+    }),
+  );
+
+  return (
+    <div
+      role="presentation"
+      data-version-row
+      className={cn(
+        "grid max-h-12 grid-cols-[minmax(0,1fr)_auto] overflow-hidden opacity-100 transition-[max-height,opacity,transform] duration-[180ms] motion-reduce:transition-none",
+        isDeleting && "max-h-0 -translate-x-4 opacity-0",
+      )}
+    >
+      <DropdownMenuRadioItem
+        value={version._id}
+        disabled={selectionDisabled}
+        data-version-radio-item
+        className="min-w-0"
+        onSelect={() => onSelect(version._id)}
+        {...prewarmIntentHandlers}
+      >
+        <span className="font-mono font-bold">v{version.versionNumber}</span>
+        <span className="ml-2 truncate text-xs text-[var(--foreground-muted)]">
+          {version._id === currentVideoId
+            ? `${version.isLatestVersion ? "Viewing latest" : "Viewing"} · ${versionStatusLabel(version.status)}`
+            : version.isLatestVersion
+              ? `Latest · ${versionStatusLabel(version.status)}`
+              : versionStatusLabel(version.status)}
+        </span>
+      </DropdownMenuRadioItem>
+      {canDelete && (
+        <DropdownMenuItem
+          disabled={deletionPending}
+          aria-label={`Delete version v${version.versionNumber}`}
+          className="h-10 w-10 justify-center p-0 text-[var(--destructive)] focus:text-[var(--destructive)]"
+          onSelect={(event) => {
+            event.preventDefault();
+            const deleteItem = event.currentTarget;
+            onDelete(version, () => {
+              if (deleteItem instanceof HTMLElement) {
+                focusNearestSurvivingVersion(deleteItem);
+              }
+            });
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          <span className="sr-only">Delete version v{version.versionNumber}</span>
+        </DropdownMenuItem>
+      )}
+    </div>
+  );
+}
+
+function VersionSelector({
+  versions,
+  currentVideoId,
+  currentVersionNumber,
+  teamSlug,
+  onSelect,
+  canDelete,
+  deletingVideoId,
+  onDelete,
+  compact = false,
+}: {
+  versions: VideoVersionItem[] | undefined;
+  currentVideoId: Id<"videos">;
+  currentVersionNumber: number;
+  teamSlug: string;
+  onSelect: (videoId: Id<"videos">) => void;
+  canDelete: boolean;
+  deletingVideoId: Id<"videos"> | null;
+  onDelete: (version: VideoVersionItem, beforeDelete: () => void) => void;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const lastSettledVersionsRef = useRef(versions);
+  useEffect(() => {
+    if (!deletingVideoId) {
+      lastSettledVersionsRef.current = versions;
+    }
+  }, [deletingVideoId, versions]);
+  // While a deletion is in flight the server already renumbered rows; keep
+  // showing the list the user acted on so the deleting row animates out
+  // instead of the whole menu reshuffling mid-click.
+  const displayedVersions = deletingVideoId ? lastSettledVersionsRef.current : versions;
+  const deletingVersionNumber = displayedVersions?.find(
+    (version) => version._id === deletingVideoId,
+  )?.versionNumber;
+  const deletionPending = deletingVideoId !== null;
+  const triggerLabel = deletionPending
+    ? deletingVersionNumber
+      ? `Deleting version v${deletingVersionNumber}`
+      : "Deleting video version"
+    : `Select video version, currently v${currentVersionNumber}`;
+
+  return (
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            size={compact ? "icon" : "sm"}
+            className={compact ? "h-8 w-8" : "font-mono"}
+            aria-label={triggerLabel}
+            aria-busy={deletionPending}
+          >
+            {deletionPending || displayedVersions === undefined ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Layers3 className="h-4 w-4" aria-hidden="true" />
+            )}
+            {!compact && <span>v{currentVersionNumber}</span>}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56" aria-busy={deletionPending}>
+          <DropdownMenuLabel>Video versions</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {displayedVersions === undefined ? (
+            <DropdownMenuItem disabled>Loading versions...</DropdownMenuItem>
+          ) : displayedVersions.length === 0 ? (
+            <DropdownMenuItem disabled>No versions available</DropdownMenuItem>
+          ) : (
+            <DropdownMenuRadioGroup value={currentVideoId}>
+              {displayedVersions.map((version) => (
+                <VersionSelectorOption
+                  key={version._id}
+                  version={version}
+                  teamSlug={teamSlug}
+                  currentVideoId={currentVideoId}
+                  onSelect={onSelect}
+                  canDelete={canDelete}
+                  deletingVideoId={deletingVideoId}
+                  onDelete={onDelete}
+                />
+              ))}
+            </DropdownMenuRadioGroup>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {deletionPending && (
+        <span className="sr-only" role="status" aria-live="polite">
+          {triggerLabel}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** File picker that styles like the header's outline controls. */
+function NewVersionUploadButton({
+  compact = false,
+  onFileSelected,
+}: {
+  compact?: boolean;
+  onFileSelected: (files: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*"
+        className="hidden"
+        onChange={(e) => {
+          const files = e.target.files ? Array.from(e.target.files) : [];
+          if (files.length > 0) {
+            onFileSelected(files);
+          }
+          e.target.value = "";
+        }}
+      />
+      <Button
+        variant="outline"
+        size={compact ? "icon" : "sm"}
+        className={compact ? "h-8 w-8" : undefined}
+        onClick={() => inputRef.current?.click()}
+      >
+        <Upload className="h-4 w-4" aria-hidden="true" />
+        {compact ? (
+          <span className="sr-only">Upload new version</span>
+        ) : (
+          "New version"
+        )}
+      </Button>
+    </>
+  );
+}
+
+function VersionUploadNotice({
+  upload,
+  onCancel,
+  onDismiss,
+  onView,
+}: {
+  upload: ManagedUploadItem;
+  onCancel: () => void;
+  onDismiss: () => void;
+  onView: (videoId: Id<"videos">) => void;
+}) {
+  const isTerminal = upload.status === "complete" || upload.status === "error";
+
+  return (
+    <div className="border-2 border-[var(--border)] bg-[var(--background)] p-4 shadow-[4px_4px_0px_0px_var(--shadow-color)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-[var(--foreground)]">
+            {upload.file.name}
+          </p>
+          <p className="mt-0.5 font-mono text-xs text-[var(--foreground-muted)]">
+            New version · {formatBytes(upload.file.size)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {upload.status === "complete" && (
+            <CheckCircle className="h-5 w-5 text-[var(--accent)]" aria-hidden="true" />
+          )}
+          {upload.status === "error" && (
+            <AlertCircle className="h-5 w-5 text-[var(--destructive)]" aria-hidden="true" />
+          )}
+          {isTerminal ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
+              onClick={onDismiss}
+              aria-label="Dismiss new version upload"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
+              onClick={onCancel}
+              aria-label="Cancel new version upload"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {upload.status === "uploading" && (
+        <div className="mt-3 space-y-1.5">
+          <Progress value={upload.progress} />
+          <div className="flex justify-between font-mono text-xs text-[var(--foreground-muted)]">
+            <span>
+              {upload.bytesPerSecond ? `${formatBytes(upload.bytesPerSecond)}/s` : "—"}
+            </span>
+            <span>{upload.progress}%</span>
+          </div>
+        </div>
+      )}
+
+      {upload.status === "complete" && upload.videoId && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-3 w-full"
+          onClick={() => onView(upload.videoId as Id<"videos">)}
+        >
+          View version
+        </Button>
+      )}
+
+      {upload.status === "error" && upload.error && (
+        <p className="mt-2 text-xs text-[var(--destructive)]">{upload.error}</p>
+      )}
+    </div>
+  );
+}
 
 export default function VideoPage() {
   const params = useParams({ strict: false });
@@ -80,6 +484,7 @@ export default function VideoPage() {
     resolvedProjectId,
     resolvedVideoId,
     video,
+    versions,
     comments,
     commentsThreaded,
     reactions,
@@ -89,11 +494,22 @@ export default function VideoPage() {
     videoId,
   });
   const updateVideo = useMutation(api.videos.update);
+  const deleteVideo = useMutation(api.videos.remove);
   const getPlaybackSession = useAction(api.videoActions.getPlaybackSession);
   const getOriginalPlaybackUrl = useAction(api.videoActions.getOriginalPlaybackUrl);
   const getDownloadUrl = useAction(api.videoActions.getDownloadUrl);
   const recordWatch = useAction(api.watchEventActions.recordWatch);
   const createReaction = useMutation(api.reactions.create);
+  // Version uploads run through a page-local manager instance: their progress
+  // cards belong to this stack's page. Standalone uploads keep flowing through
+  // the dashboard layout's manager and its toasts.
+  const {
+    uploads: versionUploads,
+    uploadFilesAsNewVersion,
+    cancelUpload: cancelVersionUpload,
+    dismissUpload: dismissVersionUpload,
+  } = useVideoUploadManager();
+  const { requestUpload } = useDashboardUploadContext();
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -101,6 +517,13 @@ export default function VideoPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<Id<"comments"> | undefined>();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const [deletingVideoId, setDeletingVideoId] = useState<Id<"videos"> | null>(null);
+  const [deleteNotice, setDeleteNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [versionDropActive, setVersionDropActive] = useState(false);
+  const [pendingVersionFile, setPendingVersionFile] = useState<File | null>(null);
   const [discussionSidebarOpen, toggleDiscussionSidebar] = useSidebarOpen();
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [refreshFailure, setRefreshFailure] = useState<{
@@ -115,6 +538,8 @@ export default function VideoPage() {
   const [theaterOpen, setTheaterOpen] = useState(false);
   const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
+  const deletePendingRef = useRef(false);
+  const versionDragDepthRef = useRef(0);
   const playbackRefreshInFlightRef = useRef(false);
   const playbackSessionKeyRef = useRef(0);
   const lastPlaybackAccessErrorAtRef = useRef(0);
@@ -157,8 +582,14 @@ export default function VideoPage() {
     }
   }, [shouldCanonicalize, context, navigate]);
 
+  // Switching to another version of the stack (or another video) must not
+  // carry player state across the boundary: a stale playhead would timestamp
+  // the first comment on the new version, and a stale highlight would point
+  // at a comment that may not exist there.
   useEffect(() => {
     setWatchCapKind(null);
+    setCurrentTime(0);
+    setHighlightedCommentId(undefined);
   }, [resolvedVideoId]);
 
   useEffect(() => {
@@ -405,11 +836,197 @@ export default function VideoPage() {
   const handleExportComments = useCallback(() => {
     if (!video || !commentsThreaded?.length) return;
 
+    // The stack's name (head title) labels the file; a version marker keeps
+    // exports of older versions distinguishable, since comments stay
+    // per-version.
+    const stackTitle =
+      versions?.find((version) => version.isLatestVersion)?.title ?? video.title;
     triggerTextDownload(
       buildCommentsCsv(commentsThreaded),
-      buildCommentsCsvFilename(video.title),
+      buildCommentsCsvFilename(
+        video.isLatestVersion
+          ? stackTitle
+          : `${stackTitle} v${video.versionNumber}`,
+      ),
     );
-  }, [commentsThreaded, video]);
+  }, [commentsThreaded, versions, video]);
+
+  useEffect(() => {
+    if (!deleteNotice || deleteNotice.tone !== "success") return;
+
+    const timeout = window.setTimeout(() => setDeleteNotice(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [deleteNotice]);
+
+  const handleVersionSelected = useCallback(
+    (selectedVideoId: Id<"videos">) => {
+      if (!resolvedProjectId || selectedVideoId === resolvedVideoId) return;
+      navigate({
+        to: videoPath(resolvedTeamSlug, resolvedProjectId, selectedVideoId),
+      });
+    },
+    [navigate, resolvedProjectId, resolvedTeamSlug, resolvedVideoId],
+  );
+
+  const handleNewVersionSelected = useCallback(
+    (files: File[]) => {
+      const file = files.find(isVideoFile);
+      if (!file || !resolvedVideoId || !resolvedProjectId) return;
+      void uploadFilesAsNewVersion(resolvedVideoId, resolvedProjectId, [file]);
+    },
+    [resolvedProjectId, resolvedVideoId, uploadFilesAsNewVersion],
+  );
+
+  const handleViewUploadedVersion = useCallback(
+    (uploadedVideoId: Id<"videos">) => {
+      if (!resolvedProjectId) return;
+      prewarmVideo(convex, {
+        teamSlug: resolvedTeamSlug,
+        projectId: resolvedProjectId,
+        videoId: uploadedVideoId,
+      });
+      navigate({
+        to: videoPath(resolvedTeamSlug, resolvedProjectId, uploadedVideoId),
+      });
+    },
+    [convex, navigate, resolvedProjectId, resolvedTeamSlug],
+  );
+
+  const handleDeleteVersion = useCallback(
+    async (
+      versionToDelete: VideoVersionItem,
+      animateSelectorRow = true,
+      beforeDelete?: () => void,
+    ) => {
+      if (deletePendingRef.current || !resolvedVideoId || !resolvedProjectId) return;
+      const isCurrentVersion = versionToDelete._id === resolvedVideoId;
+      const stackSize = versions?.length ?? 1;
+      const deletedWithStackCopy =
+        stackSize > 1
+          ? "Comments on this version will be deleted."
+          : "Its comments and share links will be deleted.";
+      const versionChangeCopy =
+        stackSize > 1
+          ? versionToDelete.isLatestVersion
+            ? " The previous version will become latest."
+            : " Later versions will be renumbered."
+          : "";
+      const destinationCopy = isCurrentVersion
+        ? animateSelectorRow
+          ? " You will be taken to the nearest remaining version."
+          : " You will return to the project."
+        : "";
+      if (
+        !window.confirm(
+          `Delete ${versionToDelete.isLatestVersion && stackSize > 1 ? "latest " : ""}version v${versionToDelete.versionNumber}? ${deletedWithStackCopy}${versionChangeCopy}${destinationCopy} This can't be undone.`,
+        )
+      ) {
+        return;
+      }
+
+      beforeDelete?.();
+      deletePendingRef.current = true;
+      setDeletingVideoId(versionToDelete._id);
+      setDeleteNotice(null);
+
+      try {
+        // Non-current deletions keep the page mounted, so their request can
+        // run while the selector row animates out. Deleting the current
+        // version must navigate before the row disappears or the route races
+        // the deletion (upstream 9a2c070).
+        const requestDelete = () =>
+          deleteVideo({ videoId: versionToDelete._id }).then(
+            (result) => ({ ok: true as const, result }),
+            (error: unknown) => ({ ok: false as const, error }),
+          );
+        const nonCurrentDeleteRequest = isCurrentVersion ? null : requestDelete();
+
+        if (animateSelectorRow) {
+          const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (!reduceMotion) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
+          }
+        }
+
+        const preferredReplacementVideoId =
+          isCurrentVersion && animateSelectorRow
+            ? findPreferredReplacementVideoId(versions, versionToDelete._id)
+            : null;
+
+        if (isCurrentVersion) {
+          if (preferredReplacementVideoId) {
+            prewarmVideo(convex, {
+              teamSlug: resolvedTeamSlug,
+              projectId: resolvedProjectId,
+              videoId: preferredReplacementVideoId,
+            });
+            await navigate({
+              to: videoPath(resolvedTeamSlug, resolvedProjectId, preferredReplacementVideoId),
+              replace: true,
+            });
+          } else {
+            await navigate({
+              to: projectPath(resolvedTeamSlug, resolvedProjectId),
+              replace: true,
+            });
+          }
+        }
+
+        const outcome = await (nonCurrentDeleteRequest ?? requestDelete());
+        if (outcome.ok === false) {
+          throw outcome.error;
+        }
+
+        const result = outcome.result;
+        setDeleteNotice({
+          tone: "success",
+          message:
+            stackSize > 1
+              ? versionToDelete.isLatestVersion
+                ? `Version v${versionToDelete.versionNumber} deleted. The previous version is now latest.`
+                : `Version v${versionToDelete.versionNumber} deleted. Later versions were renumbered.`
+              : "Video deleted. Returning to the project.",
+        });
+
+        if (
+          isCurrentVersion &&
+          result.replacementVideoId !== preferredReplacementVideoId
+        ) {
+          if (result.replacementVideoId) {
+            prewarmVideo(convex, {
+              teamSlug: resolvedTeamSlug,
+              projectId: resolvedProjectId,
+              videoId: result.replacementVideoId,
+            });
+            await navigate({
+              to: videoPath(resolvedTeamSlug, resolvedProjectId, result.replacementVideoId),
+              replace: true,
+            });
+          } else {
+            await navigate({
+              to: projectPath(resolvedTeamSlug, resolvedProjectId),
+              replace: true,
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Failed to delete video version:", error);
+        if (isCurrentVersion) {
+          // The page may already have navigated away; an alert survives that.
+          window.alert("Couldn't delete that video version. Please try again.");
+        } else {
+          setDeleteNotice({
+            tone: "error",
+            message: "Couldn't delete that video version. Please try again.",
+          });
+        }
+      } finally {
+        deletePendingRef.current = false;
+        setDeletingVideoId(null);
+      }
+    },
+    [convex, deleteVideo, navigate, resolvedProjectId, resolvedTeamSlug, resolvedVideoId, versions],
+  );
 
   const discussionSidebarToggleLabel = resolveToggleLabel({
     isOpen: discussionSidebarOpen,
@@ -418,8 +1035,12 @@ export default function VideoPage() {
 
   const handleSaveTitle = async () => {
     if (!editedTitle.trim() || !video || !resolvedVideoId) return;
+    // The stack's title lives on the head row; an edit always writes there so
+    // the heads-only project listing shows the change.
+    const stackHeadVideoId =
+      versions?.find((version) => version.isLatestVersion)?._id ?? resolvedVideoId;
     try {
-      await updateVideo({ videoId: resolvedVideoId, title: editedTitle.trim() });
+      await updateVideo({ videoId: stackHeadVideoId, title: editedTitle.trim() });
       setIsEditingTitle(false);
     } catch (error) {
       console.error("Failed to update title:", error);
@@ -428,7 +1049,9 @@ export default function VideoPage() {
 
   const startEditingTitle = () => {
     if (video) {
-      setEditedTitle(video.title);
+      setEditedTitle(
+        versions?.find((version) => version.isLatestVersion)?.title ?? video.title,
+      );
       setIsEditingTitle(true);
     }
   };
@@ -455,7 +1078,74 @@ export default function VideoPage() {
     (video.uploadedByClerkId === userId ||
       video.role === "admin" ||
       video.role === "owner");
+  // `videos.remove` requires an admin team role; the per-row delete buttons
+  // in the version selector use the same gate.
+  const canDeleteVersions = video.role === "admin" || video.role === "owner";
   const canComment = true;
+  const showVersionSelector = (versions?.length ?? 0) > 1;
+  // Stack-level metadata comes from the head; version-level details (status,
+  // uploader, duration, discussion) stay per-version.
+  const stackTitle =
+    versions?.find((version) => version.isLatestVersion)?.title ?? video.title;
+  const nextVersionNumber = versions?.[0] ? versions[0].versionNumber + 1 : null;
+
+  // Dropping a file on the video page offers to cut it as the next version.
+  // The handlers stop propagation so the dashboard layout's global drop
+  // handler does not also treat it as a standalone project upload.
+  const handleVersionDragEnter = (event: ReactDragEvent) => {
+    if (!canManageSharing || !dragEventHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    versionDragDepthRef.current += 1;
+    setVersionDropActive(true);
+  };
+
+  const handleVersionDragOver = (event: ReactDragEvent) => {
+    if (!canManageSharing || !dragEventHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setVersionDropActive(true);
+  };
+
+  const handleVersionDragLeave = (event: ReactDragEvent) => {
+    if (!canManageSharing || !dragEventHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    versionDragDepthRef.current = Math.max(0, versionDragDepthRef.current - 1);
+    if (versionDragDepthRef.current === 0) {
+      setVersionDropActive(false);
+    }
+  };
+
+  const handleVersionDrop = (event: ReactDragEvent) => {
+    if (!canManageSharing || !dragEventHasFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    versionDragDepthRef.current = 0;
+    setVersionDropActive(false);
+
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    const videoFiles = files.filter(isVideoFile);
+    if (files.length !== 1 || videoFiles.length !== 1) {
+      window.alert("Drop one video at a time to upload it as a new version.");
+      return;
+    }
+    setPendingVersionFile(videoFiles[0]);
+  };
+
+  const confirmPendingVersionUpload = () => {
+    if (!pendingVersionFile || !resolvedVideoId || !resolvedProjectId) return;
+    const file = pendingVersionFile;
+    setPendingVersionFile(null);
+    void uploadFilesAsNewVersion(resolvedVideoId, resolvedProjectId, [file]);
+  };
+
+  const uploadPendingFileAsSeparateVideo = () => {
+    if (!pendingVersionFile || !resolvedProjectId) return;
+    const file = pendingVersionFile;
+    setPendingVersionFile(null);
+    requestUpload([file], resolvedProjectId);
+  };
   const playerFallback = (
     <div className="flex-1 flex items-center justify-center">
       {video.status === "ready" && !playbackUrl ? (
@@ -492,6 +1182,15 @@ export default function VideoPage() {
 
   return (
     <VideoEditorLayout open={theaterOpen} onToggle={toggleTheater}>
+      {/* `display: contents` keeps the editor layout's flex children intact
+          while scoping the version-drop handlers to the video page. */}
+      <div
+        className="contents"
+        onDragEnter={handleVersionDragEnter}
+        onDragOver={handleVersionDragOver}
+        onDragLeave={handleVersionDragLeave}
+        onDrop={handleVersionDrop}
+      >
       {/* Header */}
       <DashboardHeader paths={[
         {
@@ -531,8 +1230,14 @@ export default function VideoPage() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="truncate max-w-[150px] sm:max-w-[300px]">{video.title}</span>
-              {canEdit && (
+              <span className="truncate max-w-[150px] sm:max-w-[300px]">{stackTitle}</span>
+              {showVersionSelector && !video.isLatestVersion && (
+                <span className="font-mono text-xs text-[var(--foreground-muted)]">
+                  v{video.versionNumber}
+                </span>
+              )}
+              <WorkflowStatusBadge status={video.workflowStatus} />
+              {canEdit && video.isLatestVersion && (
                 <Button
                   size="icon"
                   variant="ghost"
@@ -567,14 +1272,34 @@ export default function VideoPage() {
           <VideoWatchers watchers={watchers} />
         </div>
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0 border-l-2 border-[var(--border)]/20 pl-3 ml-1">
+          {showVersionSelector && (
+            <VersionSelector
+              versions={versions}
+              currentVideoId={resolvedVideoId}
+              currentVersionNumber={video.versionNumber}
+              teamSlug={resolvedTeamSlug}
+              onSelect={handleVersionSelected}
+              canDelete={canDeleteVersions}
+              deletingVideoId={deletingVideoId}
+              onDelete={(versionToDelete, beforeDelete) =>
+                void handleDeleteVersion(versionToDelete, true, beforeDelete)
+              }
+            />
+          )}
+          {canManageSharing && (
+            <NewVersionUploadButton
+              onFileSelected={handleNewVersionSelected}
+            />
+          )}
               {canManageSharing ? (
-                <Button variant="outline" onClick={() => setShareDialogOpen(true)}>
+                <Button variant="outline" size="sm" onClick={() => setShareDialogOpen(true)}>
                   <LinkIcon className="mr-1.5 h-4 w-4" />
                   Share
             </Button>
           ) : null}
           <Button
             variant="outline"
+            size="sm"
             className="lg:hidden"
             onClick={() => setMobileCommentsOpen(true)}
           >
@@ -602,6 +1327,27 @@ export default function VideoPage() {
 
         {/* Mobile: compact actions */}
         <div className="flex sm:hidden items-center gap-2">
+          {showVersionSelector && (
+            <VersionSelector
+              versions={versions}
+              currentVideoId={resolvedVideoId}
+              currentVersionNumber={video.versionNumber}
+              teamSlug={resolvedTeamSlug}
+              onSelect={handleVersionSelected}
+              canDelete={canDeleteVersions}
+              deletingVideoId={deletingVideoId}
+              onDelete={(versionToDelete, beforeDelete) =>
+                void handleDeleteVersion(versionToDelete, true, beforeDelete)
+              }
+              compact
+            />
+          )}
+          {canManageSharing && (
+            <NewVersionUploadButton
+              compact
+              onFileSelected={handleNewVersionSelected}
+            />
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="h-8 w-8">
@@ -619,6 +1365,30 @@ export default function VideoPage() {
               <MessageSquare className="mr-2 h-4 w-4" />
               Comments{comments && comments.length > 0 ? ` (${comments.length})` : ""}
             </DropdownMenuItem>
+            {canDeleteVersions && !showVersionSelector && (
+              <DropdownMenuItem
+                className="text-[var(--destructive)] focus:text-[var(--destructive)]"
+                disabled={deletingVideoId !== null}
+                onSelect={() =>
+                  void handleDeleteVersion(
+                    {
+                      _id: resolvedVideoId,
+                      projectId: resolvedProjectId,
+                      title: video.title,
+                      status: video.status,
+                      thumbnailUrl: video.thumbnailUrl,
+                      versionNumber: video.versionNumber,
+                      isLatestVersion: video.isLatestVersion,
+                      createdAt: video._creationTime,
+                    },
+                    false,
+                  )
+                }
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete video (v{video.versionNumber})
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -811,6 +1581,95 @@ export default function VideoPage() {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
       />
+
+      {versionDropActive && (
+        <div className="pointer-events-none fixed inset-0 z-40">
+          <div className="absolute inset-0 bg-[var(--border)]/20" />
+          <div className="absolute inset-4 flex items-center justify-center border-4 border-dashed border-[var(--accent)] bg-[var(--accent)]/10">
+            <p className="border-2 border-[var(--border)] bg-[var(--background)] px-4 py-2 text-sm font-bold text-[var(--foreground)]">
+              Drop one video to upload it as a new version
+            </p>
+          </div>
+        </div>
+      )}
+
+      <Dialog
+        open={pendingVersionFile !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingVersionFile(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Upload as a new version?</DialogTitle>
+            <DialogDescription>
+              {pendingVersionFile
+                ? `${pendingVersionFile.name} · ${formatBytes(pendingVersionFile.size)}`
+                : ""}
+              {nextVersionNumber !== null
+                ? ` becomes v${nextVersionNumber} of "${stackTitle}".`
+                : ` becomes the next version of "${stackTitle}".`}{" "}
+              Existing share links keep working. Comments stay on the version
+              they were posted on.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Button onClick={confirmPendingVersionUpload}>
+              <Upload className="h-4 w-4" />
+              {nextVersionNumber !== null
+                ? `Upload as v${nextVersionNumber}`
+                : "Upload as new version"}
+            </Button>
+            <Button variant="outline" onClick={uploadPendingFileAsSeparateVideo}>
+              Upload as separate video
+            </Button>
+            <Button variant="ghost" onClick={() => setPendingVersionFile(null)}>
+              Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {versionUploads.length > 0 && (
+        <div className="fixed bottom-4 left-4 right-4 z-50 space-y-2 sm:left-auto sm:right-4 sm:w-full sm:max-w-sm">
+          {versionUploads.map((upload) => (
+            <VersionUploadNotice
+              key={upload.id}
+              upload={upload}
+              onCancel={() => cancelVersionUpload(upload.id)}
+              onDismiss={() => dismissVersionUpload(upload.id)}
+              onView={handleViewUploadedVersion}
+            />
+          ))}
+        </div>
+      )}
+
+      {deleteNotice && (
+        <div
+          className={cn(
+            "fixed top-4 right-4 z-50 flex items-center gap-3 border-2 px-3 py-2 text-sm font-bold shadow-[4px_4px_0px_0px_var(--shadow-color)]",
+            deleteNotice.tone === "error"
+              ? "border-[var(--destructive)] bg-[var(--background)] text-[var(--destructive)]"
+              : "border-[var(--border)] bg-[var(--background)] text-[var(--foreground)]",
+          )}
+          role={deleteNotice.tone === "error" ? "alert" : "status"}
+          aria-live={deleteNotice.tone === "error" ? "assertive" : "polite"}
+        >
+          <span>{deleteNotice.message}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
+            onClick={() => setDeleteNotice(null)}
+            aria-label="Dismiss notice"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+      </div>
     </VideoEditorLayout>
   );
 }

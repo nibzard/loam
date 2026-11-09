@@ -173,6 +173,57 @@ test("watch progress machine clears pending state when no playback target is ava
   });
 });
 
+test("watch progress machine bills nothing for the first sample after a reset", () => {
+  const machine = createWatchProgressMachine();
+
+  machine.trackTime({
+    enabled: true,
+    flushThresholdSeconds: 5,
+    maxDeltaSeconds: 10,
+    time: 0,
+  });
+  machine.trackTime({
+    enabled: true,
+    flushThresholdSeconds: 5,
+    maxDeltaSeconds: 10,
+    time: 6,
+  });
+
+  // A version switch resets the machine: the pending seconds were flushed to
+  // the old target by the old closures, and the first sample on the new
+  // target only anchors lastTime so it cannot bill anything.
+  machine.reset();
+
+  assert.equal(
+    machine.trackTime({
+      enabled: true,
+      flushThresholdSeconds: 5,
+      maxDeltaSeconds: 10,
+      time: 100,
+    }),
+    false,
+  );
+  assert.deepEqual(machine.snapshot(), {
+    generation: 1,
+    isCapReached: false,
+    isFlushing: false,
+    lastTime: 100,
+    pendingWatchSeconds: 0,
+  });
+
+  // Only deltas after the anchor accrue again.
+  assert.equal(
+    machine.trackTime({
+      enabled: true,
+      flushThresholdSeconds: 5,
+      maxDeltaSeconds: 10,
+      time: 103,
+    }),
+    false,
+  );
+  assert.equal(machine.snapshot().pendingWatchSeconds, 3);
+});
+
 test("watch progress machine bills fast shuttle at wall-clock time", () => {
   const machine = createWatchProgressMachine();
 

@@ -643,7 +643,9 @@ export const markUploadComplete = action({
       return { outcome: "already_ready", success: true };
     }
     if (processing.outcome === "retry_required") {
-      throw new ConvexError({ code: "BAD_REQUEST", message: "Upload session is no longer pending. Request a new upload URL." });
+      // Dismiss-only UI: the message must be actionable on its own, with no
+      // button to press. The retry is to upload the file again.
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Upload session expired. Upload the file again to retry." });
     }
     if (processing.outcome === "missing_object") {
       throw new ConvexError({ code: "NOT_FOUND", message: "Original bucket file not found for this video" });

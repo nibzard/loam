@@ -2,7 +2,7 @@
 import { useConvex, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +34,7 @@ import { Id } from "@convex/_generated/dataModel";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prewarmProject } from "./-project.data";
 import { useTeamData } from "./-team.data";
+import { useHeldWhileLoading } from "@/lib/useHeldWhileLoading";
 import { DashboardHeader } from "@/components/DashboardHeader";
 
 type TeamProjectCardProps = {
@@ -124,7 +125,12 @@ export default function TeamPage() {
   const pathname = useLocation().pathname;
   const teamSlug = typeof params.teamSlug === "string" ? params.teamSlug : "";
 
-  const { context, team, projects, billing } = useTeamData({ teamSlug });
+  const {
+    context: loadedContext,
+    team: loadedTeam,
+    projects: loadedProjects,
+    billing: loadedBilling,
+  } = useTeamData({ teamSlug });
   const createProject = useMutation(api.projects.create);
   const deleteProject = useMutation(api.projects.remove);
 
@@ -133,8 +139,37 @@ export default function TeamPage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Switch teams as one unit, holding the previous team briefly so fast
+  // switches don't flash a loading state.
+  const loaded = useMemo(() => {
+    if (loadedContext === undefined) return undefined;
+    if (
+      loadedTeam &&
+      (loadedProjects === undefined || loadedBilling === undefined)
+    ) {
+      return undefined;
+    }
+    return {
+      context: loadedContext,
+      team: loadedTeam,
+      projects: loadedProjects,
+      billing: loadedBilling,
+    };
+  }, [loadedContext, loadedTeam, loadedProjects, loadedBilling]);
+
+  // Held data is stale by definition: it belongs to the team the user just
+  // switched away from. It is safe to render, but it must never drive side
+  // effects. Redirects are gated on !isHeld below. Uploads never see it —
+  // the upload manager resolves its project from route params and
+  // projects.listUploadTargets, neither of which is held.
+  const { value: held, isHeld } = useHeldWhileLoading(loaded);
+  const context = held?.context;
+  const team = held?.team;
+  const projects = held?.projects;
+  const billing = held?.billing;
+
   const shouldCanonicalize =
-    !!context && !context.isCanonical && pathname !== context.canonicalPath;
+    !!context && !isHeld && !context.isCanonical && pathname !== context.canonicalPath;
 
   useEffect(() => {
     if (shouldCanonicalize && context) {

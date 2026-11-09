@@ -44,9 +44,9 @@ Guard for every PORT: new playback paths must sit behind signed sessions and wat
 | Editor shuttle + theater + Final Cut shortcuts | PORT | P1 — already on `todo.md` |
 | Comment CSV export, URL autolinking | PORT (audience-aware) | P1 done 2026-11-09 |
 | Upload error messages via `ConvexError`, m4v | PORT (map to our coded errors) | P1 done 2026-11-09 |
-| Mux status reconciliation, stale-upload sweep | PORT onto `uploadSessions` + signed layer | P2 |
-| Auth-chain flattening, bounded reads, pagination | PORT the technique | P2 |
-| PR #67 frontend perf (`4c6ed8d`, `8f98027`) | PORT selectively; SKIP route restructuring (`2bffb78`) | P2 |
+| Mux status reconciliation, stale-upload sweep | PORT onto `uploadSessions` + signed layer | Designed 2026-11-09 in `plans/2026-11-09-mux-sweeps-design.md`; implementation blocked on Convex credentials (codegen) — lands with deploy access |
+| Auth-chain flattening, bounded reads, pagination | PORT the technique | P2 done 2026-11-09; real pagination deferred — list caps at 100 now surface "Showing the first 100" and "100+" count labels instead of truncating silently |
+| PR #67 frontend perf (`4c6ed8d`, `8f98027`) | PORT selectively; SKIP route restructuring (`2bffb78`) | P2 done 2026-11-09, including the adaptive-bitrate half (720p cap kept, floor dropped) |
 | Collapsible discussion sidebar | PORT | P2 done 2026-11-09 (dashboard; share page is a stacked layout, not a side panel) |
 | Frozen-playback 720p recovery, default 720p | default 720p PORTED (`dashboardPlaybackSource.ts`); recovery (`bf041bd`) deferred | P1 done 2026-11-09 |
 | Dashboard sorting + expandable titles | PORT | P3 |
@@ -66,7 +66,7 @@ Guard for every PORT: new playback paths must sit behind signed sessions and wat
 | Homepage/marketing polish, Geist fonts | SKIP | — |
 | Prettier repo-wide reformat | SKIP (revisit only if porting volume grows) | — |
 | Upstream dev tooling (Conductor, `dev.sh`, `convex-local-setup.sh`, Convex AI files) | SKIP: files absent here; ignore in monthly triage | — |
-| Vitest + Playwright harness | PORT selectively | P2 |
+| Vitest + Playwright harness | Playwright PORTED; Vitest skipped deliberately — `bun test` (node:test) already runs the unit suites, a second unit runner is churn | P2 done 2026-11-09 |
 
 ## Workstream 0: security and stability (now)
 

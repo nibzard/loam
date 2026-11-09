@@ -33,7 +33,7 @@ test("buildSignedPlaybackSession includes signed urls and an explicit expiry", (
   assert.equal(session.expiresAt, 1_700_000_000_000 + SIGNED_PLAYBACK_SESSION_TTL_MS);
   assert.equal(
     session.url,
-    "https://stream.mux.com/playback_signed.m3u8?min_resolution=720p&max_resolution=720p&token=video-token",
+    "https://stream.mux.com/playback_signed.m3u8?max_resolution=720p&token=video-token",
   );
   assert.equal(
     session.posterUrl,

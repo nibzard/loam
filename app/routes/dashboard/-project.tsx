@@ -95,8 +95,10 @@ export default function ProjectPage({
   const convex = useConvex();
   const { userId } = useAuth();
 
-  const { context, resolvedProjectId, resolvedTeamSlug, project, videos } =
+  const { context, resolvedProjectId, resolvedTeamSlug, project, videos: videosPage } =
     useProjectData({ teamSlug, projectId });
+  const videos = videosPage?.videos;
+  const videosCapped = videosPage?.hasMore ?? false;
   const projectPresenceCounts = useQuery(
     api.videoPresence.listProjectOnlineCounts,
     resolvedProjectId ? { projectId: resolvedProjectId } : "skip",
@@ -269,6 +271,11 @@ export default function ProjectPage({
 
       {/* Content */}
       <div className="flex-1 overflow-auto">
+        {videosCapped ? (
+          <p className="border-b border-[var(--border-subtle)] px-6 py-2 font-mono text-xs uppercase tracking-[0.25em] text-[var(--foreground-muted)]">
+            Showing the first 100 videos
+          </p>
+        ) : null}
         {!isLoadingData && videos.length === 0 ? (
           <div className="h-full flex items-center justify-center p-6 animate-in fade-in duration-300">
             <DropZone
@@ -405,6 +412,7 @@ export default function ProjectPage({
                         <span className="inline-flex items-center gap-1 text-[11px] text-[var(--foreground-muted)]">
                           <MessageSquare className="h-3 w-3" />
                           {video.commentCount}
+                          {video.commentCountIsCapped ? "+" : ""}
                         </span>
                       )}
                       {watchingCount > 0 && (
@@ -493,6 +501,7 @@ export default function ProjectPage({
                       <span className="inline-flex items-center gap-1 text-xs text-[var(--foreground-muted)]">
                         <MessageSquare className="h-3.5 w-3.5" />
                         {video.commentCount}
+                        {video.commentCountIsCapped ? "+" : ""}
                       </span>
                     )}
                     {watchingCount > 0 && (

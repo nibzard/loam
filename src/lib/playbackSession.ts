@@ -3,6 +3,21 @@ export const PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS = 5 * 1000;
 export const PLAYBACK_SESSION_REFRESH_RETRY_MS = 10 * 1000;
 export const PLAYBACK_SESSION_REFRESH_RETRY_MAX_MS = 60 * 1000;
 
+/**
+ * Give up after this many failed keep-alive refreshes. Without a cap each
+ * open tab polls a permanently dead grant (revoked grant, deleted video)
+ * once a minute forever.
+ */
+export const PLAYBACK_SESSION_REFRESH_RETRY_MAX_ATTEMPTS = 8;
+
+/** Pure: true when the retry loop should stop scheduling further attempts. */
+export function playbackSessionRetryExhausted(
+  failureCount: number,
+  maxAttempts: number = PLAYBACK_SESSION_REFRESH_RETRY_MAX_ATTEMPTS,
+): boolean {
+  return Math.max(0, Math.floor(failureCount)) >= maxAttempts;
+}
+
 export type PlaybackSession = {
   accessMode: "public" | "signed";
   expiresAt: number | null;

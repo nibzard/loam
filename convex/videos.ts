@@ -215,7 +215,9 @@ export const list = query({
       });
     }
 
-    return await Promise.all(
+    return {
+      hasMore,
+      videos: await Promise.all(
       videos.map(async (video) => {
         // Per-video comment count, capped at LIST_ITEM_CAP + 1 scanned rows
         // (upstream 62c0463 pattern) so a video with thousands of comments
@@ -236,7 +238,8 @@ export const list = query({
           commentCountIsCapped,
         };
       }),
-    );
+      ),
+    };
   },
 });
 

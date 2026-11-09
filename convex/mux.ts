@@ -249,12 +249,10 @@ export async function createSignedPlaybackId(assetId: string) {
   });
 }
 
-export async function createPublicPlaybackId(assetId: string) {
-  return await muxRequest<MuxPlaybackId>(`/video/v1/assets/${assetId}/playback-ids`, {
-    body: { policy: "public" },
-    method: "POST",
-  });
-}
+// No createPublicPlaybackId here on purpose: every asset in this fork is
+// signed-only, and upstream's reconcileMuxAssetStatus used this function to
+// mint public playback ids. Never reintroduce it (see the upstream plan's
+// trap list).
 
 export async function deletePlaybackId(assetId: string, playbackId: string) {
   await muxRequest<void>(`/video/v1/assets/${assetId}/playback-ids/${playbackId}`, {

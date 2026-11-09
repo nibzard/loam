@@ -19,6 +19,7 @@ import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
   playbackSessionRefreshDelayMs,
   playbackSessionRetryDelayMs,
+  playbackSessionRetryExhausted,
   type PlaybackSession,
 } from "@/lib/playbackSession";
 import { usePublicViewerAuth } from "@/lib/publicViewerAuth";
@@ -232,6 +233,12 @@ export default function SharePage() {
 
   useEffect(() => {
     if (!refreshFailure) {
+      return;
+    }
+
+    // Stop after bounded attempts instead of polling a dead grant forever;
+    // the playback error UI keeps showing the last failure.
+    if (playbackSessionRetryExhausted(refreshFailure.count)) {
       return;
     }
 
@@ -527,6 +534,11 @@ export default function SharePage() {
               {bootstrap.state === "passwordRejected" ? (
                 <p className="text-sm text-[var(--destructive)]">Incorrect password</p>
               ) : null}
+              {activeGrantError ? (
+                <p role="alert" className="text-sm text-[var(--destructive)]">
+                  {activeGrantError}
+                </p>
+              ) : null}
               <Button type="submit" className="w-full" disabled={!passwordInput || isRequestingGrant}>
                 {isRequestingGrant ? "Verifying..." : "View video"}
               </Button>
@@ -555,6 +567,11 @@ export default function SharePage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {activeGrantError ? (
+              <p role="alert" className="mb-4 text-sm text-[var(--destructive)]">
+                {activeGrantError}
+              </p>
+            ) : null}
             <Button
               className="w-full"
               onClick={() => {

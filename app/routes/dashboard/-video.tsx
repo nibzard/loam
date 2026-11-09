@@ -53,6 +53,7 @@ import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
   playbackSessionRefreshDelayMs,
   playbackSessionRetryDelayMs,
+  playbackSessionRetryExhausted,
   type PlaybackSession,
 } from "@/lib/playbackSession";
 import { useWatchProgress } from "@/lib/useWatchProgress";
@@ -292,6 +293,12 @@ export default function VideoPage() {
 
   useEffect(() => {
     if (!refreshFailure) {
+      return;
+    }
+
+    // Stop after bounded attempts instead of polling a permanently dead
+    // video or session forever; the failure state stays visible as-is.
+    if (playbackSessionRetryExhausted(refreshFailure.count)) {
       return;
     }
 

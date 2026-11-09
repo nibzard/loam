@@ -1,0 +1,11 @@
+# Todo
+
+Deferred by this commit:
+- Delete stale tracked package-lock.json (still resolves the vulnerable
+  TanStack versions; nothing installs via npm, but it misleads).
+- convex/_generated regenerates on the deploy box; this machine has no
+  Convex credentials.
+- Deploy to production to make the CVE fix live; pushing alone does not
+  deploy (deploys ship the working tree via bunx convex dev).
+- Workstream 1 next: editor shuttle, theater mode, Final Cut shortcuts
+  (two items already on todo.md).

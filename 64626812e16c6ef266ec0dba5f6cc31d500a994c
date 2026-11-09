@@ -1,0 +1,36 @@
+# Context
+
+## Background
+Workstream 3 of the upstream-alignment plan: port the PR #67
+leftovers 4c6ed8d (harden performance recovery flows) and
+8f98027 (guard prewarmed project rendering) onto the fork's
+signed-session playback layer. 2bffb78 was skipped per plan.
+
+## Why This Way
+- Upstream's buildMuxPlaybackHlsUrl change (drop
+  min_resolution=720p) touches an unsigned stream.mux.com
+  builder. The fork has no client URL builder, and
+  convex/muxPlayback.ts (which still sets min_resolution) is
+  outside this workstream's file ownership, so it was left
+  for the convex-file owner.
+- Upstream's grant-failure retry card was mapped to the fork's
+  bootstrap state machine: the card only replaces the
+  "bootstrapping" spinner, because password and throttle
+  states already have their own recovery UI.
+- The retry backoff exists because VideoPlayer reports an
+  access error only once per attached source. A failed
+  keep-alive refresh would otherwise never retry: the session
+  state is unchanged, so the refresh timer never re-arms.
+- The project-data guard lives in useProjectData rather than
+  the page: the crash (project._id inside videos.map while the
+  project document is still loading) is only reachable when a
+  prewarmed videos.list resolves before projects.get.
+
+## Gotchas
+- Concurrent workstreams share this working tree. Validation
+  for this commit ran in a throwaway git worktree of HEAD plus
+  only this diff, because sibling edits briefly broke
+  typecheck mid-session.
+
+## Related
+- Upstream lawn commits 4c6ed8d, 8f98027 (PR #67)

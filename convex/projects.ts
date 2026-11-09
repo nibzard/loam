@@ -2,13 +2,19 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  canTeamMemberAccessVideo,
   getUser,
   requireTeamAccess,
   requireProjectAccess,
 } from "./auth";
 import { assertTeamHasActiveSubscription } from "./billingHelpers";
 import { getGrantedVideoIdsForTeamUser } from "./videoMemberGrantHelpers";
+import {
+  LIST_ITEM_CAP,
+  capRawPage,
+  capScannedCount,
+  collectAccessibleVideosForProjectUpToCap,
+  logCappedList,
+} from "./listCaps";
 
 export const create = mutation({
   args: {
@@ -37,31 +43,42 @@ export const list = query({
       userClerkId: membership.userClerkId,
     });
 
-    const projects = await ctx.db
+    // Projects have no per-item ACL beyond team membership (already checked
+    // by requireTeamAccess), so the raw read is capped directly with
+    // .take(cap + 1) — the upstream 62c0463 pattern. Truncation is logged,
+    // never silent.
+    const projectPage = await ctx.db
       .query("projects")
       .withIndex("by_team", (q) => q.eq("teamId", args.teamId))
-      .collect();
+      .take(LIST_ITEM_CAP + 1);
+    const { items: projects, hasMore } = capRawPage(projectPage);
+    if (hasMore) {
+      logCappedList("projects.list", {
+        teamId: args.teamId,
+        kept: projects.length,
+        droppedAtLeast: projectPage.length - LIST_ITEM_CAP,
+        cap: LIST_ITEM_CAP,
+      });
+    }
 
-    // Get video counts for each project
+    // Accessible video count per project. The count is capped AFTER the ACL
+    // filter (upstream aaf96d8 flags this as videoCountIsCapped): the scan
+    // stops once LIST_ITEM_CAP + 1 accessible videos are found, so restricted
+    // videos the caller cannot access do not shrink the count.
     const projectsWithCounts = await Promise.all(
       projects.map(async (project) => {
-        const videos = await ctx.db
-          .query("videos")
-          .withIndex("by_project", (q) => q.eq("projectId", project._id))
-          .collect();
+        const accessible = await collectAccessibleVideosForProjectUpToCap(ctx, {
+          projectId: project._id,
+          grantedVideoIds,
+          membership,
+        });
+        const { count: videoCount, isCapped: videoCountIsCapped } =
+          capScannedCount(accessible.accepted.length);
+
         return {
           ...project,
-          videoCount: (
-            await Promise.all(
-              videos.map((video) =>
-                canTeamMemberAccessVideo(ctx, {
-                  grantedVideoIds,
-                  membership,
-                  video,
-                }),
-              ),
-            )
-          ).filter(Boolean).length,
+          videoCount,
+          videoCountIsCapped,
         };
       })
     );
@@ -78,10 +95,24 @@ export const listUploadTargets = query({
     const user = await getUser(ctx);
     if (!user) return [];
 
-    const memberships = await ctx.db
+    // Bounded reads for the upload picker. Neither scan has a per-item ACL
+    // (the role filter runs after the membership read, and projects have no
+    // per-item ACL), so the raw reads are capped with .take(cap + 1) — the
+    // upstream 62c0463 pattern. Truncation is logged, never silent.
+    const membershipPage = await ctx.db
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userClerkId", user.subject))
-      .collect();
+      .take(LIST_ITEM_CAP + 1);
+    const { items: memberships, hasMore: membershipsCapped } =
+      capRawPage(membershipPage);
+    if (membershipsCapped) {
+      logCappedList("projects.listUploadTargets", {
+        userClerkId: user.subject,
+        kept: memberships.length,
+        droppedAtLeast: membershipPage.length - LIST_ITEM_CAP,
+        cap: LIST_ITEM_CAP,
+      });
+    }
 
     const uploadableMemberships = memberships.filter(
       (membership) => membership.role !== "viewer",
@@ -93,10 +124,19 @@ export const listUploadTargets = query({
         if (!team) return [];
         if (args.teamSlug && team.slug !== args.teamSlug) return [];
 
-        const projects = await ctx.db
+        const projectPage = await ctx.db
           .query("projects")
           .withIndex("by_team", (q) => q.eq("teamId", team._id))
-          .collect();
+          .take(LIST_ITEM_CAP + 1);
+        const { items: projects, hasMore } = capRawPage(projectPage);
+        if (hasMore) {
+          logCappedList("projects.listUploadTargets", {
+            teamId: team._id,
+            kept: projects.length,
+            droppedAtLeast: projectPage.length - LIST_ITEM_CAP,
+            cap: LIST_ITEM_CAP,
+          });
+        }
 
         return projects.map((project) => ({
           projectId: project._id,

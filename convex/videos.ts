@@ -2,7 +2,7 @@ import { v, ConvexError } from "convex/values";
 import { internalMutation, internalQuery, mutation, query, MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  canTeamMemberAccessVideo,
+  canTeamMemberAccessVideoWithGrantSet,
   identityEmail,
   identityName,
   requireProjectAccess,
@@ -18,6 +18,13 @@ import {
   deleteVideoMemberGrantsForVideo,
   getGrantedVideoIdsForTeamUser,
 } from "./videoMemberGrantHelpers";
+import {
+  LIST_ITEM_CAP,
+  capRawPage,
+  capScannedCount,
+  collectAccessibleVideosForProjectUpToCap,
+  logCappedList,
+} from "./listCaps";
 import {
   classifyUploadCompletionAttempt,
   classifyUploadFailureAttempt,
@@ -184,36 +191,52 @@ export const list = query({
       userClerkId: membership.userClerkId,
     });
 
-    const videos = await ctx.db
-      .query("videos")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .order("desc")
-      .collect();
+    // Bounded read, capped AFTER the ACL filter: a restricted video the
+    // caller cannot access must not consume the cap, or a member with grants
+    // could see fewer (or zero) videos while accessible ones sit past the
+    // first page. The paged scan collects at most LIST_ITEM_CAP + 1
+    // accessible videos and never reads more rows than the unbounded
+    // .collect() it replaces. The grant set makes each ACL check a pure set
+    // lookup, so filtering stays free.
+    const accessible = await collectAccessibleVideosForProjectUpToCap(ctx, {
+      projectId: args.projectId,
+      grantedVideoIds,
+      membership,
+      order: "desc",
+    });
+    const { items: videos, hasMore } = capRawPage(accessible.accepted);
+    if (hasMore) {
+      logCappedList("videos.list", {
+        projectId: args.projectId,
+        kept: videos.length,
+        skippedInaccessible: accessible.skippedCount,
+        moreAccessibleRemain: accessible.moreRemain,
+        cap: LIST_ITEM_CAP,
+      });
+    }
 
     return await Promise.all(
       videos.map(async (video) => {
-        const canAccess = await canTeamMemberAccessVideo(ctx, {
-          grantedVideoIds,
-          membership,
-          video,
-        });
-        if (!canAccess) {
-          return null;
-        }
-
-        const comments = await ctx.db
+        // Per-video comment count, capped at LIST_ITEM_CAP + 1 scanned rows
+        // (upstream 62c0463 pattern) so a video with thousands of comments
+        // does not materialize them all just to read .length. The cap is
+        // reported per item, not applied silently.
+        const commentPage = await ctx.db
           .query("comments")
           .withIndex("by_video", (q) => q.eq("videoId", video._id))
-          .collect();
+          .take(LIST_ITEM_CAP + 1);
+        const { count: commentCount, isCapped: commentCountIsCapped } =
+          capScannedCount(commentPage.length);
 
         return {
           ...video,
           accessMode: resolveVideoAccessMode(video),
           uploaderName: video.uploaderName ?? "Unknown",
-          commentCount: comments.length,
+          commentCount,
+          commentCountIsCapped,
         };
       }),
-    ).then((items) => items.filter((item): item is NonNullable<typeof item> => item !== null));
+    );
   },
 });
 
@@ -827,45 +850,54 @@ export const listPlaybackTargetsForProject = query({
       userClerkId: membership.userClerkId,
     });
 
-    const requestedIds = args.videoIds ? new Set(args.videoIds) : null;
-    const requestOrder = args.videoIds
-      ? new Map(args.videoIds.map((videoId, index) => [videoId, index]))
-      : null;
+    if (args.videoIds) {
+      // Explicit request: the request length itself bounds the read (one get
+      // per unique id), so no additional cap applies here — capping would
+      // drop playback targets the caller explicitly asked for. Project
+      // scoping and the ACL are still enforced per id, and the result keeps
+      // request order.
+      const targets = [];
+      for (const videoId of new Set(args.videoIds)) {
+        const video = await ctx.db.get(videoId);
+        if (!video || video.projectId !== args.projectId) {
+          continue;
+        }
 
-    const videos = await ctx.db
-      .query("videos")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
+        const canAccess = canTeamMemberAccessVideoWithGrantSet({
+          grantedVideoIds,
+          membership,
+          video,
+        });
+        if (!canAccess) {
+          continue;
+        }
 
-    const accessibleVideos: Doc<"videos">[] = [];
-    for (const video of videos) {
-      if (requestedIds && !requestedIds.has(video._id)) {
-        continue;
+        targets.push(buildPlaybackTarget(video));
       }
 
-      const canAccess = await canTeamMemberAccessVideo(ctx, {
-        grantedVideoIds,
-        membership,
-        video,
-      });
-      if (!canAccess) {
-        continue;
-      }
-
-      accessibleVideos.push(video);
-    }
-
-    const targets = accessibleVideos.map((video) => buildPlaybackTarget(video));
-
-    if (!requestOrder) {
       return targets;
     }
 
-    return targets.sort(
-      (left, right) =>
-        (requestOrder.get(left._id) ?? Number.MAX_SAFE_INTEGER) -
-        (requestOrder.get(right._id) ?? Number.MAX_SAFE_INTEGER),
-    );
+    // No explicit request: same bounded read as videos.list, capped AFTER the
+    // ACL filter so restricted videos do not consume the cap. Targets beyond
+    // the cap are logged, never dropped silently.
+    const accessible = await collectAccessibleVideosForProjectUpToCap(ctx, {
+      projectId: args.projectId,
+      grantedVideoIds,
+      membership,
+    });
+    const { items, hasMore } = capRawPage(accessible.accepted);
+    if (hasMore) {
+      logCappedList("videos.listPlaybackTargetsForProject", {
+        projectId: args.projectId,
+        kept: items.length,
+        skippedInaccessible: accessible.skippedCount,
+        moreAccessibleRemain: accessible.moreRemain,
+        cap: LIST_ITEM_CAP,
+      });
+    }
+
+    return items.map((video) => buildPlaybackTarget(video));
   },
 });
 

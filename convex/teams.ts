@@ -3,7 +3,6 @@ import { v, ConvexError } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
 import { components, internal } from "./_generated/api";
 import {
-  canTeamMemberAccessVideo,
   getUser,
   identityAvatarUrl,
   identityEmail,
@@ -21,6 +20,13 @@ import {
   deleteVideoMemberGrantsForTeamUser,
   getGrantedVideoIdsForTeamUser,
 } from "./videoMemberGrantHelpers";
+import {
+  LIST_ITEM_CAP,
+  capRawPage,
+  capScannedCount,
+  collectAccessibleVideosForProjectUpToCap,
+  logCappedList,
+} from "./listCaps";
 
 function normalizedEmail(value: string) {
   return value.trim().toLowerCase();
@@ -100,10 +106,22 @@ export const list = query({
     const user = await getUser(ctx);
     if (!user) return [];
 
-    const memberships = await ctx.db
+    // The user's own memberships have no per-item ACL, so the raw read is
+    // capped with .take(cap + 1) — the upstream 62c0463 pattern. Truncation
+    // is logged, never silent.
+    const membershipPage = await ctx.db
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userClerkId", user.subject))
-      .collect();
+      .take(LIST_ITEM_CAP + 1);
+    const { items: memberships, hasMore } = capRawPage(membershipPage);
+    if (hasMore) {
+      logCappedList("teams.list", {
+        userClerkId: user.subject,
+        kept: memberships.length,
+        droppedAtLeast: membershipPage.length - LIST_ITEM_CAP,
+        cap: LIST_ITEM_CAP,
+      });
+    }
 
     const teams = await Promise.all(
       memberships.map(async (membership) => {
@@ -122,10 +140,21 @@ export const listWithProjects = query({
     const user = await getUser(ctx);
     if (!user) return [];
 
-    const memberships = await ctx.db
+    // Same bounded membership read as teams.list.
+    const membershipPage = await ctx.db
       .query("teamMembers")
       .withIndex("by_user", (q) => q.eq("userClerkId", user.subject))
-      .collect();
+      .take(LIST_ITEM_CAP + 1);
+    const { items: memberships, hasMore: membershipsCapped } =
+      capRawPage(membershipPage);
+    if (membershipsCapped) {
+      logCappedList("teams.listWithProjects", {
+        userClerkId: user.subject,
+        kept: memberships.length,
+        droppedAtLeast: membershipPage.length - LIST_ITEM_CAP,
+        cap: LIST_ITEM_CAP,
+      });
+    }
 
     const teams = await Promise.all(
       memberships.map(async (membership) => {
@@ -135,36 +164,49 @@ export const listWithProjects = query({
           teamId: team._id,
           userClerkId: membership.userClerkId,
         });
-        
-        const projects = await ctx.db
+
+        // Projects have no per-item ACL beyond team membership, so the raw
+        // read is capped with .take(cap + 1). Truncation is logged.
+        const projectPage = await ctx.db
           .query("projects")
           .withIndex("by_team", (q) => q.eq("teamId", team._id))
-          .collect();
+          .take(LIST_ITEM_CAP + 1);
+        const { items: projects, hasMore: projectsCapped } =
+          capRawPage(projectPage);
+        if (projectsCapped) {
+          logCappedList("teams.listWithProjects", {
+            teamId: team._id,
+            kept: projects.length,
+            droppedAtLeast: projectPage.length - LIST_ITEM_CAP,
+            cap: LIST_ITEM_CAP,
+          });
+        }
 
-        // Get video counts for each project
+        // Accessible video count per project, capped AFTER the ACL filter
+        // (upstream aaf96d8 flags this as videoCountIsCapped): the scan
+        // stops once LIST_ITEM_CAP + 1 accessible videos are found, so
+        // restricted videos the caller cannot access do not shrink it.
         const projectsWithCounts = await Promise.all(
           projects.map(async (project) => {
-            const videos = await ctx.db
-              .query("videos")
-              .withIndex("by_project", (q) => q.eq("projectId", project._id))
-              .collect();
+            const accessible = await collectAccessibleVideosForProjectUpToCap(
+              ctx,
+              {
+                projectId: project._id,
+                grantedVideoIds,
+                membership,
+              },
+            );
+            const { count: videoCount, isCapped: videoCountIsCapped } =
+              capScannedCount(accessible.accepted.length);
+
             return {
               ...project,
-              videoCount: (
-                await Promise.all(
-                  videos.map((video) =>
-                    canTeamMemberAccessVideo(ctx, {
-                      grantedVideoIds,
-                      membership,
-                      video,
-                    }),
-                  ),
-                )
-              ).filter(Boolean).length,
+              videoCount,
+              videoCountIsCapped,
             };
           })
         );
-          
+
         return { ...team, role: membership.role, projects: projectsWithCounts };
       })
     );

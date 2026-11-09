@@ -255,9 +255,9 @@ export default function SharePage() {
   });
 
   const handleTimeUpdate = useCallback(
-    (time: number) => {
+    (time: number, rate?: number) => {
       setCurrentTime(time);
-      trackTime(time);
+      trackTime(time, rate);
     },
     [trackTime],
   );

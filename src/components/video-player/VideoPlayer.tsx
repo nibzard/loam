@@ -16,11 +16,14 @@ import {
   Settings2,
   Check,
   ChevronDown,
+  RectangleHorizontal,
 } from "lucide-react";
 import { cn, formatDuration, formatTimestamp } from "@/lib/utils";
 import { triggerDownload } from "@/lib/download";
 import { isPlaybackAccessError } from "@/lib/playbackErrors";
 import { isHlsPlaybackSource, shouldLoadHlsJsForSource } from "@/lib/muxPlayback";
+import { createShuttleController } from "./shuttle";
+import { bindPlaybackShortcuts, type PlaybackShortcutHandle } from "./bindPlaybackShortcuts";
 
 interface Comment {
   _id: string;
@@ -37,7 +40,7 @@ interface VideoPlayerProps {
   src: string;
   poster?: string;
   comments?: Comment[];
-  onTimeUpdate?: (currentTime: number) => void;
+  onTimeUpdate?: (currentTime: number, playbackRate?: number) => void;
   onMarkerClick?: (comment: Comment) => void;
   initialTime?: number;
   className?: string;
@@ -56,6 +59,12 @@ interface VideoPlayerProps {
   onSelectQuality?: (id: string) => void;
   /** Render controls below the video frame instead of overlaid. Ideal for mobile. */
   controlsBelow?: boolean;
+  /** Bind editor shortcuts (J/L shuttle, K chords, frame steps) on the document. */
+  editorControls?: boolean;
+  /** Reflects theater mode state for the in-player toggle button. */
+  theaterMode?: boolean;
+  /** Called when the in-player theater toggle is clicked. */
+  onToggleTheater?: () => void;
 }
 
 export interface VideoPlayerHandle {
@@ -93,12 +102,16 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     selectedQualityId,
     onSelectQuality,
     controlsBelow = false,
+    editorControls = false,
+    theaterMode = false,
+    onToggleTheater,
   },
   ref
 ) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const shuttleRef = useRef<ReturnType<typeof createShuttleController> | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -136,6 +149,21 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
   const onTimeUpdateRef = useRef<typeof onTimeUpdate>(onTimeUpdate);
   const onPlaybackStartedRef = useRef<typeof onPlaybackStarted>(onPlaybackStarted);
   const onPlaybackAccessErrorRef = useRef<typeof onPlaybackAccessError>(onPlaybackAccessError);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const shuttle = createShuttleController(video, (playing, rate) => {
+      isPlayingRef.current = playing;
+      setIsPlaying(playing);
+      setPlaybackRate(rate);
+    });
+    shuttleRef.current = shuttle;
+    return () => {
+      shuttle.dispose();
+      shuttleRef.current = null;
+    };
+  }, []);
 
   const groupedMarkers = useMemo(() => {
     if (!duration || comments.length === 0) return [] as { position: number; comment: Comment }[];
@@ -188,15 +216,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     (time: number, options?: { play?: boolean }) => {
       applyTime(time);
       if (options?.play) {
-        const video = videoRef.current;
-        if (video) {
-          const playPromise = video.play();
-          if (playPromise) {
-            playPromise.catch(() => {
-              // Ignore autoplay rejections.
-            });
-          }
-        }
+        shuttleRef.current?.play();
       }
       showControls();
     },
@@ -219,16 +239,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     showControls();
 
-    if (video.paused) {
-      const playPromise = video.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          // Ignore play errors caused by browser autoplay policies.
-        });
-      }
-    } else {
-      video.pause();
-    }
+    shuttleRef.current?.toggle();
   }, [showControls]);
 
   const setVideoVolume = useCallback((nextVolume: number) => {
@@ -265,11 +276,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     showControls();
 
-    const currentIndex = PLAYBACK_RATES.findIndex((rate) => rate === video.playbackRate);
+    const currentRate = Math.abs(shuttleRef.current?.rate ?? video.playbackRate);
+    const currentIndex = PLAYBACK_RATES.findIndex((rate) => rate === currentRate);
     const nextIndex = currentIndex === -1 ? 2 : (currentIndex + 1) % PLAYBACK_RATES.length;
     const nextRate = PLAYBACK_RATES[nextIndex];
-    video.playbackRate = nextRate;
-    setPlaybackRate(nextRate);
+    shuttleRef.current?.setRate(nextRate);
   }, [showControls]);
 
   const toggleFullscreen = useCallback(async () => {
@@ -288,6 +299,31 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       // Fullscreen can fail in some embedded contexts; ignore gracefully.
     }
   }, [controlsBelow, showControls]);
+
+  // Playback shortcuts: Space/K for play state, J/L to shuttle, arrows to
+  // step or seek, F/M for fullscreen and mute. Editor surfaces listen on the
+  // document inside the [data-video-editor] boundary; public players keep
+  // their listener scoped to the player root.
+  useEffect(() => {
+    const root = wrapperRef.current;
+    if (!root) return;
+    const handle: PlaybackShortcutHandle = {
+      get playing() {
+        return shuttleRef.current?.playing ?? false;
+      },
+      get rate() {
+        return shuttleRef.current?.rate ?? 1;
+      },
+      pause: () => shuttleRef.current?.pause(),
+      playAt: (rate) => shuttleRef.current?.playAt(rate),
+      toggle: () => shuttleRef.current?.toggle(),
+      step: (frames) => shuttleRef.current?.step(frames),
+      seekBy: (seconds) => handleSeekBy(seconds),
+      toggleFullscreen: () => void toggleFullscreen(),
+      toggleMute: () => toggleMute(),
+    };
+    return bindPlaybackShortcuts(handle, { root, editor: editorControls, onAction: showControls });
+  }, [editorControls, handleSeekBy, showControls, toggleFullscreen, toggleMute]);
 
   const handleDownload = useCallback(async () => {
     if (!allowDownload || isDownloading) return;
@@ -364,8 +400,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       const video = videoRef.current;
       if (!video || !duration) return;
 
-      wasPlayingBeforeScrubRef.current = !video.paused;
-      video.pause();
+      wasPlayingBeforeScrubRef.current = shuttleRef.current?.playing ?? !video.paused;
+      shuttleRef.current?.pause();
       setIsScrubbing(true);
 
       const nextTime = getTimeFromClientX(clientX);
@@ -399,12 +435,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
     setIsScrubbing(false);
 
     if (wasPlayingBeforeScrubRef.current) {
-      const playPromise = video.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          // Ignore autoplay rejections after scrubbing.
-        });
-      }
+      shuttleRef.current?.play();
     }
   }, [duration]);
 
@@ -449,6 +480,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     const handleLoadedMetadata = () => {
       if (cancelled) return;
+      // Loading a source resets the element rate; restore the clamped shuttle rate.
+      video.playbackRate = Math.min(Math.abs(shuttleRef.current?.rate ?? 1), 16);
       setDuration(video.duration || 0);
       updateBuffered();
       const resumeTime = initialTimeRef.current ?? resumeTimeOnSourceChangeRef.current ?? undefined;
@@ -465,12 +498,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
       if (resumePlaybackOnSourceChangeRef.current) {
         resumePlaybackOnSourceChangeRef.current = false;
-        const playPromise = video.play();
-        if (playPromise) {
-          playPromise.catch(() => {
-            // Ignore resume failures after signed-session rotation.
-          });
-        }
+        shuttleRef.current?.play();
       }
     };
 
@@ -483,7 +511,9 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       if (cancelled || isScrubbingRef.current) return;
       const time = video.currentTime || 0;
       setCurrentTime(time);
-      onTimeUpdateRef.current?.(time);
+      // Pass the effective rate so watch-time metering can bill wall-clock
+      // time during fast shuttle instead of content time.
+      onTimeUpdateRef.current?.(time, shuttleRef.current?.rate ?? video.playbackRate);
     };
 
     const handlePlay = () => {
@@ -499,7 +529,8 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     const handlePause = () => {
       if (cancelled) return;
-      setIsPlaying(false);
+      // Seek-driven playback keeps the element paused; trust the controller.
+      setIsPlaying(shuttleRef.current?.playing ?? false);
       setIsBuffering(false);
       setControlsVisible(true);
     };
@@ -534,7 +565,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
 
     const handleRateChange = () => {
       if (cancelled) return;
-      setPlaybackRate(video.playbackRate || 1);
+      setPlaybackRate(shuttleRef.current?.rate ?? (video.playbackRate || 1));
     };
 
     const handleProgress = () => {
@@ -736,6 +767,23 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       window.removeEventListener("blur", handleClose);
     };
   }, [qualityMenuOpen]);
+
+  // Escape closes an open menu before anything else reacts. This registers
+  // before the theater-mode listener (child effects run first), and marking
+  // the event prevented keeps theater from exiting over an open menu.
+  useEffect(() => {
+    if (!contextMenu && !qualityMenuOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setContextMenu(null);
+      setQualityMenuOpen(false);
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [contextMenu, qualityMenuOpen]);
 
   const displayTime = isScrubbing ? scrubTime : currentTime;
   const playedPercent = duration > 0 ? clamp(displayTime / duration, 0, 1) : 0;
@@ -958,6 +1006,19 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
             </button>
           )}
 
+          {onToggleTheater && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleTheater(); }}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--media-outline)] bg-[var(--media-fill)] transition hover:border-[var(--media-outline-focus)] hover:bg-[var(--media-fill-strong)]"
+              aria-label={theaterMode ? "Exit theater mode" : "Enter theater mode"}
+              aria-pressed={theaterMode}
+              title={theaterMode ? "Exit theater mode" : "Theater mode"}
+            >
+              <RectangleHorizontal className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); toggleFullscreen(); }}
@@ -977,7 +1038,7 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
       ref={wrapperRef}
       className={cn(
         "relative",
-        controlsBelow ? "flex flex-col h-full bg-[var(--media-background)]" : "",
+        controlsBelow ? "flex flex-1 min-h-0 flex-col bg-[var(--media-background)]" : "",
         className,
       )}
     >
@@ -993,37 +1054,14 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
               ),
         )}
         tabIndex={0}
+        role="region"
+        aria-label="Video player"
+        aria-describedby="video-player-shortcuts"
         onMouseMove={showControls}
         onMouseEnter={showControls}
         onMouseLeave={() => {
           if (isPlaying) {
             setControlsVisible(false);
-          }
-        }}
-        onKeyDown={(e) => {
-          if (e.key === " " || e.key.toLowerCase() === "k") {
-            e.preventDefault();
-            togglePlay();
-            return;
-          }
-          if (e.key === "ArrowLeft") {
-            e.preventDefault();
-            handleSeekBy(-5);
-            return;
-          }
-          if (e.key === "ArrowRight") {
-            e.preventDefault();
-            handleSeekBy(5);
-            return;
-          }
-          if (e.key.toLowerCase() === "f") {
-            e.preventDefault();
-            toggleFullscreen();
-            return;
-          }
-          if (e.key.toLowerCase() === "m") {
-            e.preventDefault();
-            toggleMute();
           }
         }}
         onContextMenu={(e) => {
@@ -1038,6 +1076,11 @@ export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(funct
           setContextMenu({ x, y });
         }}
       >
+        <span id="video-player-shortcuts" className="sr-only">
+          {editorControls
+            ? "Space toggles playback. K pauses. J and L shuttle backward and forward up to 32 times speed. Hold K and tap J or L to step, or hold both for half speed. Arrows step one frame; Shift and arrows step ten frames, using 30 fps. F toggles fullscreen. M toggles mute."
+            : "Space toggles playback. K pauses. Arrows seek five seconds. F toggles fullscreen. M toggles mute."}
+        </span>
         <video
           ref={videoRef}
           poster={poster}

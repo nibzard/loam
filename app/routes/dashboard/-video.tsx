@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LazyVideoPlayer, preloadVideoPlayer, type VideoPlayerHandle } from "@/components/video-player/lazy";
+import { VideoEditorLayout } from "@/components/video-player/VideoEditorLayout";
 import { WatchCapNotice } from "@/components/video-player/WatchCapNotice";
 import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
@@ -34,6 +35,10 @@ import { Id } from "@convex/_generated/dataModel";
 import { projectPath, teamHomePath } from "@/lib/routes";
 import { useRoutePrewarmIntent } from "@/lib/useRoutePrewarmIntent";
 import { prefetchHlsRuntime, prefetchPlaybackSource } from "@/lib/muxPlayback";
+import {
+  selectDashboardPlaybackUrl,
+  type DashboardPlaybackSource,
+} from "@/lib/dashboardPlaybackSource";
 import {
   PLAYBACK_SESSION_ACCESS_ERROR_COOLDOWN_MS,
   PLAYBACK_SESSION_REFRESH_LEAD_MS,
@@ -85,7 +90,9 @@ export default function VideoPage() {
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [originalPlaybackUrl, setOriginalPlaybackUrl] = useState<string | null>(null);
   const [isLoadingOriginalPlayback, setIsLoadingOriginalPlayback] = useState(false);
-  const [preferredSource, setPreferredSource] = useState<"mux720" | "original">("original");
+  const [preferredSource, setPreferredSource] = useState<DashboardPlaybackSource>("mux720");
+  const [playbackSessionFailed, setPlaybackSessionFailed] = useState(false);
+  const [theaterOpen, setTheaterOpen] = useState(false);
   const [watchCapKind, setWatchCapKind] = useState<"member" | "shared" | null>(null);
   const playerRef = useRef<VideoPlayerHandle | null>(null);
   const playbackRefreshInFlightRef = useRef(false);
@@ -93,10 +100,14 @@ export default function VideoPage() {
   const lastPlaybackAccessErrorAtRef = useRef(0);
   const isPlayable = video?.status === "ready" && Boolean(video?.muxPlaybackId);
   const playbackUrl = playbackSession?.url ?? null;
-  const activePlaybackUrl =
-    preferredSource === "mux720"
-      ? playbackUrl ?? originalPlaybackUrl
-      : originalPlaybackUrl ?? playbackUrl;
+  const activePlaybackUrl = selectDashboardPlaybackUrl({
+    preferredSource,
+    muxPlaybackReady: isPlayable,
+    // A failed session request degrades to the original instead of waiting
+    // forever; an in-flight request keeps the player on its loading state.
+    muxUrl: playbackUrl ?? (playbackSessionFailed ? originalPlaybackUrl : null),
+    originalUrl: originalPlaybackUrl,
+  });
   const activeQualityId =
     activePlaybackUrl && playbackUrl && activePlaybackUrl === playbackUrl
       ? "mux720"
@@ -139,6 +150,7 @@ export default function VideoPage() {
     playbackRefreshInFlightRef.current = false;
     playbackSessionKeyRef.current += 1;
     lastPlaybackAccessErrorAtRef.current = 0;
+    setPlaybackSessionFailed(false);
   }, [resolvedVideoId, video?.muxPlaybackId]);
 
   const refreshPlaybackSession = useCallback(
@@ -150,6 +162,7 @@ export default function VideoPage() {
       const requestKey = playbackSessionKeyRef.current;
       playbackRefreshInFlightRef.current = true;
       setIsLoadingPlayback(true);
+      setPlaybackSessionFailed(false);
 
       if (!options?.preserveExisting) {
         setPlaybackSession(null);
@@ -167,6 +180,7 @@ export default function VideoPage() {
           return;
         }
 
+        setPlaybackSessionFailed(true);
         if (!options?.preserveExisting) {
           setPlaybackSession(null);
         }
@@ -278,9 +292,9 @@ export default function VideoPage() {
   });
 
   const handleTimeUpdate = useCallback(
-    (time: number) => {
+    (time: number, rate?: number) => {
       setCurrentTime(time);
-      trackWatchTime(time);
+      trackWatchTime(time, rate);
     },
     [trackWatchTime],
   );
@@ -288,6 +302,10 @@ export default function VideoPage() {
   const handleMarkerClick = useCallback((comment: { _id: string }) => {
     setHighlightedCommentId(comment._id as Id<"comments">);
     setTimeout(() => setHighlightedCommentId(undefined), 3000);
+  }, []);
+
+  const toggleTheater = useCallback(() => {
+    setTheaterOpen((current) => !current);
   }, []);
 
   const requestDownload = useCallback(async () => {
@@ -405,7 +423,7 @@ export default function VideoPage() {
   );
 
   return (
-    <div className="h-full flex flex-col">
+    <VideoEditorLayout open={theaterOpen} onToggle={toggleTheater}>
       {/* Header */}
       <DashboardHeader paths={[
         {
@@ -540,6 +558,7 @@ export default function VideoPage() {
           ) : activePlaybackUrl ? (
             <Suspense fallback={playerFallback}>
               <LazyVideoPlayer
+                key={resolvedVideoId}
                 ref={playerRef}
                 src={activePlaybackUrl}
                 poster={playbackSession?.posterUrl}
@@ -551,6 +570,9 @@ export default function VideoPage() {
                 downloadFilename={`${video.title}.mp4`}
                 onRequestDownload={requestDownload}
                 controlsBelow
+                editorControls
+                theaterMode={theaterOpen}
+                onToggleTheater={toggleTheater}
                 qualityOptionsConfig={[
                   {
                     id: "mux720",
@@ -673,6 +695,6 @@ export default function VideoPage() {
         open={shareDialogOpen}
         onOpenChange={setShareDialogOpen}
       />
-    </div>
+    </VideoEditorLayout>
   );
 }

@@ -88,11 +88,14 @@ export function createWatchProgressMachine() {
       enabled,
       flushThresholdSeconds,
       maxDeltaSeconds,
+      rate = 1,
       time,
     }: {
       enabled: boolean;
       flushThresholdSeconds: number;
       maxDeltaSeconds: number;
+      /** Playback rate. Time above 1x bills as wall-clock time, not content time. */
+      rate?: number;
       time: number;
     }) {
       if (!enabled || state.isCapReached) return false;
@@ -106,7 +109,11 @@ export function createWatchProgressMachine() {
       const delta = normalizedTime - lastTime;
       if (delta <= 0) return false;
 
-      const trackedDelta = Math.min(delta, maxDeltaSeconds);
+      // Fast shuttle (up to 32x) and reverse skim review; the caps exist to
+      // meter real watching and delivery, so scale media-time deltas down to
+      // their wall-clock equivalent instead of billing 32x budget for a skim.
+      const rateScale = Math.max(1, Math.abs(Number.isFinite(rate) ? rate : 1));
+      const trackedDelta = Math.min(delta / rateScale, maxDeltaSeconds);
       if (trackedDelta <= 0) return false;
 
       state.pendingWatchSeconds += trackedDelta;
@@ -285,11 +292,12 @@ export function useWatchProgress({
   }, [clearTimer, flush]);
 
   const trackTime = useCallback(
-    (time: number) => {
+    (time: number, rate?: number) => {
       const shouldFlush = machineRef.current?.trackTime({
         enabled,
         flushThresholdSeconds,
         maxDeltaSeconds,
+        rate,
         time,
       });
       if (shouldFlush) {

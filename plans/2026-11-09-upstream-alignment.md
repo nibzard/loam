@@ -48,7 +48,7 @@ Guard for every PORT: new playback paths must sit behind signed sessions and wat
 | Auth-chain flattening, bounded reads, pagination | PORT the technique | P2 |
 | PR #67 frontend perf (`4c6ed8d`, `8f98027`) | PORT selectively; SKIP route restructuring (`2bffb78`) | P2 |
 | Collapsible discussion sidebar | PORT | P2 |
-| Frozen-playback 720p recovery, default 720p | PORT | P1 (ships with editor work) |
+| Frozen-playback 720p recovery, default 720p | default 720p PORTED (`dashboardPlaybackSource.ts`); recovery (`bf041bd`) deferred | P1 done 2026-11-09 |
 | Dashboard sorting + expandable titles | PORT | P3 |
 | Bulk multi-select (move/status/delete) | PORT after sorting | P3 |
 | Video version stacks | PORT as a designed project | P3, highest product value |
@@ -87,7 +87,9 @@ Upstream shipped two items from our own `todo.md`: Final Cut keybindings and the
 - Rebuild the theater-mode layout wrapper on our routes. Keep our player chrome.
 - Port the Final Cut chord semantics (hold K + tap J/L, Alt for slow motion, `event.code` for non-US layouts) with their tests.
 - Fold in `cc879fd` (`h-full` → `flex-1 min-h-0`) so banners never clip controls.
-- Add the frozen-playback 720p fallback (`bf041bd`) and the default-720p changeover (`2adfab9`), both behind our signed-session prefetch path in `src/lib/muxPlayback.ts`. With the dead unsigned helpers deleted (Workstream 0), these ports cannot fall back to unsigned URLs.
+- Default-720p changeover (`2adfab9`): ported as `src/lib/dashboardPlaybackSource.ts` with tests. Our fork had defaulted to the original-source presign (a 600 s signed GET of the full-resolution MP4); the route now defaults to the Mux 720p session and waits out in-flight session requests instead of starting the original and swapping. The original presign stays as an explicit quality choice.
+- Frozen-playback fallback (`bf041bd`): deferred. Its detector targets upstream's unsigned original-playback recovery; under signed forced-720p manifests the failure mode it guards is different. Revisit only if original-source stalls are reported in production.
+- Watch-minute billing hardening (fork-specific, added during port review): shuttle rates up to 32x previously metered content time against the team watch caps, so a 60-minute skim could bill 60 team minutes and trip the workspace-wide playback lock. `trackTime` now scales deltas by `max(1, |rate|)`, billing wall-clock time.
 
 This workstream touches `VideoPlayer.tsx`, which both sides rewrote. Expect hand-merging, not cherry-picks.
 

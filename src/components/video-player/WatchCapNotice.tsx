@@ -32,7 +32,7 @@ export function WatchCapNotice({
       className={cn(
         "relative w-full overflow-hidden bg-[var(--media-background)]",
         controlsBelow
-          ? "flex h-full min-h-0 items-center justify-center"
+          ? "flex flex-1 min-h-0 items-center justify-center"
           : "aspect-video rounded-xl border border-[var(--media-border)] shadow-[0_10px_40px_var(--media-shadow)]",
         className,
       )}

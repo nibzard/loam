@@ -172,3 +172,32 @@ test("watch progress machine clears pending state when no playback target is ava
     pendingWatchSeconds: 0,
   });
 });
+
+test("watch progress machine bills fast shuttle at wall-clock time", () => {
+  const machine = createWatchProgressMachine();
+
+  machine.trackTime({
+    enabled: true,
+    flushThresholdSeconds: 5,
+    maxDeltaSeconds: 10,
+    time: 0,
+  });
+  // 32x shuttle: 64 media-seconds pass in about 2 wall-clock seconds.
+  const shouldFlush = machine.trackTime({
+    enabled: true,
+    flushThresholdSeconds: 5,
+    maxDeltaSeconds: 10,
+    rate: 32,
+    time: 64,
+  });
+
+  const started = machine.startFlush({
+    enabled: true,
+    minReportSeconds: 1,
+    target: { videoId: "video_123" as never },
+  });
+
+  assert.equal(shouldFlush, false);
+  assert.ok(started);
+  assert.equal(started.requestedWatchSeconds, 2);
+});

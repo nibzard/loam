@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildPublicPlaybackSession,
   buildSignedPlaybackSession,
   resolveMuxPlaybackIds,
   SIGNED_PLAYBACK_SESSION_TTL_MS,
@@ -20,21 +19,6 @@ test("resolveMuxPlaybackIds separates public and signed ids", () => {
   assert.deepEqual(result.publicPlaybackIds, ["public_1"]);
   assert.equal(result.signedPlaybackId, "signed_1");
   assert.deepEqual(result.signedPlaybackIds, ["signed_1", "signed_2"]);
-});
-
-test("buildPublicPlaybackSession produces a non-expiring public session", () => {
-  const session = buildPublicPlaybackSession("playback_public");
-
-  assert.equal(session.accessMode, "public");
-  assert.equal(session.expiresAt, null);
-  assert.equal(
-    session.url,
-    "https://stream.mux.com/playback_public.m3u8?min_resolution=720p&max_resolution=720p",
-  );
-  assert.equal(
-    session.posterUrl,
-    "https://image.mux.com/playback_public/thumbnail.jpg?time=0",
-  );
 });
 
 test("buildSignedPlaybackSession includes signed urls and an explicit expiry", () => {

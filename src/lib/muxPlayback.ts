@@ -1,7 +1,3 @@
-export function buildMuxPlaybackHlsUrl(playbackId: string): string {
-  return `https://stream.mux.com/${playbackId}.m3u8`;
-}
-
 type HlsCapableMediaElement = {
   canPlayType: (type: string) => string;
 };
@@ -50,10 +46,6 @@ export function prefetchPlaybackSource(url: string) {
   }).catch(() => {
     // Best effort only; route transitions should not depend on this.
   });
-}
-
-export function prefetchMuxPlaybackManifest(playbackId: string) {
-  prefetchPlaybackSource(buildMuxPlaybackHlsUrl(playbackId));
 }
 
 export function prefetchHlsRuntime(url?: string) {

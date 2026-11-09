@@ -39,15 +39,6 @@ export function resolveMuxPlaybackIds(
   };
 }
 
-export function buildPublicPlaybackSession(playbackId: string): PlaybackSession {
-  return {
-    accessMode: "public",
-    expiresAt: null,
-    url: buildMuxPlaybackUrl(playbackId),
-    posterUrl: buildMuxThumbnailUrl(playbackId),
-  };
-}
-
 export function buildSignedPlaybackSession(args: {
   playbackId: string;
   playbackToken: string;

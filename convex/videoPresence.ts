@@ -198,6 +198,11 @@ export const disconnect = mutation({
   },
 });
 
+// Derive the counted videos server-side from the project index. Never accept
+// client-supplied video ids here: a video deleted or moved mid-session must
+// drop out of the index, not throw. A thrown error would be rethrown by
+// useQuery in render and crash every open dashboard for the project. The
+// client already tolerates missing count entries.
 export const listProjectOnlineCounts = query({
   args: {
     projectId: v.id("projects"),

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import {
@@ -42,10 +43,27 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("viewer");
   const [isLoading, setIsLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const members = useQuery(api.teams.getMembers, { teamId });
+
+  // The component stays mounted while the dialog is closed and across team
+  // changes, so transient dialog state must reset when either happens.
+  useEffect(() => {
+    if (!open) {
+      setInviteError(null);
+      setInviteLink(null);
+      setCopied(false);
+    }
+  }, [open]);
+  useEffect(() => {
+    setInviteError(null);
+    setInviteLink(null);
+    setEmail("");
+    setCopied(false);
+  }, [teamId]);
   const invites = useQuery(api.teams.getInvites, { teamId });
   const inviteMember = useMutation(api.teams.inviteMember);
   const removeMember = useMutation(api.teams.removeMember);
@@ -56,6 +74,7 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
     if (!email.trim()) return;
 
     setIsLoading(true);
+    setInviteError(null);
     try {
       const token = await inviteMember({
         teamId,
@@ -66,7 +85,26 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
       setInviteLink(`${baseUrl}/invite/${token}`);
       setEmail("");
     } catch (error) {
-      console.error("Failed to invite member:", error);
+      let message: string | null = null;
+      if (error instanceof ConvexError) {
+        const data = error.data;
+        if (
+          typeof data === "object" &&
+          data !== null &&
+          "message" in data &&
+          typeof data.message === "string"
+        ) {
+          message = data.message;
+        } else if (typeof data === "string" && data.length > 0) {
+          message = data;
+        }
+      }
+      if (message) {
+        setInviteError(message);
+      } else {
+        console.error("Failed to invite member:", error);
+        setInviteError("Failed to invite member. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -115,7 +153,10 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
               placeholder="Email address"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setInviteError(null);
+              }}
               className="flex-1"
             />
             <DropdownMenu>
@@ -142,6 +183,11 @@ export function MemberInvite({ teamId, open, onOpenChange }: MemberInviteProps) 
             <UserPlus className="mr-2 h-4 w-4" />
             {isLoading ? "Sending..." : "Send invite"}
           </Button>
+          {inviteError && (
+            <p role="alert" className="text-sm text-[var(--destructive)]">
+              {inviteError}
+            </p>
+          )}
         </form>
 
         {inviteLink && (

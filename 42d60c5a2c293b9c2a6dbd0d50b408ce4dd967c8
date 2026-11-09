@@ -1,0 +1,41 @@
+# Context
+
+## Background
+Workstream 4 (the flagship) of plans/2026-11-09-upstream-alignment.md:
+version stacks rebuilt on the fork's ACL model, plus sorting, bulk
+ops, team switcher, and storage bar.
+
+## Why This Way
+- Generated-type fact that unlocked this: convex/_generated derives
+  types LIVE from schema.ts and module sources, so new fields and new
+  functions in EXISTING modules typecheck locally; only new modules
+  need codegen (why the Mux sweeps remain design-only).
+- Grants: copied forward AND backfilled reciprocally — the review
+  proved a forward-only bridge dead-ends an admin who cuts a version
+  of a restricted stack (videos.get FORBIDDEN on older versions).
+- Share links repoint at markAsReady, never createVersion: repointing
+  during upload stranded every share viewer on an uploading head for
+  the whole upload. Links always resolve to the newest READY version.
+- listVersions filters per-row ACL (restricted siblings' metadata
+  must not leak to members without grants).
+- Bulk budgets: Convex per-mutation limits (db calls ~4096, writes,
+  scheduled jobs) are pre-checked worst-case BEFORE any deletion,
+  with distinct coded errors; a batch under the version cap could
+  otherwise die mid-transaction with the wrong message.
+- Watch metering needed no new cap logic: trackerKey is the videoId,
+  so version switches reset the machine; a test pins no
+  double-billing and the playhead resets on switch.
+
+## Gotchas
+- shareLinks.videoId = current READY head (schema.ts comment); every
+  future head-change path must repoint via the markAsReady planner.
+- Title sort indexes are BYTE-ordered, not locale-ordered (the test
+  suite pins apple-before-Banana).
+- finalizeAbandonedUpload is guarded but has no caller until the Mux
+  sweeps land (plans/2026-11-09-mux-sweeps-design.md).
+- Known deferred follow-up: version-upload progress hides on
+  navigation (upload continues; surface via the layout manager).
+
+## Related
+- Commits 88aac13, abd658c, 2aef9e3, e523163..5a4560f;
+  plans/2026-11-09-upstream-alignment.md

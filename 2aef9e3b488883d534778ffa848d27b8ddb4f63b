@@ -1,0 +1,36 @@
+# Context
+
+## Background
+Workstream 2 of plans/2026-11-09-upstream-alignment.md: discussion and
+upload UX ported from upstream lawn.
+
+## Why This Way
+- CSV export is dashboard-only and audience-aware: buildCommentsCsv
+  filters rows by audience ("all" = team+share for the dashboard;
+  "share" exists for a possible future share-viewer export). Reviewers
+  traced every export and render path: team-audience text cannot reach
+  a share viewer.
+- commentLinks.ts is the final upstream parser (after the 4e87d99
+  linear-time fix); candidates are re-validated with new URL so
+  javascript:/data:/vbscript: never linkify even if the regex drifts.
+- CollapsibleSidebar uses useSyncExternalStore with a server snapshot
+  that never reads storage (the 251e899 hydration pattern) and is
+  inert (inert + aria-hidden + pointer-events-none + blur) when
+  collapsed. The share page was deliberately not wired: its comments
+  are a stacked section, not a side panel.
+- Upload errors keep our coded ConvexError {code, message} contract;
+  uploadErrors.ts maps message -> per-code fallback -> generic. The
+  backend messages are already user-facing.
+- The built-in sidebar toggle is suppressed (toggle={() => null});
+  the discussion header button drives the persisted store directly.
+
+## Gotchas
+- ALLOWED_UPLOAD_CONTENT_TYPES is now exported for its test; keep it
+  in sync with DropZone copy and the -layout.tsx drag regex (no AVI:
+  backend rejects it).
+- Videos table audience field flows into CSV rows via
+  api.comments.getThreaded; if that query ever strips fields, the
+  export silently degrades - the call site was checked, not the query.
+
+## Related
+- Commits 88aac13, abd658c; plans/2026-11-09-upstream-alignment.md

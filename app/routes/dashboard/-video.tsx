@@ -13,9 +13,16 @@ import { CommentList } from "@/components/comments/CommentList";
 import { CommentInput } from "@/components/comments/CommentInput";
 import { ShareDialog } from "@/components/ShareDialog";
 import { formatDuration } from "@/lib/utils";
+import { buildCommentsCsv, buildCommentsCsvFilename } from "@/lib/commentCsv";
+import { triggerTextDownload } from "@/lib/download";
 import { useVideoPresence } from "@/lib/useVideoPresence";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import {
+  CollapsibleSidebar,
+  resolveToggleLabel,
+  useSidebarOpen,
+} from "@/components/ui/CollapsibleSidebar";
 import {
   Edit2,
   Check,
@@ -23,6 +30,9 @@ import {
   Link as LinkIcon,
   MessageSquare,
   MoreVertical,
+  Download,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { ReactionBar, summarizeReactions } from "@/components/reactions/ReactionBar";
 import {
@@ -48,6 +58,9 @@ import { useWatchProgress } from "@/lib/useWatchProgress";
 import { prewarmProject } from "./-project.data";
 import { prewarmTeam } from "./-team.data";
 import { useVideoData } from "./-video.data";
+
+const DISCUSSION_SIDEBAR_ID = "video-discussion-sidebar";
+const DISCUSSION_SIDEBAR_LABEL = "discussion sidebar";
 
 export default function VideoPage() {
   const params = useParams({ strict: false });
@@ -86,6 +99,7 @@ export default function VideoPage() {
   const [highlightedCommentId, setHighlightedCommentId] = useState<Id<"comments"> | undefined>();
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [mobileCommentsOpen, setMobileCommentsOpen] = useState(false);
+  const [discussionSidebarOpen, toggleDiscussionSidebar] = useSidebarOpen();
   const [playbackSession, setPlaybackSession] = useState<PlaybackSession | null>(null);
   const [isLoadingPlayback, setIsLoadingPlayback] = useState(false);
   const [originalPlaybackUrl, setOriginalPlaybackUrl] = useState<string | null>(null);
@@ -348,6 +362,20 @@ export default function VideoPage() {
     [playerRef, setHighlightedCommentId]
   );
 
+  const handleExportComments = useCallback(() => {
+    if (!video || !commentsThreaded?.length) return;
+
+    triggerTextDownload(
+      buildCommentsCsv(commentsThreaded),
+      buildCommentsCsvFilename(video.title),
+    );
+  }, [commentsThreaded, video]);
+
+  const discussionSidebarToggleLabel = resolveToggleLabel({
+    isOpen: discussionSidebarOpen,
+    label: DISCUSSION_SIDEBAR_LABEL,
+  });
+
   const handleSaveTitle = async () => {
     if (!editedTitle.trim() || !video || !resolvedVideoId) return;
     try {
@@ -515,6 +543,21 @@ export default function VideoPage() {
               <span className="ml-1 text-xs">{comments.length}</span>
             )}
           </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="hidden lg:inline-flex h-8 w-8"
+            onClick={toggleDiscussionSidebar}
+            aria-label={discussionSidebarToggleLabel}
+            aria-controls={DISCUSSION_SIDEBAR_ID}
+            aria-expanded={discussionSidebarOpen}
+          >
+            {discussionSidebarOpen ? (
+              <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
+            )}
+          </Button>
         </div>
 
         {/* Mobile: compact actions */}
@@ -598,17 +641,38 @@ export default function VideoPage() {
           )}
         </div>
 
-        {/* Comments sidebar — desktop */}
-        <aside className="hidden lg:flex w-80 xl:w-96 border-l-2 border-[var(--border)] flex-col bg-[var(--background)]">
+        {/* Comments sidebar — desktop. The built-in toggle is suppressed
+            (toggle={() => null}); the discussion header button drives the
+            persisted store directly. */}
+        <CollapsibleSidebar
+          open={discussionSidebarOpen}
+          side="right"
+          id={DISCUSSION_SIDEBAR_ID}
+          label={DISCUSSION_SIDEBAR_LABEL}
+          className="hidden lg:flex"
+          toggle={() => null}
+        >
           <div className="flex-shrink-0 px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between">
             <h2 className="font-semibold text-sm tracking-tight flex items-center gap-2 text-[var(--foreground)] dark:text-[var(--foreground-inverse)]">
               Discussion
             </h2>
-            {comments && comments.length > 0 && (
-              <span className="text-[11px] font-medium text-[var(--foreground-muted)] bg-[var(--surface-strong)]/5 dark:bg-[var(--media-fill)] px-2 py-0.5 rounded-full">
-                {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {comments && comments.length > 0 && (
+                <span className="text-[11px] font-medium text-[var(--foreground-muted)] bg-[var(--surface-strong)]/5 dark:bg-[var(--media-fill)] px-2 py-0.5 rounded-full">
+                  {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[10px]"
+                onClick={handleExportComments}
+                disabled={!commentsThreaded?.length}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+            </div>
           </div>
           <div className="flex-shrink-0 px-5 py-3 border-b border-[var(--border)]/10">
             <ReactionBar
@@ -635,7 +699,7 @@ export default function VideoPage() {
               />
             </div>
           )}
-        </aside>
+        </CollapsibleSidebar>
       </div>
 
       {/* Comments overlay — mobile */}
@@ -650,14 +714,26 @@ export default function VideoPage() {
                 </span>
               )}
             </h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setMobileCommentsOpen(false)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-[10px]"
+                onClick={handleExportComments}
+                disabled={!commentsThreaded?.length}
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setMobileCommentsOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex-shrink-0 px-5 py-3 border-b border-[var(--border)]/10">
             <ReactionBar

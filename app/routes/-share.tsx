@@ -4,6 +4,7 @@ import { Link, useLoaderData, useParams } from "@tanstack/react-router";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Lock, Video } from "lucide-react";
 
+import { CommentText } from "@/components/comments/CommentText";
 import { DeferredPublicAuthBridge } from "@/components/public/DeferredPublicAuthBridge";
 import { PublicDiscussionControls } from "@/components/public/PublicDiscussionControls";
 import { VideoWatchers } from "@/components/presence/VideoWatchers";
@@ -600,7 +601,9 @@ export default function SharePage() {
                         {formatTimestamp(comment.timestampSeconds)}
                       </button>
                     </div>
-                    <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap">{comment.text}</p>
+                    <p className="text-sm text-[var(--foreground)] mt-1 whitespace-pre-wrap break-words">
+                      <CommentText text={comment.text} />
+                    </p>
                     <p className="text-[11px] text-[var(--foreground-muted)] mt-1">{formatRelativeTime(comment._creationTime)}</p>
 
                     {comment.replies.length > 0 ? (
@@ -617,7 +620,9 @@ export default function SharePage() {
                                 {formatTimestamp(reply.timestampSeconds)}
                               </button>
                             </div>
-                            <p className="text-[var(--foreground)] whitespace-pre-wrap">{reply.text}</p>
+                            <p className="text-[var(--foreground)] whitespace-pre-wrap break-words">
+                              <CommentText text={reply.text} />
+                            </p>
                           </div>
                         ))}
                       </div>

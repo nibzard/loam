@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { api } from "@convex/_generated/api";
 import { Id } from "@convex/_generated/dataModel";
 import type { UploadStatus } from "@/components/upload/UploadProgress";
+import { getUploadErrorMessage } from "@/lib/uploadErrors";
 import { copyTextToClipboard, prepareDefaultShareLink } from "@/lib/shareLinks";
 
 const AUTO_DISMISS_COPIED_UPLOAD_DELAY_MS = 8000;
@@ -290,8 +291,7 @@ export function useVideoUploadManager() {
             videoId: createdVideoId,
           });
         } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : "Upload failed";
+          const errorMessage = getUploadErrorMessage(error, "Upload failed");
 
           setUploads((prev) =>
             prev.map((upload) =>

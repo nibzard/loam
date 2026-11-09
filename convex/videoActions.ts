@@ -36,8 +36,9 @@ const GIBIBYTE = 1024 ** 3;
 const MAX_PRESIGNED_PUT_FILE_SIZE_BYTES = 5 * GIBIBYTE;
 const PROJECT_VIDEO_POSTER_TTL = "1h";
 const PROJECT_VIDEO_POSTER_TTL_MS = 60 * 60 * 1000;
-const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
+export const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
   "video/mp4",
+  "video/x-m4v",
   "video/quicktime",
   "video/webm",
   "video/x-matroska",
@@ -325,7 +326,7 @@ function validateUploadRequestOrThrow(args: { fileSize: number; contentType: str
 
   const normalizedContentType = normalizeContentType(args.contentType);
   if (!isAllowedUploadContentType(normalizedContentType)) {
-    throw new ConvexError({ code: "BAD_REQUEST", message: "Unsupported video format. Allowed: mp4, mov, webm, mkv." });
+    throw new ConvexError({ code: "BAD_REQUEST", message: "Unsupported video format. Allowed: mp4, m4v, mov, webm, mkv." });
   }
 
   return normalizedContentType;
@@ -668,18 +669,18 @@ export const markUploadComplete = action({
         !Number.isFinite(contentLengthRaw) ||
         contentLengthRaw <= 0
       ) {
-        throw new Error("Uploaded video file not found or empty.");
+        throw new ConvexError({ code: "NOT_FOUND", message: "Uploaded video file not found or empty." });
       }
       const contentLength = contentLengthRaw;
       if (contentLength > MAX_PRESIGNED_PUT_FILE_SIZE_BYTES) {
-        throw new Error("Video file is too large for direct upload.");
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Video file is too large for direct upload." });
       }
 
       const normalizedContentType = normalizeContentType(
         head.ContentType ?? activeProcessing.contentType,
       );
       if (!isAllowedUploadContentType(normalizedContentType)) {
-        throw new Error("Unsupported video format. Allowed: mp4, mov, webm, mkv.");
+        throw new ConvexError({ code: "BAD_REQUEST", message: "Unsupported video format. Allowed: mp4, m4v, mov, webm, mkv." });
       }
 
       const reconciled = await ctx.runMutation(internal.videos.reconcileUploadedObjectMetadata, {

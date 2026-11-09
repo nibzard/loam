@@ -42,12 +42,12 @@ Guard for every PORT: new playback paths must sit behind signed sessions and wat
 | Team invitation error surfacing | PORT (UI half only; backend already done) | P1 |
 | Player one-line layout fix (`cc879fd`) | ADOPT with any player work | P1 |
 | Editor shuttle + theater + Final Cut shortcuts | PORT | P1 — already on `todo.md` |
-| Comment CSV export, URL autolinking | PORT (audience-aware) | P1 |
-| Upload error messages via `ConvexError`, m4v | PORT (map to our coded errors) | P1 |
+| Comment CSV export, URL autolinking | PORT (audience-aware) | P1 done 2026-11-09 |
+| Upload error messages via `ConvexError`, m4v | PORT (map to our coded errors) | P1 done 2026-11-09 |
 | Mux status reconciliation, stale-upload sweep | PORT onto `uploadSessions` + signed layer | P2 |
 | Auth-chain flattening, bounded reads, pagination | PORT the technique | P2 |
 | PR #67 frontend perf (`4c6ed8d`, `8f98027`) | PORT selectively; SKIP route restructuring (`2bffb78`) | P2 |
-| Collapsible discussion sidebar | PORT | P2 |
+| Collapsible discussion sidebar | PORT | P2 done 2026-11-09 (dashboard; share page is a stacked layout, not a side panel) |
 | Frozen-playback 720p recovery, default 720p | default 720p PORTED (`dashboardPlaybackSource.ts`); recovery (`bf041bd`) deferred | P1 done 2026-11-09 |
 | Dashboard sorting + expandable titles | PORT | P3 |
 | Bulk multi-select (move/status/delete) | PORT after sorting | P3 |

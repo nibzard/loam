@@ -22,7 +22,7 @@ import { UploadProgress } from "@/components/upload/UploadProgress";
 import { useVideoUploadManager } from "./-useVideoUploadManager";
 import { DashboardUploadProvider } from "@/lib/dashboardUploadContext";
 
-const VIDEO_FILE_EXTENSIONS = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
+const VIDEO_FILE_EXTENSIONS = /\.(mp4|mov|m4v|webm|mkv)$/i;
 
 function isVideoFile(file: File) {
   return file.type.startsWith("video/") || VIDEO_FILE_EXTENSIONS.test(file.name);

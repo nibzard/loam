@@ -1,0 +1,38 @@
+# Context
+
+## Background
+Workstream 1 of plans/2026-11-09-upstream-alignment.md: editor parity
+ported from upstream lawn (7d066eb, da3d9cd, 184c352), closing two
+long-standing items on todo.md (Final Cut keybindings, theater mode).
+
+## Why This Way
+- shuttle.ts is a byte-identical upstream port (zero imports, no Mux
+  coupling); the shortcut BINDER was refactored into a handle-based
+  module with the K-chord state machine extracted for unit tests.
+  Upstream's in-file binder copy was deleted so the chord logic exists
+  once (review finding).
+- Watch-minute billing is rate-scaled (delta / max(1, |rate|)) because
+  this fork meters team watch caps upstream does not have; without
+  scaling, 32x skim review billed content time and could lock out the
+  whole workspace mid-review. Reverse playback bills nothing (backward
+  deltas are ignored by design).
+- Default playback source flipped from the original-source presign
+  (600 s signed GET of the full-res MP4) to the Mux 720p session via
+  dashboardPlaybackSource.ts; bf041bd frozen-video recovery deferred as
+  inapplicable under forced-720p signed manifests - revisit if
+  original-source stalls are reported.
+
+## Gotchas
+- Frame stepping assumes 30 fps (upstream default); 24/25 fps media
+  needs a frameRate plumbed through.
+- The INTERACTIVE selector is duplicated across shuttle.ts,
+  bindPlaybackShortcuts.ts, and VideoEditorLayout.tsx (accepted
+  port-phase artifact; consolidate on next touch).
+- Escape-closes-menus relies on React child-before-parent effect order:
+  the player's listener registers before VideoEditorLayout's theater
+  listener, so preventDefault blocks theater over an open menu.
+- 16x/32x seek-driven playback fires ~30 seeks/s; manual QA against a
+  real signed manifest is still recommended before wide use.
+
+## Related
+- Commit 88aac13 (Workstream 0), plans/2026-11-09-upstream-alignment.md

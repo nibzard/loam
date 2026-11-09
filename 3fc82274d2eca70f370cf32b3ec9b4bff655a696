@@ -1,0 +1,48 @@
+# Design: Bounded reads for ACL-filtered list queries (Workstream 3)
+
+## Problem
+The dashboard list queries used unbounded .collect(): videos.list
+read every video in a project plus every comment per video,
+projects.list and teams.listWithProjects read every project and
+every video per project just to compute counts. Upstream lawn fixed
+this in 62c0463 (.take(101) count caps) and aaf96d8 (capped-count
+flags), but upstream has no per-video ACL. The fork filters every
+video through the restricted-access grant check first, so a naive
+.take() before filtering would let inaccessible videos consume the
+cap.
+
+## Approach
+One shared cap (LIST_ITEM_CAP = 100, take 101) in convex/listCaps.ts.
+- ACL-filtered reads (videos.list, listPlaybackTargetsForProject
+  without videoIds, per-project accessible counts) page the index
+  with .paginate() and collect until 101 accepted items prove
+  truncation or the index is exhausted: cap AFTER filtering.
+- listPlaybackTargetsForProject with explicit videoIds does one
+  ctx.db.get per unique requested id. The request bounds the read,
+  so no cap applies; project scoping and the ACL are checked per id.
+- Reads with no per-item ACL (projects by team, memberships by user)
+  use the plain .take(cap + 1).
+- The grant set makes each ACL check a pure set lookup
+  (canTeamMemberAccessVideoWithGrantSet), so filtering adds no
+  per-video queries inside the paged loop.
+
+## Key Trade-offs
+- Worst case (every video restricted) still scans the whole project
+  range, same as the old .collect(); it is never worse, and usually
+  stops after one page. maximumRowsRead was considered and rejected:
+  it would silently truncate the accessible set.
+- Return shapes stay arrays (clients unchanged); truncation is
+  reported via console.warn at each site and additive
+  commentCountIsCapped / videoCountIsCapped item flags instead of a
+  hasMore envelope, which would have required client edits outside
+  this workstream's file ownership.
+- Comment counts cap at 100 (upstream used 200) for one consistent
+  cap across every site.
+- Delete cascades (videos.remove, projects.remove, teams.deleteTeam)
+  stay unbounded on purpose: capping them would leak orphan rows.
+
+## References
+- Upstream lawn 62c0463 (perf: audit-driven Convex backend
+  optimizations), aaf96d8 (dashboard sorting / expandable titles)
+- Fork ACL guards: convex/auth.ts canTeamMemberAccessVideoWithGrantSet,
+  videoMemberGrantHelpers.getGrantedVideoIdsForTeamUser

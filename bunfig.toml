@@ -1,0 +1,4 @@
+[test]
+# Keep `bun test` (unit suite) from collecting the Playwright specs under
+# tests/e2e. Those run with `bun run test:e2e` instead.
+pathIgnorePatterns = ["tests/e2e/**"]

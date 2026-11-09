@@ -19,6 +19,7 @@
     "deploy:check": "bun run scripts/check-deploy-env.ts",
     "start": "vite preview --port 5296",
     "lint": "eslint app src convex --ignore-pattern 'convex/_generated/**'",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
     "typecheck:convex": "bunx convex typecheck",
     "generate:og": "bun run scripts/generate-og.tsx"
@@ -57,6 +58,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

@@ -160,18 +160,9 @@ export function canManageVideoSharing(args: {
   return args.membership.role === "admin" || args.membership.role === "owner";
 }
 
-export async function requireTeamAccess(
-  ctx: QueryCtx | MutationCtx,
-  teamId: Id<"teams">,
-  requiredRole?: Role
-) {
-  const user = await requireUser(ctx);
-
-  const membership = await getTeamMembership(ctx, {
-    teamId,
-    userClerkId: user.subject,
-  });
-
+function requireTeamMembershipOrThrow(
+  membership: Doc<"teamMembers"> | null
+): Doc<"teamMembers"> {
   if (!membership) {
     throw new ConvexError({
       code: "FORBIDDEN",
@@ -179,12 +170,35 @@ export async function requireTeamAccess(
     });
   }
 
+  return membership;
+}
+
+function requireRoleOrThrow(
+  membership: Doc<"teamMembers">,
+  requiredRole?: Role
+) {
   if (!hasRequiredRole(membership.role, requiredRole)) {
     throw new ConvexError({
       code: "FORBIDDEN",
       message: `Requires ${requiredRole} role or higher.`,
     });
   }
+}
+
+export async function requireTeamAccess(
+  ctx: QueryCtx | MutationCtx,
+  teamId: Id<"teams">,
+  requiredRole?: Role
+) {
+  const user = await requireUser(ctx);
+
+  const membership = requireTeamMembershipOrThrow(
+    await getTeamMembership(ctx, {
+      teamId,
+      userClerkId: user.subject,
+    })
+  );
+  requireRoleOrThrow(membership, requiredRole);
 
   return { user, membership };
 }
@@ -204,7 +218,15 @@ export async function requireProjectAccess(
     });
   }
 
-  const { membership } = await requireTeamAccess(ctx, project.teamId, requiredRole);
+  // Flattened lookup (upstream 62c0463): one identity read plus one direct
+  // teamMembers lookup, instead of delegating to requireTeamAccess.
+  const membership = requireTeamMembershipOrThrow(
+    await getTeamMembership(ctx, {
+      teamId: project.teamId,
+      userClerkId: user.subject,
+    })
+  );
+  requireRoleOrThrow(membership, requiredRole);
 
   return { user, membership, project };
 }
@@ -232,7 +254,15 @@ export async function requireVideoAccess(
     });
   }
 
-  const { membership } = await requireTeamAccess(ctx, project.teamId);
+  // Flattened lookup (upstream 62c0463): no requireTeamAccess delegation,
+  // so video-scoped calls pay one identity read and one membership lookup.
+  const membership = requireTeamMembershipOrThrow(
+    await getTeamMembership(ctx, {
+      teamId: project.teamId,
+      userClerkId: user.subject,
+    })
+  );
+
   const canAccess = await canTeamMemberAccessVideo(ctx, {
     membership,
     video,
@@ -244,12 +274,7 @@ export async function requireVideoAccess(
     });
   }
 
-  if (!hasRequiredRole(membership.role, requiredRole)) {
-    throw new ConvexError({
-      code: "FORBIDDEN",
-      message: `Requires ${requiredRole} role or higher.`,
-    });
-  }
+  requireRoleOrThrow(membership, requiredRole);
 
   return { user, membership, project, video };
 }
@@ -276,7 +301,15 @@ export async function requireVideoManagementAccess(
     });
   }
 
-  const { membership } = await requireTeamAccess(ctx, project.teamId);
+  // Flattened lookup (upstream 62c0463), same guard order as before:
+  // membership first, then the video-management permission check.
+  const membership = requireTeamMembershipOrThrow(
+    await getTeamMembership(ctx, {
+      teamId: project.teamId,
+      userClerkId: user.subject,
+    })
+  );
+
   if (
     membership.role === "viewer" ||
     !canManageVideoSharing({
